@@ -1,0 +1,238 @@
+---
+# Collect Gentoo package build times from emerge.log via qlop.
+# Identifies packages whose longest build exceeded 5 minutes across all
+# Gentoo hosts, then collects the last 3 builds with kernel/compiler info.
+
+- name: Check if this is a Gentoo host
+  ansible.builtin.set_fact:
+    run_benchmarks_is_gentoo: "{{ ansible_distribution | default('') == 'Gentoo' }}"
+
+- name: Skip non-Gentoo hosts
+  ansible.builtin.meta: end_host
+  when: not run_benchmarks_is_gentoo
+
+- name: Verify qlop is available
+  ansible.builtin.command:
+    cmd: qlop --version
+  register: run_benchmarks_qlop_check
+  changed_when: false
+  failed_when: false
+
+- name: Skip if qlop is not available
+  ansible.builtin.debug:
+    msg: "qlop not found — skipping build time analysis"
+  when: run_benchmarks_qlop_check.rc != 0
+
+- name: Collect build time data
+  when: run_benchmarks_qlop_check.rc == 0
+  block:
+    - name: Get all merge times (machine-readable)
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          qlop -t -M -v 2>/dev/null
+      register: run_benchmarks_qlop_all
+      changed_when: false
+
+    - name: Save qlop output to file
+      ansible.builtin.copy:
+        content: "{{ run_benchmarks_qlop_all.stdout }}"
+        dest: "{{ run_benchmarks_work_dir }}/qlop_all.txt"
+        mode: "0644"
+
+    - name: Get kernel merge history
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          qlop -t -M -v sys-kernel/gentoo-kernel sys-kernel/gentoo-kernel-bin \
+            sys-kernel/gentoo-sources sys-kernel/vanilla-kernel \
+            sys-kernel/vanilla-kernel-bin 2>/dev/null || true
+      register: run_benchmarks_kernel_history
+      changed_when: false
+
+    - name: Save kernel history to file
+      ansible.builtin.copy:
+        content: "{{ run_benchmarks_kernel_history.stdout }}"
+        dest: "{{ run_benchmarks_work_dir }}/kernel_history.txt"
+        mode: "0644"
+
+    - name: Get current package build metadata
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          for pkgdir in /var/db/pkg/*/*; do
+            [ -d "$pkgdir" ] || continue
+            cat_pn="${pkgdir#/var/db/pkg/}"
+            bt=""
+            cc=""
+            cflags=""
+            kv=""
+            [ -f "$pkgdir/BUILD_TIME" ] && bt=$(cat "$pkgdir/BUILD_TIME")
+            [ -f "$pkgdir/CC" ] && cc=$(cat "$pkgdir/CC")
+            [ -f "$pkgdir/CFLAGS" ] && cflags=$(cat "$pkgdir/CFLAGS")
+            if [ -f "$pkgdir/environment.bz2" ]; then
+              kv=$(bzcat "$pkgdir/environment.bz2" 2>/dev/null \
+                | grep -m1 '^declare.*KV_FULL=' \
+                | sed 's/.*KV_FULL="//' | sed 's/".*//' || true)
+            fi
+            echo "${cat_pn}|${bt}|${cc}|${cflags}|${kv}"
+          done
+      register: run_benchmarks_pkg_metadata
+      changed_when: false
+
+    - name: Save package metadata to file
+      ansible.builtin.copy:
+        content: "{{ run_benchmarks_pkg_metadata.stdout }}"
+        dest: "{{ run_benchmarks_work_dir }}/pkg_metadata.txt"
+        mode: "0644"
+
+    - name: Deploy build time analysis script
+      ansible.builtin.copy:
+        content: |
+          #!/usr/bin/env python3
+          """Analyze Gentoo package build times from qlop data."""
+          import json
+          import sys
+          from pathlib import Path
+
+          def main():
+              work_dir = sys.argv[1]
+              min_secs = int(sys.argv[2])
+              max_builds = int(sys.argv[3])
+              hostname = sys.argv[4]
+
+              qlop_file = Path(work_dir) / "qlop_all.txt"
+              kernel_file = Path(work_dir) / "kernel_history.txt"
+              meta_file = Path(work_dir) / "pkg_metadata.txt"
+
+              # Parse package metadata: cat/pkg-ver -> {cc, cflags, kv_full}
+              pkg_meta = {}
+              for line in meta_file.read_text().strip().split("\n"):
+                  if not line.strip() or "|" not in line:
+                      continue
+                  parts = line.split("|", 4)
+                  if len(parts) < 5:
+                      continue
+                  pkg_meta[parts[0].strip()] = {
+                      "build_time": parts[1].strip(),
+                      "cc": parts[2].strip(),
+                      "cflags": parts[3].strip(),
+                      "kv_full": parts[4].strip(),
+                  }
+
+              # Build kernel timeline
+              kernel_timeline = []
+              for line in kernel_file.read_text().strip().split("\n"):
+                  if ">>>" not in line:
+                      continue
+                  parts = line.split(">>>")
+                  if len(parts) < 2:
+                      continue
+                  ts = int(parts[0].strip())
+                  pkg_dur = parts[1].strip()
+                  pkg_name = pkg_dur.split(":")[0].strip()
+                  ver = pkg_name.rsplit("-", 1)[-1] if "-" in pkg_name else ""
+                  kernel_timeline.append((ts, ver))
+              kernel_timeline.sort()
+
+              def find_kernel_at(timestamp):
+                  best = None
+                  for kts, kver in kernel_timeline:
+                      if kts <= timestamp:
+                          best = kver
+                      else:
+                          break
+                  return best or "unknown"
+
+              # Parse qlop build entries
+              builds = {}
+              for line in qlop_file.read_text().strip().split("\n"):
+                  if ">>>" not in line:
+                      continue
+                  parts = line.split(">>>")
+                  if len(parts) < 2:
+                      continue
+                  ts = int(parts[0].strip())
+                  pkg_dur = parts[1].strip()
+                  if ":" not in pkg_dur:
+                      continue
+                  pkg_full, dur_str = pkg_dur.rsplit(":", 1)
+                  pkg_full = pkg_full.strip()
+                  duration = int(dur_str.strip())
+                  slash_pos = pkg_full.find("/")
+                  if slash_pos < 0:
+                      continue
+                  cat = pkg_full[:slash_pos]
+                  name_ver = pkg_full[slash_pos + 1:]
+                  idx = -1
+                  for i in range(len(name_ver) - 1, 0, -1):
+                      if name_ver[i - 1] == "-" and name_ver[i].isdigit():
+                          idx = i - 1
+                          break
+                  if idx > 0:
+                      pkg_name = cat + "/" + name_ver[:idx]
+                      version = name_ver[idx + 1:]
+                  else:
+                      pkg_name = pkg_full
+                      version = ""
+                  builds.setdefault(pkg_name, []).append(
+                      (ts, version, duration, pkg_full)
+                  )
+
+              # Filter to packages with max build > threshold
+              long_builds = {}
+              for pkg_name, entries in builds.items():
+                  max_dur = max(e[2] for e in entries)
+                  if max_dur < min_secs:
+                      continue
+                  entries.sort(key=lambda e: e[0])
+                  last_n = entries[-max_builds:]
+                  build_records = []
+                  for ts, ver, dur, pkg_full in last_n:
+                      meta = pkg_meta.get(pkg_full, {})
+                      cc = meta.get("cc", "")
+                      cflags = meta.get("cflags", "")
+                      kv = meta.get("kv_full", "")
+                      if not kv:
+                          kv = find_kernel_at(ts)
+                      build_records.append({
+                          "timestamp": ts,
+                          "version": ver,
+                          "duration_secs": dur,
+                          "kernel": kv,
+                          "compiler": cc or "unknown",
+                          "cflags": cflags,
+                      })
+                  long_builds[pkg_name] = {
+                      "max_duration_secs": max_dur,
+                      "builds": build_records,
+                  }
+
+              result = {
+                  "hostname": hostname,
+                  "min_build_threshold_secs": min_secs,
+                  "packages": long_builds,
+              }
+              out_path = Path(work_dir) / "gentoo_build_times.json"
+              out_path.write_text(json.dumps(result, indent=2))
+              print(f"Wrote {len(long_builds)} packages to {out_path}")
+
+          if __name__ == "__main__":
+              main()
+        dest: "{{ run_benchmarks_work_dir }}/analyze_build_times.py"
+        mode: "0755"
+
+    - name: Analyze build times and write JSON
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ run_benchmarks_work_dir }}/analyze_build_times.py
+          {{ run_benchmarks_work_dir }}
+          {{ run_benchmarks_gentoo_min_build_secs }}
+          {{ run_benchmarks_gentoo_max_builds }}
+          {{ inventory_hostname }}
+      register: run_benchmarks_build_times_result
+      changed_when: false
+
+    - name: Show build time analysis summary
+      ansible.builtin.debug:
+        msg: "{{ run_benchmarks_build_times_result.stdout }}"

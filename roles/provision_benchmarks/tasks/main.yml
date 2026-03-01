@@ -1,0 +1,270 @@
+---
+# Provision VMs with all software required for the benchmark suite.
+# Handles per-OS-family package names, EPEL for RHEL, and binary fallbacks.
+
+# ── 1. Enable EPEL on RHEL/CentOS (needed for hyperfine, ffmpeg) ─────────
+- name: Install EPEL release (RHEL/CentOS)
+  ansible.builtin.package:
+    name: epel-release
+    state: present
+  become: true
+  when: >-
+    ansible_os_family | default('') == 'RedHat' and
+    ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+
+- name: Enable CRB/PowerTools for RHEL 8+ dependencies
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      if command -v dnf >/dev/null 2>&1; then
+        dnf config-manager --set-enabled crb 2>/dev/null || \
+        dnf config-manager --set-enabled powertools 2>/dev/null || \
+        dnf config-manager --set-enabled PowerTools 2>/dev/null || true
+      fi
+  become: true
+  changed_when: false
+  when: >-
+    ansible_os_family | default('') == 'RedHat' and
+    ansible_distribution | default('') != 'Fedora' and
+    (ansible_distribution_major_version | default('0') | int) >= 8
+
+# ── 2. Update package cache ──────────────────────────────────────────────
+- name: Update apt cache (Debian-based)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: ansible_os_family | default('') == 'Debian'
+
+# ── 3. Install core packages (batch per OS family) ───────────────────────
+- name: Install benchmark dependencies
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages[ansible_os_family] }}"
+    state: present
+  become: true
+  when: ansible_os_family in provision_benchmarks_packages
+  failed_when: false
+  register: provision_benchmarks_pkg_result
+
+- name: Install packages individually on partial failure
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ provision_benchmarks_packages[ansible_os_family] }}"
+  when: >-
+    ansible_os_family in provision_benchmarks_packages and
+    provision_benchmarks_pkg_result is defined and
+    provision_benchmarks_pkg_result is failed
+  failed_when: false
+
+# ── 4. Install EPEL packages (RHEL/CentOS only) ─────────────────────────
+- name: Install EPEL packages (RHEL/CentOS)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_epel_packages }}"
+    state: present
+  become: true
+  when: >-
+    ansible_os_family | default('') == 'RedHat' and
+    ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+
+# ── 5. Install hyperfine via package manager (distro-specific) ───────────
+- name: Check if hyperfine is available
+  ansible.builtin.command:
+    cmd: hyperfine --version
+  register: provision_benchmarks_hf_check
+  changed_when: false
+  failed_when: false
+
+- name: Install hyperfine on Fedora
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_hf_check.rc != 0 and
+    ansible_distribution | default('') == 'Fedora'
+
+- name: Install hyperfine on Arch-based
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_hf_check.rc != 0 and
+    ansible_os_family | default('') == 'Archlinux'
+
+- name: Install hyperfine on openSUSE
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_hf_check.rc != 0 and
+    ansible_os_family | default('') == 'Suse'
+  failed_when: false
+
+- name: Install hyperfine on FreeBSD
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_hf_check.rc != 0 and
+    ansible_os_family | default('') == 'FreeBSD'
+
+# ── 6. Hyperfine binary fallback (download from GitHub releases) ─────────
+- name: Re-check hyperfine after package install attempts
+  ansible.builtin.command:
+    cmd: hyperfine --version
+  register: provision_benchmarks_hf_recheck
+  changed_when: false
+  failed_when: false
+
+- name: Download hyperfine binary (fallback)
+  when: provision_benchmarks_hf_recheck.rc != 0
+  become: true
+  block:
+    - name: Download hyperfine release tarball
+      ansible.builtin.get_url:
+        url: "{{ provision_benchmarks_hyperfine_url }}"
+        dest: /tmp/hyperfine.tar.gz
+        mode: "0644"
+
+    - name: Extract and install hyperfine binary
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          cd /tmp
+          tar xzf hyperfine.tar.gz
+          find /tmp -name hyperfine -type f -executable \
+            -exec install -m 0755 {} /usr/local/bin/hyperfine \;
+          rm -rf /tmp/hyperfine* || true
+      changed_when: true
+
+# ── 7. Install ffmpeg (optional, needs extra repos on some distros) ──────
+- name: Check if ffmpeg is available
+  ansible.builtin.command:
+    cmd: ffmpeg -version
+  register: provision_benchmarks_ffmpeg_check
+  changed_when: false
+  failed_when: false
+
+- name: Install ffmpeg on RHEL via RPM Fusion
+  when: >-
+    provision_benchmarks_install_ffmpeg | bool and
+    provision_benchmarks_ffmpeg_check.rc != 0 and
+    ansible_os_family | default('') == 'RedHat'
+  become: true
+  block:
+    - name: Install RPM Fusion Free repository
+      ansible.builtin.package:
+        name: "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{ ansible_distribution_major_version }}.noarch.rpm"
+        state: present
+        disable_gpg_check: true
+      failed_when: false
+
+    - name: Install ffmpeg from RPM Fusion
+      ansible.builtin.package:
+        name: ffmpeg
+        state: present
+      failed_when: false
+
+- name: Install ffmpeg on Debian-based
+  ansible.builtin.package:
+    name: ffmpeg
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_install_ffmpeg | bool and
+    provision_benchmarks_ffmpeg_check.rc != 0 and
+    ansible_os_family | default('') == 'Debian'
+  failed_when: false
+
+# ── 8. Install Void Linux packages via xbps ──────────────────────────────
+- name: Install packages on Void Linux
+  ansible.builtin.command:
+    cmd: "xbps-install -Sy {{ item }}"
+  become: true
+  loop:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - go
+    - git
+    - ffmpeg
+    - gnupg2
+  when: ansible_distribution | default('') == 'Void'
+  changed_when: true
+  failed_when: false
+
+# ── 9. Install NixOS packages ────────────────────────────────────────────
+- name: Install packages on NixOS
+  ansible.builtin.command:
+    cmd: "nix-env -iA nixos.{{ item }}"
+  loop:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rustc
+    - go
+    - git
+    - ffmpeg
+    - gnupg
+  when: ansible_distribution | default('') == 'NixOS'
+  changed_when: true
+  failed_when: false
+
+# ── 10. Install Solus packages ───────────────────────────────────────────
+- name: Install packages on Solus
+  ansible.builtin.command:
+    cmd: "eopkg install -y {{ item }}"
+  become: true
+  loop:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - golang
+    - git
+    - ffmpeg
+    - gnupg
+  when: ansible_distribution | default('') == 'Solus'
+  changed_when: true
+  failed_when: false
+
+# ── 11. Verify installation ─────────────────────────────────────────────
+- name: Verify essential tools are available
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      echo "=== Tool availability ==="
+      for tool in hyperfine gcc python3 openssl git; do
+        if command -v "$tool" >/dev/null 2>&1; then
+          printf "  %-15s OK\n" "$tool"
+        else
+          printf "  %-15s MISSING\n" "$tool"
+        fi
+      done
+      for tool in clang rustc go ffmpeg; do
+        if command -v "$tool" >/dev/null 2>&1; then
+          printf "  %-15s OK\n" "$tool"
+        else
+          printf "  %-15s OPTIONAL (missing)\n" "$tool"
+        fi
+      done
+  register: provision_benchmarks_verify
+  changed_when: false
+
+- name: Show tool verification results
+  ansible.builtin.debug:
+    msg: "{{ provision_benchmarks_verify.stdout }}"

@@ -1,0 +1,42 @@
+---
+# Restore Windows VM to its original state after benchmarking.
+
+# ── Defender ─────────────────────────────────────────────────────────────
+- name: Restore Defender real-time protection
+  ansible.windows.win_shell: Set-MpPreference -DisableRealtimeMonitoring $false
+  changed_when: true
+  failed_when: false
+  when: >-
+    run_benchmarks_orig_defender_rtp is defined and
+    run_benchmarks_orig_defender_rtp.stdout | default('') | trim == 'False'
+
+# ── Power plan ───────────────────────────────────────────────────────────
+- name: Restore original power plan
+  ansible.windows.win_shell: >-
+    powercfg /setactive {{ run_benchmarks_orig_power_plan.stdout | trim }}
+  changed_when: true
+  when: >-
+    run_benchmarks_orig_power_plan is defined and
+    run_benchmarks_orig_power_plan.stdout | default('') | trim | length > 0
+
+# ── Services ─────────────────────────────────────────────────────────────
+- name: Restart stopped services (Windows)
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: started
+  loop: "{{ run_benchmarks_active_services_win.stdout | default('') | trim | split(',') }}"
+  when: run_benchmarks_active_services_win.stdout | default('') | trim | length > 0
+  failed_when: false
+
+# ── Page file ────────────────────────────────────────────────────────────
+- name: Re-enable automatic page file management
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    if (-not $cs.AutomaticManagedPagefile) {
+      $cs | Set-CimInstance -Property @{AutomaticManagedPagefile=$true}
+    }
+  changed_when: true
+  failed_when: false
+  when: >-
+    run_benchmarks_orig_pagefile is defined and
+    run_benchmarks_orig_pagefile.stdout | default('') | trim == 'enabled'

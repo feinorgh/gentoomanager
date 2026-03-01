@@ -1,0 +1,124 @@
+---
+# Coreutils and development tools benchmarks
+
+- name: Create test data for coreutils benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}
+      # Create a text file with sortable data
+      if [ ! -f sortdata.txt ]; then
+        python3 -c "
+      import random, string
+      random.seed(42)
+      with open('sortdata.txt', 'w') as f:
+          for _ in range(500000):
+              f.write(''.join(random.choices(string.ascii_letters + string.digits, k=80)) + '\n')
+      "
+      fi
+      # Create a directory tree for find benchmarks
+      if [ ! -d findtree ]; then
+        mkdir -p findtree
+        for i in $(seq 1 50); do
+          mkdir -p "findtree/dir_$i/sub_a" "findtree/dir_$i/sub_b"
+          for j in $(seq 1 20); do
+            dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_a/file_$j.txt" 2>/dev/null
+            dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_b/file_$j.dat" 2>/dev/null
+          done
+        done
+      fi
+    creates: "{{ run_benchmarks_work_dir }}/sortdata.txt"
+
+- name: Run coreutils benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
+        --command-name 'sort' 'sort sortdata.txt > /dev/null' \
+        --command-name 'sort-unique' 'sort -u sortdata.txt > /dev/null' \
+        --command-name 'wc-lines' 'wc -l sortdata.txt' \
+        --command-name 'grep-pattern' 'grep -c "^[A-Z].*[0-9]$" sortdata.txt || true' \
+        --command-name 'find-files' 'find findtree -name "*.txt" -type f' \
+        --command-name 'find-exec' 'find findtree -name "*.txt" -exec wc -c {} +' \
+        --command-name 'tar-create' 'tar cf /dev/null findtree' \
+        --command-name 'du-summary' 'du -sh findtree'
+  changed_when: false
+
+- name: Check git availability  # noqa: command-instead-of-module command-instead-of-shell
+  ansible.builtin.shell:
+    cmd: command -v git
+  register: run_benchmarks_git_check
+  changed_when: false
+  failed_when: false
+
+- name: Create git test repo
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      if [ ! -d gitrepo/.git ]; then
+        mkdir -p gitrepo && cd gitrepo
+        git init
+        git config user.email "bench@test"
+        git config user.name "Bench"
+        # Create commit history
+        for i in $(seq 1 100); do
+          echo "Content for commit $i with random data $(head -c 100 /dev/urandom | base64)" > "file_$i.txt"
+          git add .
+          git commit -m "Commit $i" --quiet
+        done
+        # Create a branch with changes
+        git checkout -b feature
+        for i in $(seq 1 20); do
+          echo "Feature change $i" >> file_1.txt
+          git commit -am "Feature $i" --quiet
+        done
+        git checkout main 2>/dev/null || git checkout master
+      fi
+    creates: "{{ run_benchmarks_work_dir }}/gitrepo/.git"
+
+- name: Run git benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}/gitrepo
+      BRANCH=$(git branch --show-current)
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/git.json \
+        --command-name 'git-log' 'git log --oneline' \
+        --command-name 'git-log-stat' 'git log --stat --quiet' \
+        --command-name 'git-diff' "git diff feature..${BRANCH}" \
+        --command-name 'git-blame' 'git blame file_1.txt' \
+        --command-name 'git-status' 'git status'
+  when: run_benchmarks_git_check.rc == 0
+  changed_when: false
+
+- name: Check diff tool availability
+  ansible.builtin.command:
+    cmd: command -v diff
+  register: run_benchmarks_diff_check
+  changed_when: false
+  failed_when: false
+
+- name: Run diff benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}
+      # Create two similar large files
+      head -400000 sortdata.txt > diff_a.txt
+      tail -400000 sortdata.txt > diff_b.txt
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/diff.json \
+        --command-name 'diff' 'diff diff_a.txt diff_b.txt > /dev/null || true' \
+        --command-name 'comm' 'comm <(sort diff_a.txt) <(sort diff_b.txt) > /dev/null'
+  when: run_benchmarks_diff_check.rc == 0
+  changed_when: false

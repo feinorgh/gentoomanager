@@ -1,0 +1,86 @@
+---
+# Normalize Windows VM into a predictable state before benchmarking.
+
+# ── 1. Set power plan to High Performance ────────────────────────────────
+- name: Save current power plan (Windows)
+  ansible.windows.win_shell: |
+    (powercfg /getactivescheme) -replace '.*GUID:\s*', '' -replace '\s*\(.*', ''
+  register: run_benchmarks_orig_power_plan
+  changed_when: false
+
+- name: Set High Performance power plan
+  ansible.windows.win_shell: powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+  changed_when: true
+
+# ── 2. Disable Windows Defender real-time protection ─────────────────────
+- name: Save Defender RTP state
+  ansible.windows.win_shell: |
+    (Get-MpPreference).DisableRealtimeMonitoring
+  register: run_benchmarks_orig_defender_rtp
+  changed_when: false
+  failed_when: false
+
+- name: Disable Defender real-time protection
+  ansible.windows.win_shell: Set-MpPreference -DisableRealtimeMonitoring $true
+  changed_when: true
+  failed_when: false
+
+# ── 3. Stop non-essential services ───────────────────────────────────────
+- name: Identify stoppable services (Windows)
+  ansible.windows.win_shell: |
+    $svcs = @('SysMain', 'WSearch', 'wuauserv', 'DiagTrack',
+              'dmwappushservice', 'MapsBroker', 'lfsvc',
+              'TabletInputService', 'Spooler')
+    $running = @()
+    foreach ($svc in $svcs) {
+      $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+      if ($s -and $s.Status -eq 'Running') { $running += $svc }
+    }
+    $running -join ','
+  register: run_benchmarks_active_services_win
+  changed_when: false
+
+- name: Stop non-essential services (Windows)
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ run_benchmarks_active_services_win.stdout | trim | split(',') }}"
+  when: run_benchmarks_active_services_win.stdout | trim | length > 0
+  failed_when: false
+
+# ── 4. Disable page file (swap equivalent) ──────────────────────────────
+- name: Save page file state
+  ansible.windows.win_shell: |
+    $pf = Get-CimInstance Win32_PageFileSetting -ErrorAction SilentlyContinue
+    if ($pf) { 'enabled' } else { 'disabled' }
+  register: run_benchmarks_orig_pagefile
+  changed_when: false
+  failed_when: false
+
+- name: Disable automatic page file management
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    if ($cs.AutomaticManagedPagefile) {
+      $cs | Set-CimInstance -Property @{AutomaticManagedPagefile=$false}
+    }
+    Get-CimInstance Win32_PageFileSetting -ErrorAction SilentlyContinue |
+      Remove-CimInstance -ErrorAction SilentlyContinue
+  changed_when: true
+  failed_when: false
+
+# ── 5. Flush caches ─────────────────────────────────────────────────────
+- name: Flush file system cache (Windows)
+  ansible.windows.win_shell: |
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+  changed_when: false
+
+# ── 6. Wait for system to settle ────────────────────────────────────────
+- name: Wait for CPU load to settle (Windows)
+  ansible.windows.win_shell: |
+    for ($i = 0; $i -lt 30; $i++) {
+      $cpu = (Get-CimInstance Win32_Processor).LoadPercentage
+      if ($cpu -lt 10) { exit 0 }
+      Start-Sleep -Seconds 2
+    }
+  changed_when: false

@@ -1,0 +1,109 @@
+---
+# Restore the VM to its original state after benchmarking.
+# OS-agnostic — works on Linux (all distros) and FreeBSD.
+
+# ── ASLR ──────────────────────────────────────────────────────────────────
+- name: Re-enable ASLR (Linux)
+  ansible.builtin.shell:
+    cmd: >-
+      echo {{ run_benchmarks_orig_aslr.content | b64decode | trim }}
+      > /proc/sys/kernel/randomize_va_space
+  become: true
+  changed_when: true
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_aslr is defined and
+    run_benchmarks_orig_aslr.content is defined
+
+- name: Re-enable ASLR (FreeBSD)
+  ansible.builtin.command:
+    cmd: >-
+      sysctl kern.elf64.aslr.enable={{ run_benchmarks_orig_aslr_bsd.stdout | default('1') | trim }}
+  become: true
+  changed_when: true
+  when: >-
+    ansible_system | default('Linux') == 'FreeBSD' and
+    run_benchmarks_orig_aslr_bsd is defined and
+    run_benchmarks_orig_aslr_bsd is not failed
+
+# ── NMI watchdog ──────────────────────────────────────────────────────────
+- name: Re-enable NMI watchdog (Linux)
+  ansible.builtin.shell:
+    cmd: echo 1 > /proc/sys/kernel/nmi_watchdog
+  become: true
+  changed_when: true
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+# ── CPU governor ──────────────────────────────────────────────────────────
+- name: Restore CPU governor (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      GOV="{{ run_benchmarks_orig_governor.content | b64decode | trim }}"
+      for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        [ -f "$gov" ] && echo "$GOV" > "$gov"
+      done
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_governor is defined and
+    run_benchmarks_orig_governor.content is defined
+
+# ── I/O scheduler ────────────────────────────────────────────────────────
+- name: Restore I/O scheduler (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      SCHED="{{ run_benchmarks_orig_iosched.stdout | trim }}"
+      for disk in $(lsblk -dno NAME); do
+        echo "$SCHED" > "/sys/block/${disk}/queue/scheduler" 2>/dev/null || true
+      done
+  become: true
+  changed_when: true
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_iosched is defined and
+    run_benchmarks_orig_iosched is not failed
+
+# ── Services ─────────────────────────────────────────────────────────────
+- name: Restart stopped services (systemd)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+  loop: "{{ run_benchmarks_active_services.stdout_lines | default([]) }}"
+  become: true
+  when: >-
+    ansible_service_mgr | default('systemd') == 'systemd' and
+    run_benchmarks_active_services.stdout_lines | default([]) | length > 0
+  failed_when: false
+
+# ── Swap ─────────────────────────────────────────────────────────────────
+- name: Re-enable swap (Linux)
+  ansible.builtin.command:
+    cmd: swapon -a
+  become: true
+  changed_when: true
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_swap is defined and
+    (run_benchmarks_orig_swap.stdout | default('') | length > 0)
+
+- name: Re-enable swap (FreeBSD)
+  ansible.builtin.command:
+    cmd: swapon -a
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'FreeBSD' and
+    run_benchmarks_orig_swap_bsd is defined and
+    (run_benchmarks_orig_swap_bsd.stdout_lines | default([]) | length > 1)
+
+# ── Caches ───────────────────────────────────────────────────────────────
+- name: Drop filesystem caches after benchmarks (Linux)
+  ansible.builtin.shell:
+    cmd: echo 3 > /proc/sys/vm/drop_caches
+  become: true
+  changed_when: true
+  when: ansible_system | default('Linux') == 'Linux'

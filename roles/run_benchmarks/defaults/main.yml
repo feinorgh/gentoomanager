@@ -1,0 +1,33 @@
+---
+# Number of benchmark runs per command
+run_benchmarks_runs: 5
+
+# Number of warmup runs before measurement
+run_benchmarks_warmup: 1
+
+# Categories to run (empty list = all)
+# Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup
+run_benchmarks_categories: []
+
+# Local directory for collected results
+run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
+
+# Remote working directory for test data
+run_benchmarks_work_dir: /tmp/ansible-benchmarks
+run_benchmarks_work_dir_win: C:\ansible-benchmarks
+
+# Test data sizes
+run_benchmarks_compress_size_mb: 64
+run_benchmarks_ffmpeg_duration_sec: 10
+
+# Hyperfine binary name
+run_benchmarks_hyperfine_bin: hyperfine
+
+# Include Windows hosts in benchmark runs (opt-in)
+run_benchmarks_include_windows: false
+
+# Gentoo build time analysis: minimum build duration to include (seconds)
+run_benchmarks_gentoo_min_build_secs: 300
+
+# Gentoo build time analysis: number of recent builds to collect per package
+run_benchmarks_gentoo_max_builds: 3

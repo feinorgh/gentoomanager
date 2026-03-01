@@ -1,0 +1,14 @@
+---
+# defaults file for local.gentoomanager.apply_portage_config
+
+# Path to make.conf on the remote host
+apply_portage_config_make_conf: /etc/portage/make.conf
+
+# Directory containing per-package USE flag files
+apply_portage_config_package_use_dir: /etc/portage/package.use
+
+# Paths to the use_flags variable files on the controller.
+# These are loaded explicitly to work around Ansible's default
+# hash_behaviour=replace, which prevents automatic dict merging.
+apply_portage_config_group_vars_file: "{{ playbook_dir }}/../group_vars/all/use_flags.yml"
+apply_portage_config_host_vars_file: "{{ playbook_dir }}/../host_vars/{{ inventory_hostname }}/use_flags.yml"

@@ -1,0 +1,224 @@
+---
+# Compiler benchmarks: gcc, clang, rustc, go
+
+- name: Create C benchmark project
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/bench.c"
+    mode: "0644"
+    content: |
+      /* Small but non-trivial C benchmark: matrix multiply + sorting */
+      #include <stdio.h>
+      #include <stdlib.h>
+      #include <string.h>
+
+      #define N 256
+
+      static double A[N][N], B[N][N], C[N][N];
+
+      static void matmul(void) {
+          for (int i = 0; i < N; i++)
+              for (int j = 0; j < N; j++) {
+                  double sum = 0.0;
+                  for (int k = 0; k < N; k++)
+                      sum += A[i][k] * B[k][j];
+                  C[i][j] = sum;
+              }
+      }
+
+      static int cmp(const void *a, const void *b) {
+          double da = *(const double *)a, db = *(const double *)b;
+          return (da > db) - (da < db);
+      }
+
+      int main(void) {
+          srand(42);
+          for (int i = 0; i < N; i++)
+              for (int j = 0; j < N; j++) {
+                  A[i][j] = (double)rand() / RAND_MAX;
+                  B[i][j] = (double)rand() / RAND_MAX;
+              }
+          matmul();
+          qsort(C, N * N, sizeof(double), cmp);
+          printf("result: %f\n", C[N * N / 2]);
+          return 0;
+      }
+
+- name: Check available compilers
+  ansible.builtin.shell:
+    cmd: |
+      for cmd in gcc clang rustc go; do
+        command -v "$cmd" >/dev/null 2>&1 && echo "$cmd"
+      done
+  register: run_benchmarks_compilers_available
+  changed_when: false
+
+- name: Run C compiler benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      CMDS=""
+      {% for compiler in ['gcc', 'clang'] %}
+      if command -v {{ compiler }} >/dev/null 2>&1; then
+        for opt in "-O0" "-O2" "-O3" "-O3 -flto" "-Os"; do
+          OPTLABEL=$(echo "$opt" | tr ' ' '_')
+          CMDS="$CMDS --command-name '{{ compiler }}-${OPTLABEL}-compile' '{{ compiler }} $opt -o bench_${OPTLABEL} bench.c -lm'"
+        done
+      fi
+      {% endfor %}
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
+          $CMDS
+      fi
+  changed_when: false
+
+- name: Run C runtime benchmarks (compiled binaries)
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      # Compile all variants first
+      CMDS=""
+      {% for compiler in ['gcc', 'clang'] %}
+      if command -v {{ compiler }} >/dev/null 2>&1; then
+        for opt in "-O2" "-O3" "-O3 -flto"; do
+          OPTLABEL=$(echo "$opt" | tr ' ' '_')
+          {{ compiler }} $opt -o bench_{{ compiler }}_${OPTLABEL} bench.c -lm 2>/dev/null || true
+          if [ -f bench_{{ compiler }}_${OPTLABEL} ]; then
+            CMDS="$CMDS --command-name '{{ compiler }}-${OPTLABEL}-run' './bench_{{ compiler }}_${OPTLABEL}'"
+          fi
+        done
+      fi
+      {% endfor %}
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
+          $CMDS
+      fi
+  changed_when: false
+
+- name: Create Rust benchmark project
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      if command -v rustc >/dev/null 2>&1 && [ ! -d {{ run_benchmarks_work_dir }}/rust_bench ]; then
+        mkdir -p {{ run_benchmarks_work_dir }}/rust_bench/src
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml << 'TOML'
+      [package]
+      name = "bench"
+      version = "0.1.0"
+      edition = "2021"
+
+      [[bin]]
+      name = "bench"
+      path = "src/main.rs"
+      TOML
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs << 'RUST'
+      fn matmul(a: &[[f64; 128]; 128], b: &[[f64; 128]; 128]) -> [[f64; 128]; 128] {
+          let mut c = [[0.0f64; 128]; 128];
+          for i in 0..128 {
+              for j in 0..128 {
+                  let mut sum = 0.0;
+                  for k in 0..128 { sum += a[i][k] * b[k][j]; }
+                  c[i][j] = sum;
+              }
+          }
+          c
+      }
+      fn main() {
+          let mut a = [[0.0f64; 128]; 128];
+          let mut b = [[0.0f64; 128]; 128];
+          let mut seed: u64 = 42;
+          for i in 0..128 {
+              for j in 0..128 {
+                  seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                  a[i][j] = (seed >> 33) as f64 / (1u64 << 31) as f64;
+                  seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                  b[i][j] = (seed >> 33) as f64 / (1u64 << 31) as f64;
+              }
+          }
+          let c = matmul(&a, &b);
+          println!("result: {}", c[64][64]);
+      }
+      RUST
+      fi
+    creates: "{{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml"
+  changed_when: false
+
+- name: Run Rust compile benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}/rust_bench
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --prepare 'cargo clean 2>/dev/null || true' \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_rust.json \
+        --command-name 'cargo-debug' 'cargo build 2>&1' \
+        --command-name 'cargo-release' 'cargo build --release 2>&1'
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+  changed_when: false
+
+- name: Create Go benchmark project
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      if command -v go >/dev/null 2>&1 && [ ! -d {{ run_benchmarks_work_dir }}/go_bench ]; then
+        mkdir -p {{ run_benchmarks_work_dir }}/go_bench
+        cat > {{ run_benchmarks_work_dir }}/go_bench/main.go << 'GO'
+      package main
+
+      import (
+        "fmt"
+        "math/rand"
+        "sort"
+      )
+
+      const N = 256
+
+      func main() {
+        r := rand.New(rand.NewSource(42))
+        a := make([]float64, N*N)
+        b := make([]float64, N*N)
+        c := make([]float64, N*N)
+        for i := range a {
+          a[i] = r.Float64()
+          b[i] = r.Float64()
+        }
+        for i := 0; i < N; i++ {
+          for j := 0; j < N; j++ {
+            sum := 0.0
+            for k := 0; k < N; k++ {
+              sum += a[i*N+k] * b[k*N+j]
+            }
+            c[i*N+j] = sum
+          }
+        }
+        sort.Float64s(c)
+        fmt.Printf("result: %f\n", c[len(c)/2])
+      }
+      GO
+        cd {{ run_benchmarks_work_dir }}/go_bench && go mod init bench
+      fi
+    creates: "{{ run_benchmarks_work_dir }}/go_bench/main.go"
+  changed_when: false
+
+- name: Run Go compile benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}/go_bench
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --prepare 'rm -f bench' \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_go.json \
+        --command-name 'go-build' 'go build -o bench .'
+  when: "'go' in run_benchmarks_compilers_available.stdout"
+  changed_when: false

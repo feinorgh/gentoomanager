@@ -1,0 +1,24 @@
+---
+# Provision VMs with all software required for the benchmark suite.
+#
+# Usage:
+#   ansible-playbook playbooks/provision_benchmarks.yml
+#
+#   # Only VMs on one hypervisor:
+#   ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_hv1
+#
+#   # Including Windows hosts:
+#   ansible-playbook playbooks/provision_benchmarks.yml \
+#     -e provision_benchmarks_include_windows=true
+#
+#   # With sudo password:
+#   ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
+
+- name: Provision benchmark VMs
+  hosts: "all:!mswindows:!win:!win11"
+  gather_facts: true
+  ignore_unreachable: true
+  any_errors_fatal: false
+
+  roles:
+    - role: provision_benchmarks

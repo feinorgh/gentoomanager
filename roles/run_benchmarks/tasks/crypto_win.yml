@@ -1,0 +1,49 @@
+---
+# Crypto benchmarks on Windows using certutil and OpenSSL (if available).
+
+- name: Check crypto tools (Windows)
+  ansible.windows.win_shell: |
+    $tools = @()
+    if (Get-Command certutil -ErrorAction SilentlyContinue) { $tools += 'certutil' }
+    if (Get-Command openssl -ErrorAction SilentlyContinue) { $tools += 'openssl' }
+    $tools -join ','
+  register: run_benchmarks_win_crypto_tools
+  changed_when: false
+
+- name: Run hash benchmarks with certutil (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $cmds = @()
+
+    foreach ($algo in @('SHA256', 'SHA512', 'MD5')) {
+      $cmds += "--command-name 'certutil-${algo}' 'certutil -hashfile $wd\testdata.bin ${algo} >NUL'"
+    }
+
+    $argStr = $cmds -join ' '
+    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\crypto-hash.json $argStr"
+  changed_when: false
+  when: "'certutil' in run_benchmarks_win_crypto_tools.stdout"
+
+- name: Run OpenSSL speed benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $cmds = @()
+
+    foreach ($cipher in @('aes-256-cbc', 'aes-256-gcm', 'chacha20-poly1305')) {
+      $cmds += "--command-name 'openssl-${cipher}' 'openssl speed -elapsed -seconds 3 ${cipher} >NUL 2>&1'"
+    }
+
+    foreach ($hash in @('sha256', 'sha512')) {
+      $cmds += "--command-name 'openssl-${hash}' 'openssl speed -elapsed -seconds 3 ${hash} >NUL 2>&1'"
+    }
+
+    $argStr = $cmds -join ' '
+    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\crypto-openssl.json $argStr"
+  changed_when: false
+  when: "'openssl' in run_benchmarks_win_crypto_tools.stdout"

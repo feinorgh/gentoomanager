@@ -1,0 +1,99 @@
+---
+# Coreutils-equivalent benchmarks on Windows using PowerShell and native tools.
+
+- name: Create large text file for sort/grep benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $path = "$wd\textdata.txt"
+    if (-not (Test-Path $path)) {
+      $lines = @()
+      $rng = New-Object System.Random(42)
+      $words = @('alpha','bravo','charlie','delta','echo','foxtrot',
+                 'golf','hotel','india','juliet','kilo','lima','mike',
+                 'november','oscar','papa','quebec','romeo','sierra',
+                 'tango','uniform','victor','whiskey','xray','yankee','zulu')
+      for ($i = 0; $i -lt 500000; $i++) {
+        $line = ""
+        for ($j = 0; $j -lt 8; $j++) {
+          $line += $words[$rng.Next($words.Length)] + " "
+        }
+        $lines += $line.Trim()
+      }
+      $lines | Out-File -FilePath $path -Encoding UTF8
+    }
+  changed_when: false
+
+- name: Check available tools (Windows)
+  ansible.windows.win_shell: |
+    $tools = @()
+    if (Get-Command sort -ErrorAction SilentlyContinue) { $tools += 'sort' }
+    if (Get-Command findstr -ErrorAction SilentlyContinue) { $tools += 'findstr' }
+    if (Get-Command git -ErrorAction SilentlyContinue) { $tools += 'git' }
+    if (Get-Command tar -ErrorAction SilentlyContinue) { $tools += 'tar' }
+    $tools -join ','
+  register: run_benchmarks_win_coreutils_tools
+  changed_when: false
+
+- name: Run coreutils benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $cmds = @()
+
+    # PowerShell Sort-Object
+    $cmds += "--command-name 'powershell-sort' 'powershell -NoProfile -Command \"Get-Content $wd\textdata.txt | Sort-Object | Out-Null\"'"
+
+    # PowerShell Select-String (grep equivalent)
+    $cmds += "--command-name 'powershell-grep' 'powershell -NoProfile -Command \"Select-String -Path $wd\textdata.txt -Pattern echo | Out-Null\"'"
+
+    # findstr (native grep)
+    if ('{{ run_benchmarks_win_coreutils_tools.stdout }}' -match 'findstr') {
+      $cmds += "--command-name 'findstr' 'findstr /C:\"echo\" $wd\textdata.txt >NUL'"
+    }
+
+    # PowerShell Get-ChildItem -Recurse (find equivalent)
+    $cmds += "--command-name 'powershell-find' 'powershell -NoProfile -Command \"Get-ChildItem C:\Windows\System32 -Recurse -File -ErrorAction SilentlyContinue | Measure-Object | Out-Null\"'"
+
+    # tar archive/extract
+    if ('{{ run_benchmarks_win_coreutils_tools.stdout }}' -match 'tar') {
+      $cmds += "--command-name 'tar-archive' 'tar cf $wd\textdata.tar -C $wd textdata.txt'"
+    }
+
+    if ($cmds.Count -gt 0) {
+      $argStr = $cmds -join ' '
+      Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\coreutils.json $argStr"
+    }
+  changed_when: false
+
+- name: Run git benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+
+    # Create a test git repo
+    $repoDir = "$wd\git-bench"
+    if (Test-Path $repoDir) { Remove-Item $repoDir -Recurse -Force }
+    New-Item -Path $repoDir -ItemType Directory -Force | Out-Null
+    Push-Location $repoDir
+    git init | Out-Null
+    for ($i = 0; $i -lt 100; $i++) {
+      "File $i content $(Get-Random)" | Out-File -FilePath "file$i.txt" -Encoding UTF8
+      git add "file$i.txt" 2>$null
+      git commit -m "Commit $i" --allow-empty-message 2>$null | Out-Null
+    }
+    Pop-Location
+
+    $cmds = @(
+      "--command-name 'git-log' 'git -C $repoDir log --oneline >NUL'",
+      "--command-name 'git-status' 'git -C $repoDir status >NUL'",
+      "--command-name 'git-diff' 'git -C $repoDir diff HEAD~10 HEAD >NUL'"
+    )
+
+    $argStr = $cmds -join ' '
+    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\coreutils-git.json $argStr"
+  changed_when: false
+  when: "'git' in run_benchmarks_win_coreutils_tools.stdout"

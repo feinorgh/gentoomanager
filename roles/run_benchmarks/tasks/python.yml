@@ -1,0 +1,95 @@
+---
+# Python performance benchmarks
+
+- name: Check Python3 availability
+  ansible.builtin.command:
+    cmd: python3 --version
+  register: run_benchmarks_python_check
+  changed_when: false
+  failed_when: false
+
+- name: Create Python benchmark script
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/pybench.py"
+    mode: "0755"
+    content: |
+      #!/usr/bin/env python3
+      """Micro-benchmarks for Python performance."""
+      import sys
+      import json
+      import re
+      import hashlib
+      import time
+
+      def fib(n):
+          if n < 2:
+              return n
+          return fib(n - 1) + fib(n - 2)
+
+      def bench_fibonacci():
+          fib(32)
+
+      def bench_json():
+          data = {f"key_{i}": list(range(100)) for i in range(100)}
+          for _ in range(50):
+              s = json.dumps(data)
+              json.loads(s)
+
+      def bench_regex():
+          pattern = re.compile(
+              r'(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)'
+          )
+          text = "Connect from 192.168.1.100 to 10.0.0.1 via 172.16.0.255 " * 1000
+          for _ in range(100):
+              pattern.findall(text)
+
+      def bench_hash():
+          data = b"x" * (1024 * 1024)
+          for _ in range(50):
+              hashlib.sha256(data).hexdigest()
+
+      def bench_list_comprehension():
+          for _ in range(100):
+              _ = [x ** 2 for x in range(10000)]
+
+      def bench_dict_operations():
+          for _ in range(100):
+              d = {str(i): i for i in range(10000)}
+              _ = sum(d.values())
+
+      benchmarks = {
+          "fibonacci": bench_fibonacci,
+          "json_serde": bench_json,
+          "regex": bench_regex,
+          "sha256_hash": bench_hash,
+          "list_comprehension": bench_list_comprehension,
+          "dict_operations": bench_dict_operations,
+      }
+
+      if __name__ == "__main__":
+          name = sys.argv[1] if len(sys.argv) > 1 else "all"
+          if name == "all":
+              for fn in benchmarks.values():
+                  fn()
+          else:
+              benchmarks[name]()
+  when: run_benchmarks_python_check.rc == 0
+
+- name: Run Python benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/python.json \
+        --command-name 'fibonacci' 'python3 pybench.py fibonacci' \
+        --command-name 'json-serde' 'python3 pybench.py json_serde' \
+        --command-name 'regex' 'python3 pybench.py regex' \
+        --command-name 'sha256-hash' 'python3 pybench.py sha256_hash' \
+        --command-name 'list-comprehension' 'python3 pybench.py list_comprehension' \
+        --command-name 'dict-operations' 'python3 pybench.py dict_operations' \
+        --command-name 'python-all' 'python3 pybench.py all'
+  when: run_benchmarks_python_check.rc == 0
+  changed_when: false

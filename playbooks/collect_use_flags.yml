@@ -1,0 +1,56 @@
+---
+# Collect Gentoo USE flags from all Gentoo hosts, then collapse them
+# into group_vars/ and host_vars/ on the controller.
+#
+# Usage:
+#   ansible-playbook playbooks/collect_use_flags.yml -i inventory_generator.py
+#   ansible-playbook playbooks/collect_use_flags.yml -i inventory_generator.py --limit gentoo
+#   ansible-playbook playbooks/collect_use_flags.yml -i inventory_generator.py --check  # dry-run
+
+- name: Collect USE flags from Gentoo hosts
+  hosts: "{{ target_hosts | default('gentoo') }}"
+  gather_facts: false
+
+  pre_tasks:
+    - name: Ensure this host is running Gentoo
+      ansible.builtin.raw: test -f /etc/gentoo-release
+      changed_when: false
+      failed_when: false
+      register: _gentoo_check
+
+    - name: Skip non-Gentoo hosts
+      ansible.builtin.meta: end_host
+      when: _gentoo_check.rc != 0
+
+  roles:
+    - role: collect_use_flags
+
+# ---------------------------------------------------------------------------
+# Collapse collected facts into group_vars / host_vars
+# ---------------------------------------------------------------------------
+- name: Collapse USE flags into group_vars and host_vars
+  hosts: localhost
+  gather_facts: false
+  run_once: true
+
+  vars:
+    _facts_dir: "{{ hostvars[groups['gentoo'][0]]['collect_use_flags_facts_dir']
+      | default('/tmp/ansible_use_flags_facts') }}"
+    _output_dir: "{{ playbook_dir | dirname }}"
+    _script: "{{ playbook_dir | dirname }}/scripts/collapse_use_flags.py"
+
+  tasks:
+    - name: Run collapse script
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ _script }}
+          --facts-dir {{ _facts_dir }}
+          --output-dir {{ _output_dir }}
+          {{ '--dry-run' if ansible_check_mode else '' }}
+      changed_when: not ansible_check_mode
+      register: _collapse_result
+
+    - name: Show collapse script output
+      ansible.builtin.debug:
+        msg: "{{ _collapse_result.stdout_lines }}"
+      when: _collapse_result.stdout_lines | length > 0

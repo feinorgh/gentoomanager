@@ -1,0 +1,212 @@
+---
+# Setup: verify hyperfine, create test data, collect host metadata.
+# OS-agnostic — works on Linux (all distros) and FreeBSD.
+# Run playbooks/provision_benchmarks.yml first to install all dependencies.
+
+# ---------------------------------------------------------------------------
+# Verify hyperfine is available
+# ---------------------------------------------------------------------------
+- name: Check that hyperfine is installed
+  ansible.builtin.command:
+    cmd: hyperfine --version
+  register: run_benchmarks_hf_check
+  changed_when: false
+  failed_when: false
+
+- name: Warn if hyperfine is missing
+  ansible.builtin.fail:
+    msg: >-
+      hyperfine is not installed on {{ inventory_hostname }}.
+      Run 'ansible-playbook playbooks/provision_benchmarks.yml' first.
+  when: run_benchmarks_hf_check.rc != 0
+
+# ---------------------------------------------------------------------------
+# Create test data
+# ---------------------------------------------------------------------------
+- name: Create benchmark working directory
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Generate random test data for compression benchmarks
+  ansible.builtin.command:
+    cmd: >-
+      dd if=/dev/urandom of={{ run_benchmarks_work_dir }}/testdata.bin
+      bs=1M count={{ run_benchmarks_compress_size_mb }}
+    creates: "{{ run_benchmarks_work_dir }}/testdata.bin"
+
+# ---------------------------------------------------------------------------
+# Collect host metadata (OS-agnostic, uses Ansible gathered facts)
+# ---------------------------------------------------------------------------
+- name: Gather compiler and tool versions
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      echo "::gcc::$(gcc --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::clang::$(clang --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::rustc::$(rustc --version 2>/dev/null || echo 'not installed')"
+      echo "::go::$(go version 2>/dev/null || echo 'not installed')"
+      echo "::python::$(python3 --version 2>/dev/null || echo 'not installed')"
+      echo "::ffmpeg::$(ffmpeg -version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::openssl::$(openssl version 2>/dev/null || echo 'not installed')"
+      echo "::kernel::$(uname -r)"
+  register: run_benchmarks_versions_raw
+  changed_when: false
+
+- name: Get CPU max clock speed (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      if [ -f /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq ]; then
+        cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
+      elif [ -f /proc/cpuinfo ]; then
+        grep -m1 'cpu MHz' /proc/cpuinfo | awk '{print $NF * 1000}' | cut -d. -f1
+      else
+        echo '0'
+      fi
+  register: run_benchmarks_cpu_freq_raw
+  changed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Get CPU max clock speed (FreeBSD)
+  ansible.builtin.command:
+    cmd: sysctl -n hw.clockrate
+  register: run_benchmarks_cpu_freq_bsd
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'FreeBSD'
+
+# ---------------------------------------------------------------------------
+# Detect distro default build flags (non-Gentoo)
+# ---------------------------------------------------------------------------
+- name: Initialize distro build flag variables
+  ansible.builtin.set_fact:
+    run_benchmarks_distro_cflags: ""
+    run_benchmarks_distro_ldflags: ""
+
+- name: Detect distro default build flags
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      CFLAGS=""
+      LDFLAGS=""
+      # RPM-based (Fedora, RHEL, CentOS, openSUSE, Oracle Linux)
+      if command -v rpm >/dev/null 2>&1; then
+        CFLAGS=$(rpm --eval '%{build_cflags}' 2>/dev/null) || \
+        CFLAGS=$(rpm --eval '%{optflags}' 2>/dev/null) || true
+        LDFLAGS=$(rpm --eval '%{build_ldflags}' 2>/dev/null) || true
+      # Debian-based (Debian, Ubuntu, Mint, Elementary)
+      elif command -v dpkg-buildflags >/dev/null 2>&1; then
+        CFLAGS=$(dpkg-buildflags --get CFLAGS 2>/dev/null) || true
+        LDFLAGS=$(dpkg-buildflags --get LDFLAGS 2>/dev/null) || true
+      # Arch-based (Arch, Manjaro, CachyOS)
+      elif [ -f /etc/makepkg.conf ]; then
+        CFLAGS=$(grep '^CFLAGS=' /etc/makepkg.conf | head -1 | sed 's/^CFLAGS=//' | tr -d '"') || true
+        LDFLAGS=$(grep '^LDFLAGS=' /etc/makepkg.conf | head -1 | sed 's/^LDFLAGS=//' | tr -d '"') || true
+      fi
+      # FreeBSD: check /etc/make.conf for overrides
+      if [ -f /etc/make.conf ]; then
+        fc=$(grep '^CFLAGS' /etc/make.conf | head -1 | sed 's/^CFLAGS[+:]*=[[:space:]]*//' | tr -d '"') || true
+        fl=$(grep '^LDFLAGS' /etc/make.conf | head -1 | sed 's/^LDFLAGS[+:]*=[[:space:]]*//' | tr -d '"') || true
+        [ -n "$fc" ] && CFLAGS="$fc"
+        [ -n "$fl" ] && LDFLAGS="$fl"
+      fi
+      # Fallback: extract GCC default flags from its spec/config
+      if [ -z "$CFLAGS" ] && command -v gcc >/dev/null 2>&1; then
+        specs=$(gcc -dumpspecs 2>/dev/null || true)
+        config=$(gcc -v 2>&1 | grep '^Configured with:' | sed 's/Configured with: //' || true)
+        # Extract --with-arch and optimization defaults
+        march=$(echo "$config" | grep -oP '(?<=--with-arch=)\S+' || true)
+        mtune=$(echo "$config" | grep -oP '(?<=--with-tune=)\S+' || true)
+        [ -n "$march" ] && CFLAGS="-march=${march}"
+        [ -n "$mtune" ] && CFLAGS="${CFLAGS:+$CFLAGS }-mtune=${mtune}"
+        # Detect hardening defaults
+        echo "$specs" | grep -q 'fstack-protector' && CFLAGS="${CFLAGS:+$CFLAGS }-fstack-protector-strong"
+        echo "$config" | grep -q 'enable-default-pie' && CFLAGS="${CFLAGS:+$CFLAGS }-fPIE"
+        echo "$config" | grep -q 'enable-default-ssp' && CFLAGS="${CFLAGS:+$CFLAGS }-fstack-protector-strong"
+      fi
+      echo "${CFLAGS}"
+      echo "${LDFLAGS}"
+  register: run_benchmarks_distro_flags_raw
+  changed_when: false
+  when: ansible_distribution | default('') != 'Gentoo'
+
+- name: Parse distro build flags
+  ansible.builtin.set_fact:
+    run_benchmarks_distro_cflags: "{{ (run_benchmarks_distro_flags_raw.stdout_lines | default(['']))[0] | default('') | trim }}"
+    run_benchmarks_distro_ldflags: "{{ (run_benchmarks_distro_flags_raw.stdout_lines | default(['', '']))[1] | default('') | trim }}"
+  when: >-
+    run_benchmarks_distro_flags_raw is defined and
+    run_benchmarks_distro_flags_raw is not skipped
+
+# ---------------------------------------------------------------------------
+# GCC march=native expansion (all distros)
+# ---------------------------------------------------------------------------
+- name: Get GCC march=native expansion
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      gcc -march=native -Q --help=target 2>/dev/null |
+        grep -m1 '^\s*-march=' | awk '{print $2}' || echo ''
+  register: run_benchmarks_march_native_raw
+  changed_when: false
+  failed_when: false
+
+- name: Read Gentoo make.conf
+  ansible.builtin.slurp:
+    src: /etc/portage/make.conf
+  register: run_benchmarks_makeconf_raw
+  failed_when: false
+  when: ansible_distribution | default('') == 'Gentoo'
+
+- name: Parse host metadata
+  ansible.builtin.set_fact:
+    run_benchmarks_metadata:
+      hostname: "{{ inventory_hostname }}"
+      os: "{{ ansible_distribution | default('unknown') }}"
+      os_version: "{{ ansible_distribution_version | default('') }}"
+      os_family: "{{ ansible_os_family | default('unknown') }}"
+      cpu_model: "{{ ansible_processor[2] | default('unknown') }}"
+      cpu_cores: "{{ ansible_processor_vcpus | default(1) }}"
+      cpu_mhz: >-
+        {{
+          (run_benchmarks_cpu_freq_raw.stdout | default('0') | trim | int / 1000)
+          | round(0) | int
+          if (ansible_system | default('') == 'Linux')
+          else
+          (run_benchmarks_cpu_freq_bsd.stdout | default('0') | trim | int)
+          if (ansible_system | default('') == 'FreeBSD')
+          else 0
+        }}
+      march_native: "{{ run_benchmarks_march_native_raw.stdout | default('') | trim }}"
+      versions: >-
+        {{ run_benchmarks_versions_raw.stdout_lines
+           | select('match', '^::')
+           | map('regex_replace', '^::([^:]+)::(.*)', '\1=\2')
+           | list }}
+      common_flags: >-
+        {{
+          (make_conf | default({})).get('COMMON_FLAGS', '')
+          if (ansible_distribution | default('') == 'Gentoo')
+          else run_benchmarks_distro_cflags
+        }}
+      cflags: >-
+        {{
+          (build_profile | default({})).get('CFLAGS', '')
+          if (ansible_distribution | default('') == 'Gentoo')
+          else run_benchmarks_distro_cflags
+        }}
+      ldflags: >-
+        {{
+          (build_profile | default({})).get('LDFLAGS', '')
+          if (ansible_distribution | default('') == 'Gentoo')
+          else run_benchmarks_distro_ldflags
+        }}
+      features: "{{ (make_conf | default({})).get('FEATURES', '') }}"
+
+- name: Write host metadata JSON
+  ansible.builtin.copy:
+    content: "{{ run_benchmarks_metadata | to_nice_json }}"
+    dest: "{{ run_benchmarks_work_dir }}/metadata.json"
+    mode: "0644"

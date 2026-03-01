@@ -1,0 +1,6 @@
+---
+# vars file for local.gentoomanager.collect_use_flags
+#
+# USE_EXPAND and build-profile variable lists are defined as constants in
+# scripts/collapse_use_flags.py, which parses them from the raw make.conf
+# text collected by this role.

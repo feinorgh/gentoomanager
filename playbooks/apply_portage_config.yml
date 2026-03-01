@@ -1,0 +1,28 @@
+---
+# Apply Portage configuration to Gentoo hosts based on the variables
+# collected by the collect_use_flags role.
+#
+# Usage:
+#   ansible-playbook playbooks/apply_portage_config.yml --check --diff  # dry-run
+#   ansible-playbook playbooks/apply_portage_config.yml                 # apply
+#   ansible-playbook playbooks/apply_portage_config.yml --limit gentoo-vm1
+
+- name: Apply Portage configuration to Gentoo hosts
+  hosts: "{{ target_hosts | default('gentoo') }}"
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Ensure this host is running Gentoo
+      ansible.builtin.raw: test -f /etc/gentoo-release
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: __apply_portage_config_gentoo_check
+
+    - name: Skip non-Gentoo hosts
+      ansible.builtin.meta: end_host
+      when: __apply_portage_config_gentoo_check.rc != 0
+
+  roles:
+    - role: apply_portage_config

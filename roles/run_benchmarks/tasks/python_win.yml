@@ -1,0 +1,95 @@
+---
+# Python micro-benchmarks on Windows.
+
+- name: Check Python availability (Windows)
+  ansible.windows.win_shell: python --version 2>&1
+  register: run_benchmarks_win_python_check
+  changed_when: false
+  failed_when: false
+
+- name: Create Python benchmark script (Windows)
+  ansible.windows.win_copy:
+    content: |
+      import json, time, hashlib, re, sys, os
+
+      def bench_fibonacci():
+          def fib(n):
+              a, b = 0, 1
+              for _ in range(n):
+                  a, b = b, a + b
+              return a
+          start = time.perf_counter()
+          fib(500000)
+          return time.perf_counter() - start
+
+      def bench_json():
+          data = {str(i): list(range(100)) for i in range(100)}
+          start = time.perf_counter()
+          for _ in range(200):
+              json.loads(json.dumps(data))
+          return time.perf_counter() - start
+
+      def bench_regex():
+          text = "The quick brown fox " * 10000
+          pattern = re.compile(r'\b\w{4,6}\b')
+          start = time.perf_counter()
+          for _ in range(500):
+              pattern.findall(text)
+          return time.perf_counter() - start
+
+      def bench_hash():
+          data = os.urandom(1024 * 1024)
+          start = time.perf_counter()
+          for _ in range(100):
+              hashlib.sha256(data).hexdigest()
+          return time.perf_counter() - start
+
+      def bench_sort():
+          import random
+          data = list(range(100000))
+          random.shuffle(data)
+          start = time.perf_counter()
+          for _ in range(50):
+              sorted(data)
+          return time.perf_counter() - start
+
+      def bench_string():
+          start = time.perf_counter()
+          for _ in range(500):
+              s = ""
+              for i in range(5000):
+                  s += str(i)
+          return time.perf_counter() - start
+
+      benchmarks = {
+          'fibonacci': bench_fibonacci,
+          'json': bench_json,
+          'regex': bench_regex,
+          'hash': bench_hash,
+          'sort': bench_sort,
+          'string': bench_string,
+      }
+
+      results = {}
+      for name, fn in benchmarks.items():
+          results[name] = fn()
+      print(json.dumps(results))
+    dest: "{{ run_benchmarks_work_dir_win }}\\pybench.py"
+  when: run_benchmarks_win_python_check.rc == 0
+
+- name: Run Python benchmarks via hyperfine (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $cmds = @()
+
+    foreach ($bench in @('fibonacci', 'json', 'regex', 'hash', 'sort', 'string')) {
+      $cmds += "--command-name 'python-${bench}' 'python -c ""import json,time,hashlib,re,os,random,sys; exec(open(chr(39)+\"$wd\pybench.py\"+chr(39)).read())""'"
+    }
+
+    # Simpler approach: one benchmark command per invocation
+    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\python.json --command-name 'python-full' 'python $wd\pybench.py'"
+  changed_when: false
+  when: run_benchmarks_win_python_check.rc == 0

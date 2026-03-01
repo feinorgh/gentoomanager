@@ -1,0 +1,243 @@
+---
+# FFmpeg encode/decode benchmarks — discovers and benchmarks all available codecs
+
+- name: Check FFmpeg availability
+  ansible.builtin.command:
+    cmd: ffmpeg -version
+  register: run_benchmarks_ffmpeg_check
+  changed_when: false
+  failed_when: false
+
+- name: Discover available FFmpeg codecs
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 -c "
+      import json, subprocess, re
+
+      def get_names(cmd, type_char):
+          r = subprocess.run(cmd, capture_output=True, text=True)
+          names = set()
+          for line in r.stdout.splitlines():
+              m = re.match(r'^\s*' + type_char + r'[\.\w]{5}\s+(\S+)', line)
+              if m:
+                  names.add(m.group(1))
+          return sorted(names)
+
+      data = {
+          'video_encoders': get_names(['ffmpeg', '-encoders'], 'V'),
+          'audio_encoders': get_names(['ffmpeg', '-encoders'], 'A'),
+          'video_decoders': get_names(['ffmpeg', '-decoders'], 'V'),
+          'audio_decoders': get_names(['ffmpeg', '-decoders'], 'A'),
+      }
+      with open('{{ run_benchmarks_work_dir }}/ffmpeg_codecs.json', 'w') as f:
+          json.dump(data, f, indent=2)
+      print(json.dumps(data))
+      "
+  register: run_benchmarks_ffmpeg_codecs_raw
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: false
+
+# ── Test media generation ─────────────────────────────────────────────────
+
+- name: Generate test video with FFmpeg
+  ansible.builtin.shell:
+    cmd: |
+      ffmpeg -y -f lavfi \
+        -i "testsrc2=duration={{ run_benchmarks_ffmpeg_duration_sec }}:size=1920x1080:rate=30" \
+        -f lavfi -i "sine=frequency=440:duration={{ run_benchmarks_ffmpeg_duration_sec }}" \
+        -c:v rawvideo -c:a pcm_s16le \
+        {{ run_benchmarks_work_dir }}/test_raw.avi
+    creates: "{{ run_benchmarks_work_dir }}/test_raw.avi"
+  when: run_benchmarks_ffmpeg_check.rc == 0
+
+- name: Generate test audio with FFmpeg
+  ansible.builtin.shell:
+    cmd: |
+      ffmpeg -y -f lavfi \
+        -i "sine=frequency=440:duration={{ run_benchmarks_ffmpeg_duration_sec * 6 }}" \
+        -c:a pcm_s16le \
+        {{ run_benchmarks_work_dir }}/test_raw.wav
+    creates: "{{ run_benchmarks_work_dir }}/test_raw.wav"
+  when: run_benchmarks_ffmpeg_check.rc == 0
+
+# ── Video encoding ────────────────────────────────────────────────────────
+
+- name: Run FFmpeg video encoding benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ V/ {print $2}')
+      has() { echo "$ENCS" | grep -qx "$1"; }
+
+      CMDS=""
+      has libx264    && CMDS="$CMDS --command-name h264-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null'"
+      has libx265    && CMDS="$CMDS --command-name h265-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null'"
+      has libvpx     && CMDS="$CMDS --command-name vp8-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline good -an -f null /dev/null'"
+      has libvpx-vp9 && CMDS="$CMDS --command-name vp9-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline good -an -f null /dev/null'"
+      has libsvtav1  && CMDS="$CMDS --command-name av1-svt-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null'"
+      has libaom-av1 && CMDS="$CMDS --command-name av1-aom-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null'"
+      has librav1e   && CMDS="$CMDS --command-name av1-rav1e-encode \
+        'ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null'"
+      has libtheora  && CMDS="$CMDS --command-name theora-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null'"
+      has libxvid    && CMDS="$CMDS --command-name xvid-encode \
+        'ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 5 -an -f null /dev/null'"
+      has mpeg2video && CMDS="$CMDS --command-name mpeg2-encode \
+        'ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 5M -an -f null /dev/null'"
+      has mjpeg      && CMDS="$CMDS --command-name mjpeg-encode \
+        'ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null'"
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json ffmpeg_video_encode.json \
+          $CMDS
+      fi
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: false
+
+# ── Video decoding ────────────────────────────────────────────────────────
+
+- name: Prepare encoded video files for decode benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ V/ {print $2}')
+      has() { echo "$ENCS" | grep -qx "$1"; }
+
+      has libx264    && ffmpeg -y -i test_raw.avi -c:v libx264 -preset ultrafast -crf 18 -an test_h264.mp4           2>/dev/null || true
+      has libx265    && ffmpeg -y -i test_raw.avi -c:v libx265 -preset ultrafast -crf 22 -an test_h265.mp4           2>/dev/null || true
+      has libvpx     && ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an test_vp8.webm  2>/dev/null || true
+      has libvpx-vp9 && ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -an test_vp9.webm 2>/dev/null || true
+      has libsvtav1  && ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 45 -preset 12 -an test_av1_svt.mp4            2>/dev/null || true
+      has libaom-av1 && ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 50 -cpu-used 8 -row-mt 1 -an test_av1_aom.mp4 2>/dev/null || true
+      has librav1e   && ffmpeg -y -i test_raw.avi -c:v librav1e -qp 200 -speed 10 -an test_av1_rav1e.mp4            2>/dev/null || true
+      has libtheora  && ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 5 -an test_theora.mkv                         2>/dev/null || true
+      has libxvid    && ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 8 -an test_xvid.avi                             2>/dev/null || true
+      has mpeg2video && ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 8M -an test_mpeg2.mpg                        2>/dev/null || true
+      has mjpeg      && ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 10 -an test_mjpeg.avi                             2>/dev/null || true
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: true
+
+- name: Run FFmpeg video decoding benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      CMDS=""
+      [ -f test_h264.mp4 ]       && CMDS="$CMDS --command-name h264-decode       'ffmpeg -y -i test_h264.mp4 -f null /dev/null'"
+      [ -f test_h265.mp4 ]       && CMDS="$CMDS --command-name h265-decode       'ffmpeg -y -i test_h265.mp4 -f null /dev/null'"
+      [ -f test_vp8.webm ]       && CMDS="$CMDS --command-name vp8-decode        'ffmpeg -y -i test_vp8.webm -f null /dev/null'"
+      [ -f test_vp9.webm ]       && CMDS="$CMDS --command-name vp9-decode        'ffmpeg -y -i test_vp9.webm -f null /dev/null'"
+      [ -f test_av1_svt.mp4 ]    && CMDS="$CMDS --command-name av1-svt-decode    'ffmpeg -y -i test_av1_svt.mp4 -f null /dev/null'"
+      [ -f test_av1_aom.mp4 ]    && CMDS="$CMDS --command-name av1-aom-decode    'ffmpeg -y -i test_av1_aom.mp4 -f null /dev/null'"
+      [ -f test_av1_rav1e.mp4 ]  && CMDS="$CMDS --command-name av1-rav1e-decode  'ffmpeg -y -i test_av1_rav1e.mp4 -f null /dev/null'"
+      [ -f test_theora.mkv ]     && CMDS="$CMDS --command-name theora-decode     'ffmpeg -y -i test_theora.mkv -f null /dev/null'"
+      [ -f test_xvid.avi ]       && CMDS="$CMDS --command-name xvid-decode       'ffmpeg -y -i test_xvid.avi -f null /dev/null'"
+      [ -f test_mpeg2.mpg ]      && CMDS="$CMDS --command-name mpeg2-decode      'ffmpeg -y -i test_mpeg2.mpg -f null /dev/null'"
+      [ -f test_mjpeg.avi ]      && CMDS="$CMDS --command-name mjpeg-decode      'ffmpeg -y -i test_mjpeg.avi -f null /dev/null'"
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json ffmpeg_video_decode.json \
+          $CMDS
+      fi
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: false
+
+# ── Audio encoding ────────────────────────────────────────────────────────
+
+- name: Run FFmpeg audio encoding benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ A/ {print $2}')
+      has() { echo "$ENCS" | grep -qx "$1"; }
+
+      CMDS=""
+      has aac        && CMDS="$CMDS --command-name aac-encode     'ffmpeg -y -i test_raw.wav -c:a aac -b:a 192k -f null /dev/null'"
+      has libopus    && CMDS="$CMDS --command-name opus-encode    'ffmpeg -y -i test_raw.wav -c:a libopus -b:a 128k -f null /dev/null'"
+      has libmp3lame && CMDS="$CMDS --command-name mp3-encode     'ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k -f null /dev/null'"
+      has flac       && CMDS="$CMDS --command-name flac-encode    'ffmpeg -y -i test_raw.wav -c:a flac -f null /dev/null'"
+      has libvorbis  && CMDS="$CMDS --command-name vorbis-encode  'ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 -f null /dev/null'"
+      has ac3        && CMDS="$CMDS --command-name ac3-encode     'ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k -f null /dev/null'"
+      has eac3       && CMDS="$CMDS --command-name eac3-encode    'ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k -f null /dev/null'"
+      has wavpack    && CMDS="$CMDS --command-name wavpack-encode 'ffmpeg -y -i test_raw.wav -c:a wavpack -f null /dev/null'"
+      has alac       && CMDS="$CMDS --command-name alac-encode    'ffmpeg -y -i test_raw.wav -c:a alac -f null /dev/null'"
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json ffmpeg_audio_encode.json \
+          $CMDS
+      fi
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: false
+
+# ── Audio decoding ────────────────────────────────────────────────────────
+
+- name: Prepare encoded audio files for decode benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ A/ {print $2}')
+      has() { echo "$ENCS" | grep -qx "$1"; }
+
+      has aac        && ffmpeg -y -i test_raw.wav -c:a aac -b:a 192k test_enc_aac.m4a        2>/dev/null || true
+      has libopus    && ffmpeg -y -i test_raw.wav -c:a libopus -b:a 128k test_enc_opus.opus   2>/dev/null || true
+      has libmp3lame && ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k test_enc_mp3.mp3  2>/dev/null || true
+      has flac       && ffmpeg -y -i test_raw.wav -c:a flac test_enc_flac.flac                2>/dev/null || true
+      has libvorbis  && ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 test_enc_vorbis.ogg   2>/dev/null || true
+      has ac3        && ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k test_enc_ac3.ac3         2>/dev/null || true
+      has eac3       && ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k test_enc_eac3.eac3      2>/dev/null || true
+      has wavpack    && ffmpeg -y -i test_raw.wav -c:a wavpack test_enc_wavpack.wv             2>/dev/null || true
+      has alac       && ffmpeg -y -i test_raw.wav -c:a alac test_enc_alac.m4a                  2>/dev/null || true
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: true
+
+- name: Run FFmpeg audio decoding benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      CMDS=""
+      [ -f test_enc_aac.m4a ]      && CMDS="$CMDS --command-name aac-decode     'ffmpeg -y -i test_enc_aac.m4a -f null /dev/null'"
+      [ -f test_enc_opus.opus ]    && CMDS="$CMDS --command-name opus-decode    'ffmpeg -y -i test_enc_opus.opus -f null /dev/null'"
+      [ -f test_enc_mp3.mp3 ]      && CMDS="$CMDS --command-name mp3-decode     'ffmpeg -y -i test_enc_mp3.mp3 -f null /dev/null'"
+      [ -f test_enc_flac.flac ]    && CMDS="$CMDS --command-name flac-decode    'ffmpeg -y -i test_enc_flac.flac -f null /dev/null'"
+      [ -f test_enc_vorbis.ogg ]   && CMDS="$CMDS --command-name vorbis-decode  'ffmpeg -y -i test_enc_vorbis.ogg -f null /dev/null'"
+      [ -f test_enc_ac3.ac3 ]      && CMDS="$CMDS --command-name ac3-decode     'ffmpeg -y -i test_enc_ac3.ac3 -f null /dev/null'"
+      [ -f test_enc_eac3.eac3 ]    && CMDS="$CMDS --command-name eac3-decode    'ffmpeg -y -i test_enc_eac3.eac3 -f null /dev/null'"
+      [ -f test_enc_wavpack.wv ]   && CMDS="$CMDS --command-name wavpack-decode 'ffmpeg -y -i test_enc_wavpack.wv -f null /dev/null'"
+      [ -f test_enc_alac.m4a ]     && CMDS="$CMDS --command-name alac-decode    'ffmpeg -y -i test_enc_alac.m4a -f null /dev/null'"
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json ffmpeg_audio_decode.json \
+          $CMDS
+      fi
+  when: run_benchmarks_ffmpeg_check.rc == 0
+  changed_when: false

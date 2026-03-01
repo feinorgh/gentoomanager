@@ -1,0 +1,104 @@
+---
+# Setup for Windows: install hyperfine, create test data, collect metadata.
+# Uses PowerShell and Windows modules throughout.
+
+- name: Install Chocolatey
+  ansible.windows.win_shell: |
+    if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+      Set-ExecutionPolicy Bypass -Scope Process -Force
+      [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+      Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+    }
+  changed_when: false
+
+- name: Install hyperfine via Chocolatey
+  ansible.windows.win_shell: choco install hyperfine -y --no-progress
+  changed_when: true
+
+- name: Create benchmark working directory
+  ansible.windows.win_file:
+    path: "{{ run_benchmarks_work_dir_win }}"
+    state: directory
+
+- name: Generate random test data
+  ansible.windows.win_shell: |
+    $path = "{{ run_benchmarks_work_dir_win }}\testdata.bin"
+    if (-not (Test-Path $path)) {
+      $bytes = New-Object byte[] ({{ run_benchmarks_compress_size_mb }} * 1048576)
+      $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+      $rng.GetBytes($bytes)
+      [System.IO.File]::WriteAllBytes($path, $bytes)
+      $rng.Dispose()
+    }
+  changed_when: false
+
+# ---------------------------------------------------------------------------
+# Collect host metadata
+# ---------------------------------------------------------------------------
+- name: Gather compiler and tool versions (Windows)
+  ansible.windows.win_shell: |
+    $versions = @()
+    foreach ($pair in @(
+      @('gcc', 'gcc --version 2>&1 | Select-Object -First 1'),
+      @('clang', 'clang --version 2>&1 | Select-Object -First 1'),
+      @('rustc', 'rustc --version 2>&1'),
+      @('go', 'go version 2>&1'),
+      @('python', 'python --version 2>&1'),
+      @('openssl', 'openssl version 2>&1'),
+      @('kernel', '[System.Environment]::OSVersion.VersionString')
+    )) {
+      $name = $pair[0]
+      try {
+        $val = Invoke-Expression $pair[1] | Out-String
+        $val = $val.Trim()
+      } catch {
+        $val = 'not installed'
+      }
+      $versions += "::${name}::${val}"
+    }
+    $versions | ForEach-Object { Write-Output $_ }
+  register: run_benchmarks_versions_raw
+  changed_when: false
+
+- name: Get GCC march=native expansion (Windows)
+  ansible.windows.win_shell: |
+    try {
+      $output = gcc -march=native -Q --help=target 2>&1
+      $line = $output | Select-String '^\s*-march=' | Select-Object -First 1
+      if ($line) { ($line -split '\s+')[1] } else { '' }
+    } catch { '' }
+  register: run_benchmarks_march_native_win
+  changed_when: false
+  failed_when: false
+
+- name: Get CPU clock speed (Windows)
+  ansible.windows.win_shell: |
+    (Get-CimInstance Win32_Processor | Select-Object -First 1).MaxClockSpeed
+  register: run_benchmarks_cpu_freq_win
+  changed_when: false
+
+- name: Parse host metadata (Windows)
+  ansible.builtin.set_fact:
+    run_benchmarks_metadata:
+      hostname: "{{ inventory_hostname }}"
+      os: "{{ ansible_distribution | default('Windows') }}"
+      os_version: "{{ ansible_distribution_version | default('') }}"
+      os_family: "Windows"
+      cpu_model: "{{ ansible_processor[2] | default('unknown') }}"
+      cpu_cores: "{{ ansible_processor_vcpus | default(1) }}"
+      cpu_mhz: "{{ run_benchmarks_cpu_freq_win.stdout | default('0') | trim | int }}"
+      march_native: "{{ run_benchmarks_march_native_win.stdout | default('') | trim }}"
+      versions: >-
+        {{ run_benchmarks_versions_raw.stdout_lines
+           | select('match', '^::')
+           | map('regex_replace', '^::([^:]+)::(.*)', '\1=\2')
+           | list }}
+      common_flags: "N/A"
+      cflags: "N/A"
+      ldflags: ""
+      features: ""
+
+- name: Write host metadata JSON (Windows)
+  ansible.windows.win_copy:
+    content: "{{ run_benchmarks_metadata | to_nice_json }}"
+    dest: "{{ run_benchmarks_work_dir_win }}\\metadata.json"

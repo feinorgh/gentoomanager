@@ -1,0 +1,47 @@
+---
+# Compression benchmarks on Windows using tar (built-in) and 7-Zip.
+
+- name: Check available compression tools (Windows)
+  ansible.windows.win_shell: |
+    $tools = @()
+    if (Get-Command tar -ErrorAction SilentlyContinue) { $tools += 'tar' }
+    if (Get-Command 7z -ErrorAction SilentlyContinue) { $tools += '7z' }
+    if (Test-Path 'C:\Program Files\7-Zip\7z.exe') { $tools += '7zpath' }
+    $tools -join ','
+  register: run_benchmarks_win_compress_tools
+  changed_when: false
+
+- name: Run compression benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $cmds = @()
+
+    # tar (built into Windows 10+)
+    if (Get-Command tar -ErrorAction SilentlyContinue) {
+      $cmds += "--command-name 'tar-compress' 'tar cf $wd\testdata.tar -C $wd testdata.bin'"
+      $cmds += "--command-name 'tar-decompress' 'tar cf $wd\testdata.tar -C $wd testdata.bin; tar xf $wd\testdata.tar -C $wd'"
+    }
+
+    # 7-Zip
+    $sz = $null
+    if (Get-Command 7z -ErrorAction SilentlyContinue) {
+      $sz = '7z'
+    } elseif (Test-Path 'C:\Program Files\7-Zip\7z.exe') {
+      $sz = '"C:\Program Files\7-Zip\7z.exe"'
+    }
+    if ($sz) {
+      foreach ($method in @('deflate', 'bzip2', 'lzma2')) {
+        $cmds += "--command-name '7z-${method}-compress' '${sz} a -t7z -m0=${method} -y $wd\testdata.7z $wd\testdata.bin >NUL 2>&1; Remove-Item $wd\testdata.7z -Force -ErrorAction SilentlyContinue'"
+      }
+    }
+
+    if ($cmds.Count -gt 0) {
+      $argStr = $cmds -join ' '
+      $expr = "$hf --runs $runs --warmup $warmup --export-json $wd\compression.json $argStr"
+      Invoke-Expression $expr
+    }
+  changed_when: false
+  when: run_benchmarks_win_compress_tools.stdout | trim | length > 0

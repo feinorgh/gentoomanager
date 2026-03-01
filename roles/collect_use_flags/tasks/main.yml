@@ -1,0 +1,133 @@
+---
+# tasks file for local.gentoomanager.collect_use_flags
+#
+# All make.conf variable extraction (USE, USE_EXPAND, build profile) is
+# performed by the Python collapse script via parse_make_conf().  This role
+# only collects raw data from each host and writes it as JSON.
+
+- name: Ensure controller staging directory exists
+  ansible.builtin.file:
+    path: "{{ collect_use_flags_facts_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+
+# ---------------------------------------------------------------------------
+# 1. Read and clean make.conf
+# ---------------------------------------------------------------------------
+- name: Read make.conf
+  ansible.builtin.slurp:
+    src: "{{ collect_use_flags_make_conf }}"
+  register: collect_use_flags_make_conf_raw
+
+- name: Strip comments and join continuation lines
+  ansible.builtin.set_fact:
+    collect_use_flags_make_conf_clean: >-
+      {{
+        (collect_use_flags_make_conf_raw.content | b64decode)
+        | regex_replace('#[^\n]*', '')
+        | regex_replace('\\\\\n', ' ')
+      }}
+
+# ---------------------------------------------------------------------------
+# 2. Read Portage profile USE flag type definitions
+# ---------------------------------------------------------------------------
+- name: Read use.desc (globally-applicable USE flag names)
+  ansible.builtin.slurp:
+    src: "{{ collect_use_flags_portage_repo_dir }}/profiles/use.desc"
+  register: collect_use_flags_use_desc_raw
+
+- name: Parse global USE flag names from use.desc
+  ansible.builtin.set_fact:
+    collect_use_flags_profile_global: >-
+      {{
+        (collect_use_flags_use_desc_raw.content | b64decode)
+        | regex_findall('(?m)^([a-z0-9][a-z0-9_+-]*)\s+-\s')
+      }}
+
+- name: Read use.local.desc (package-local USE flag names)
+  ansible.builtin.slurp:
+    src: "{{ collect_use_flags_portage_repo_dir }}/profiles/use.local.desc"
+  register: collect_use_flags_use_local_desc_raw
+
+- name: Parse local-only USE flag names from use.local.desc
+  ansible.builtin.set_fact:
+    collect_use_flags_profile_local: >-
+      {{
+        (collect_use_flags_use_local_desc_raw.content | b64decode)
+        | regex_findall('(?m)^[a-zA-Z0-9][^:]+:([a-z0-9][a-z0-9_+-]*)\s+-\s')
+        | unique
+        | list
+        | difference(collect_use_flags_profile_global)
+      }}
+
+# ---------------------------------------------------------------------------
+# 3. Read /etc/portage/package.use/
+# ---------------------------------------------------------------------------
+- name: Find package.use files
+  ansible.builtin.find:
+    paths: "{{ collect_use_flags_package_use_dir }}"
+    recurse: true
+    file_type: file
+  register: collect_use_flags_pkg_use_files
+
+- name: Slurp each package.use file
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  loop: "{{ collect_use_flags_pkg_use_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: collect_use_flags_pkg_use_raw
+
+- name: Parse package.use entries into a dict
+  vars:
+    _pkg_use_pairs: >-
+      {{
+        (item.content | b64decode)
+        | regex_replace('#[^\n]*', '')
+        | regex_replace('\\\\\n', ' ')
+        | regex_findall('(?m)^(\S+)\s+(.+)$')
+      }}
+  ansible.builtin.set_fact:
+    collect_use_flags_package_use: >-
+      {{
+        collect_use_flags_package_use
+        | default({})
+        | combine(
+            dict(
+              _pkg_use_pairs | map('first')
+              | zip(
+                  _pkg_use_pairs | map('last') | map('split')
+                )
+            )
+          )
+      }}
+  loop: "{{ collect_use_flags_pkg_use_raw.results }}"
+  loop_control:
+    label: "{{ item.source | default(item.item.path) }}"
+  when: collect_use_flags_pkg_use_raw.results | length > 0
+
+- name: Default package_use to empty dict when nothing was found
+  ansible.builtin.set_fact:
+    collect_use_flags_package_use: {}
+  when: collect_use_flags_package_use is not defined
+
+# ---------------------------------------------------------------------------
+# 4. Write collected facts to controller as JSON
+# ---------------------------------------------------------------------------
+- name: Write host facts JSON to controller
+  ansible.builtin.copy:
+    content: >-
+      {{
+        {
+          'hostname': inventory_hostname,
+          'groups': group_names,
+          'make_conf_raw': collect_use_flags_make_conf_clean,
+          'package_use': collect_use_flags_package_use,
+          'profile_global_flags': collect_use_flags_profile_global,
+          'profile_local_flags': collect_use_flags_profile_local
+        } | to_nice_json
+      }}
+    dest: "{{ collect_use_flags_facts_dir }}/{{ inventory_hostname }}.json"
+    mode: "0600"
+  delegate_to: localhost

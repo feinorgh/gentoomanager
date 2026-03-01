@@ -1,0 +1,32 @@
+# Managed by Ansible — do not edit manually.
+# Generated from group_vars/all and host_vars/{{ inventory_hostname }}.
+#
+# To update, edit the YAML variable files and run:
+#   ansible-playbook playbooks/apply_portage_config.yml
+{% set _bp = apply_portage_config_merged_build_profile -%}
+{% set _mc = apply_portage_config_merged_make_conf -%}
+{% set _ue = apply_portage_config_merged_use_expand -%}
+{% set _use = apply_portage_config_merged_use -%}
+
+{% if _mc['COMMON_FLAGS'] is defined -%}
+COMMON_FLAGS="{{ _mc['COMMON_FLAGS'] }}"
+{% endif -%}
+{% for var in ['CFLAGS', 'CXXFLAGS', 'FCFLAGS', 'FFLAGS', 'LDFLAGS'] -%}
+{% set val = _bp.get(var, _mc.get(var, '')) -%}
+{% if val -%}
+{{ var }}="{{ val }}"
+{% endif -%}
+{% endfor %}
+{% set _rendered = ['COMMON_FLAGS', 'CFLAGS', 'CXXFLAGS', 'FCFLAGS', 'FFLAGS', 'LDFLAGS'] -%}
+{% for var in (_mc.keys() | list | sort) -%}
+{% if var not in _rendered -%}
+{{ var }}="{{ _mc[var] }}"
+{% endif -%}
+{% endfor %}
+{% if _use -%}
+USE="{{ _use | join(' ') }}"
+{% endif %}
+{% for var in _ue | sort -%}
+{% set vals = _ue[var] | map('regex_replace', '^\\+', '') | list -%}
+{{ var }}="{{ vals | join(' ') }}"
+{% endfor -%}

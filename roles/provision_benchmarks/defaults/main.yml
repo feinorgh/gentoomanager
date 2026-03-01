@@ -1,0 +1,116 @@
+---
+# Package lists per OS family for benchmark provisioning.
+# Each list contains all packages needed to run the full benchmark suite.
+
+provision_benchmarks_packages:
+  Gentoo:
+    - app-benchmarks/hyperfine
+    - sys-devel/gcc
+    - llvm-core/clang
+    - dev-libs/openssl
+    - dev-lang/python
+    - dev-lang/rust-bin
+    - dev-lang/go
+    - media-video/ffmpeg
+    - dev-vcs/git
+    - app-arch/gzip
+    - app-arch/bzip2
+    - app-arch/xz-utils
+    - app-arch/zstd
+    - app-arch/lz4
+    - app-crypt/gnupg
+    - sys-apps/diffutils
+  RedHat:
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - cargo
+    - golang
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg2
+    - diffutils
+  Debian:
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rustc
+    - golang-go
+    - git
+    - gzip
+    - bzip2
+    - xz-utils
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+    - dpkg-dev
+    - build-essential
+  Archlinux:
+    - gcc
+    - clang
+    - openssl
+    - python
+    - rust
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+  Suse:
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - cargo
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gpg2
+    - diffutils
+  FreeBSD:
+    - gcc
+    - llvm
+    - openssl
+    - python3
+    - rust
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+
+# Packages available only via EPEL on RHEL/CentOS
+provision_benchmarks_epel_packages:
+  - hyperfine
+
+# Hyperfine GitHub release URL template for binary fallback
+provision_benchmarks_hyperfine_version: "0.1.4"
+provision_benchmarks_hyperfine_url: >-
+  https://github.com/sharkdp/hyperfine/releases/download/v{{ provision_benchmarks_hyperfine_version }}/hyperfine-v{{ provision_benchmarks_hyperfine_version }}-x86_64-unknown-linux-gnu.tar.gz
+
+# Optional: also install ffmpeg (may need extra repos on some distros)
+provision_benchmarks_install_ffmpeg: true
+
+# Optional: install OpenCV Python bindings
+provision_benchmarks_install_opencv: false

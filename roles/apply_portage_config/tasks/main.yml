@@ -1,0 +1,108 @@
+---
+# tasks file for local.gentoomanager.apply_portage_config
+#
+# Writes /etc/portage/make.conf and /etc/portage/package.use/* from the
+# variables collected by the collect_use_flags role.  Fully supports
+# check mode (--check) for dry-run verification.
+
+# -------------------------------------------------------------------------
+# 1. Load group_vars and host_vars explicitly
+# -------------------------------------------------------------------------
+# Ansible's default hash_behaviour is "replace", so a host-level dict
+# completely shadows the group-level dict of the same name.  We load
+# both files explicitly and combine them via block-level vars.
+
+- name: Load group-level use_flags variables
+  ansible.builtin.include_vars:
+    file: "{{ apply_portage_config_group_vars_file }}"
+    name: __apply_portage_config_group
+
+- name: Check whether host-level use_flags file exists
+  ansible.builtin.stat:
+    path: "{{ apply_portage_config_host_vars_file }}"
+  register: __apply_portage_config_host_stat
+  delegate_to: localhost
+
+- name: Load host-level use_flags variables
+  ansible.builtin.include_vars:
+    file: "{{ apply_portage_config_host_vars_file }}"
+    name: __apply_portage_config_host
+  when: __apply_portage_config_host_stat.stat.exists
+
+# -------------------------------------------------------------------------
+# 2. Apply configuration (merged via block-level vars)
+# -------------------------------------------------------------------------
+
+- name: Apply merged Portage configuration
+  vars:
+    __grp: "{{ __apply_portage_config_group }}"
+    __host: "{{ __apply_portage_config_host | default({}) }}"
+    apply_portage_config_merged_build_profile: >-
+      {{ __grp.get('build_profile', {})
+         | ansible.builtin.combine(__host.get('build_profile', {})) }}
+    apply_portage_config_merged_make_conf: >-
+      {{ __grp.get('make_conf', {})
+         | ansible.builtin.combine(__host.get('make_conf', {})) }}
+    apply_portage_config_merged_use_expand: >-
+      {{ __grp.get('use_expand', {})
+         | ansible.builtin.combine(__host.get('use_expand', {})) }}
+    apply_portage_config_merged_use: >-
+      {{ (__grp.get('global_use_flags', [])
+          + __host.get('global_use_flags', []))
+         | unique | map('regex_replace', '^\+', '') | list }}
+    apply_portage_config_merged_package_use: >-
+      {{ __grp.get('package_use', {})
+         | ansible.builtin.combine(__host.get('package_use', {})) }}
+  block:
+    - name: Write make.conf
+      ansible.builtin.template:
+        src: make.conf.j2
+        dest: "{{ apply_portage_config_make_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+
+    - name: Ensure package.use directory exists
+      ansible.builtin.file:
+        path: "{{ apply_portage_config_package_use_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Write per-package USE flag files
+      ansible.builtin.copy:
+        dest: >-
+          {{ apply_portage_config_package_use_dir }}/{{
+             item.key | regex_replace('[^a-zA-Z0-9._-]', '_') }}
+        content: |
+          # Managed by Ansible — do not edit manually.
+          {{ item.key }} {{ item.value | map('regex_replace', '^\+', '') | join(' ') }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ apply_portage_config_merged_package_use | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: List existing package.use files
+      ansible.builtin.find:
+        paths: "{{ apply_portage_config_package_use_dir }}"
+        file_type: file
+      register: __apply_portage_config_existing_files
+
+    - name: Remove stale package.use files
+      vars:
+        __expected: >-
+          {{ apply_portage_config_merged_package_use.keys()
+             | map('regex_replace', '[^a-zA-Z0-9._-]', '_') | list }}
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ __apply_portage_config_existing_files.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      when:
+        - item.path | basename not in __expected
+        - not (item.path | basename is match('00.*'))

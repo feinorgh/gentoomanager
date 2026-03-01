@@ -1,0 +1,187 @@
+---
+# Run benchmarks on all compatible VMs and collect results to the controller.
+#
+# Each VM is processed one at a time (serial: 1).  RAM is temporarily
+# scaled to the VM's max configured memory for the benchmark run, then
+# restored to its minimal allocation — even if the benchmark fails.
+#
+# Supported: Linux (all distros), FreeBSD.  Windows VMs are optional.
+#
+# Usage:
+#   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py
+#   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
+#     -e '{"run_benchmarks_categories": ["compression", "crypto"]}'
+#   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
+#     -e run_benchmarks_runs=10
+#   # Skip RAM scaling (VMs already have enough RAM):
+#   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
+#     -e run_benchmarks_scale_ram=false
+#   # Only VMs on one hypervisor:
+#   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
+#     --limit 'hypervisor_hv1,localhost'
+
+# ── Play 1: Run benchmarks one VM at a time ──────────────────────────────
+- name: Run benchmarks on VMs (serial)
+  hosts: "{{ 'all' if (run_benchmarks_include_windows | default(false) | bool) else 'all:!mswindows:!win:!win11' }}"
+  gather_facts: false
+  become: false
+  serial: 1
+  vars:
+    run_benchmarks_scale_ram: true
+    run_benchmarks_work_dir: /tmp/ansible-benchmarks
+    run_benchmarks_work_dir_win: C:\ansible-benchmarks
+    run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
+
+  pre_tasks:
+    - name: Check host is reachable
+      ansible.builtin.raw: echo ok
+      register: _reachable_check
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      ignore_unreachable: true
+
+    - name: Skip unreachable hosts
+      ansible.builtin.meta: end_host
+      when: >-
+        _reachable_check is unreachable or
+        _reachable_check is failed or
+        _reachable_check.rc | default(1) != 0
+
+    - name: Gather OS and hardware facts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - distribution
+          - os_family
+          - hardware
+
+    - name: Set effective work directory
+      ansible.builtin.set_fact:
+        run_benchmarks_effective_work_dir: >-
+          {{ run_benchmarks_work_dir_win
+             if (ansible_os_family | default('') == 'Windows')
+             else run_benchmarks_work_dir }}
+
+  tasks:
+    - name: Benchmark with RAM scaling and automatic restore
+      block:
+        # ── Scale RAM up ──────────────────────────────────────────────
+        - name: Read current and max VM memory
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              virsh --connect qemu:///system dumpxml {{ inventory_hostname }} \
+                | grep -oP '<(memory|currentMemory)[^>]*>\K[0-9]+' \
+                | head -2
+          delegate_to: "{{ hypervisor_host }}"
+          register: _bench_ram_info
+          changed_when: false
+          check_mode: false
+          when: run_benchmarks_scale_ram | bool
+
+        - name: Save original RAM values
+          ansible.builtin.set_fact:
+            run_benchmarks_max_ram_kib: "{{ _bench_ram_info.stdout_lines[0] | trim }}"
+            run_benchmarks_original_ram_kib: "{{ _bench_ram_info.stdout_lines[1] | trim }}"
+          when: >-
+            run_benchmarks_scale_ram | bool and
+            _bench_ram_info is not skipped
+
+        - name: Scale VM RAM to max memory (live)
+          ansible.builtin.command:
+            cmd: >-
+              virsh --connect qemu:///system setmem {{ inventory_hostname }}
+              {{ run_benchmarks_max_ram_kib }} --live
+          delegate_to: "{{ hypervisor_host }}"
+          changed_when: true
+          when: >-
+            run_benchmarks_scale_ram | bool and
+            run_benchmarks_original_ram_kib is defined and
+            run_benchmarks_original_ram_kib != run_benchmarks_max_ram_kib
+
+        # ── Run benchmarks ────────────────────────────────────────────
+        - name: Run benchmark suite
+          ansible.builtin.include_role:
+            name: run_benchmarks
+
+        # ── Fetch results ─────────────────────────────────────────────
+        - name: Find all benchmark result files (Unix)
+          ansible.builtin.find:
+            paths: "{{ run_benchmarks_effective_work_dir }}"
+            patterns: "*.json"
+          register: _bench_result_files
+          when: ansible_os_family | default('') != 'Windows'
+
+        - name: Find all benchmark result files (Windows)
+          ansible.windows.win_find:
+            paths: "{{ run_benchmarks_effective_work_dir }}"
+            patterns: "*.json"
+          register: _bench_result_files_win
+          when: ansible_os_family | default('') == 'Windows'
+
+        - name: Unify result file list
+          ansible.builtin.set_fact:
+            _bench_all_result_files: >-
+              {{ (_bench_result_files.files | default([]))
+                 + (_bench_result_files_win.files | default([])) }}
+
+        - name: Create local results directory
+          ansible.builtin.file:
+            path: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
+            state: directory
+            mode: "0755"
+          delegate_to: localhost
+          become: false
+
+        - name: Fetch benchmark results to controller
+          ansible.builtin.fetch:
+            src: "{{ item.path }}"
+            dest: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}/"
+            flat: true
+          loop: "{{ _bench_all_result_files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+      # ── Always restore RAM, even on failure ─────────────────────────
+      always:
+        - name: Read configured minimal RAM from persistent XML
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              virsh --connect qemu:///system dumpxml --inactive {{ inventory_hostname }} \
+                | grep -oP '<currentMemory[^>]*>\K[0-9]+'
+          delegate_to: "{{ hypervisor_host }}"
+          register: _bench_minimal_ram
+          changed_when: false
+          failed_when: false
+          check_mode: false
+          when: run_benchmarks_scale_ram | bool
+
+        - name: Restore VM RAM to minimal allocation (live)
+          ansible.builtin.command:
+            cmd: >-
+              virsh --connect qemu:///system setmem {{ inventory_hostname }}
+              {{ _bench_minimal_ram.stdout | trim }} --live
+          delegate_to: "{{ hypervisor_host }}"
+          changed_when: true
+          failed_when: false
+          when: >-
+            run_benchmarks_scale_ram | bool and
+            _bench_minimal_ram.stdout is defined and
+            _bench_minimal_ram.stdout | trim | length > 0
+
+# ── Play 2: Generate report ──────────────────────────────────────────────
+- name: Generate benchmark report
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Generate Markdown and HTML reports
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ playbook_dir }}/../scripts/generate_benchmark_report.py
+          {{ playbook_dir }}/../benchmarks
+      changed_when: true

@@ -1,0 +1,62 @@
+---
+# Application startup time benchmarks
+
+- name: Check available GUI applications
+  ansible.builtin.shell:
+    cmd: |
+      for cmd in firefox gimp inkscape; do
+        command -v "$cmd" >/dev/null 2>&1 && echo "$cmd"
+      done
+  register: run_benchmarks_gui_apps
+  changed_when: false
+
+- name: Run application startup benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      export DISPLAY=:99
+      export XDG_RUNTIME_DIR=/tmp/bench-xdg-$$
+      mkdir -p "$XDG_RUNTIME_DIR"
+
+      # Start Xvfb if available and no display
+      XVFB_PID=""
+      if command -v Xvfb >/dev/null 2>&1; then
+        Xvfb :99 -screen 0 1280x1024x24 &
+        XVFB_PID=$!
+        sleep 1
+      fi
+
+      CMDS=""
+
+      {% for app in ['firefox', 'gimp', 'inkscape'] %}
+      if command -v {{ app }} >/dev/null 2>&1; then
+      {% if app == 'firefox' %}
+        # Firefox: measure startup to first window with a timeout
+        CMDS="$CMDS --command-name 'firefox-startup' \
+          'timeout 10 firefox --headless --screenshot /dev/null about:blank 2>/dev/null || true'"
+      {% elif app == 'gimp' %}
+        # GIMP: use batch mode for startup measurement
+        CMDS="$CMDS --command-name 'gimp-startup' \
+          'gimp -i --quit 2>/dev/null'"
+      {% elif app == 'inkscape' %}
+        # Inkscape: use shell mode or export for startup measurement
+        CMDS="$CMDS --command-name 'inkscape-startup' \
+          'inkscape --pipe --export-type=png < /dev/null > /dev/null 2>&1 || inkscape --version 2>/dev/null'"
+      {% endif %}
+      fi
+      {% endfor %}
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/startup.json \
+          $CMDS
+      fi
+
+      # Cleanup Xvfb
+      if [ -n "$XVFB_PID" ]; then
+        kill "$XVFB_PID" 2>/dev/null || true
+      fi
+      rm -rf "$XDG_RUNTIME_DIR"
+  changed_when: false

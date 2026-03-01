@@ -1,0 +1,102 @@
+---
+# OpenCV benchmarks via Python bindings
+
+- name: Check OpenCV Python availability
+  ansible.builtin.shell:
+    cmd: python3 -c "import cv2; print(cv2.__version__)"
+  register: run_benchmarks_opencv_check
+  changed_when: false
+  failed_when: false
+
+- name: Create OpenCV benchmark script
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/opencv_bench.py"
+    mode: "0755"
+    content: |
+      #!/usr/bin/env python3
+      """OpenCV benchmarks using representative image processing tasks."""
+      import sys
+      import numpy as np
+
+      def get_test_image():
+          """Generate a synthetic 4K test image."""
+          np.random.seed(42)
+          return np.random.randint(0, 256, (2160, 3840, 3), dtype=np.uint8)
+
+      def bench_resize():
+          import cv2
+          img = get_test_image()
+          for _ in range(10):
+              cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_LANCZOS4)
+              cv2.resize(img, (640, 480), interpolation=cv2.INTER_LINEAR)
+
+      def bench_blur():
+          import cv2
+          img = get_test_image()
+          for _ in range(5):
+              cv2.GaussianBlur(img, (15, 15), 0)
+              cv2.medianBlur(img, 7)
+              cv2.bilateralFilter(img, 9, 75, 75)
+
+      def bench_edge_detection():
+          import cv2
+          img = get_test_image()
+          gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+          for _ in range(10):
+              cv2.Canny(gray, 100, 200)
+              cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+              cv2.Laplacian(gray, cv2.CV_64F)
+
+      def bench_color_conversion():
+          import cv2
+          img = get_test_image()
+          for _ in range(20):
+              cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+              cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+              cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+
+      def bench_threshold():
+          import cv2
+          img = get_test_image()
+          gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+          for _ in range(20):
+              cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+              cv2.adaptiveThreshold(
+                  gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                  cv2.THRESH_BINARY, 11, 2
+              )
+
+      benchmarks = {
+          "resize": bench_resize,
+          "blur": bench_blur,
+          "edge_detection": bench_edge_detection,
+          "color_conversion": bench_color_conversion,
+          "threshold": bench_threshold,
+      }
+
+      if __name__ == "__main__":
+          name = sys.argv[1] if len(sys.argv) > 1 else "all"
+          if name == "all":
+              for fn in benchmarks.values():
+                  fn()
+          else:
+              benchmarks[name]()
+  when: run_benchmarks_opencv_check.rc == 0
+
+- name: Run OpenCV benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/opencv.json \
+        --command-name 'resize' 'python3 opencv_bench.py resize' \
+        --command-name 'blur' 'python3 opencv_bench.py blur' \
+        --command-name 'edge-detection' 'python3 opencv_bench.py edge_detection' \
+        --command-name 'color-conversion' 'python3 opencv_bench.py color_conversion' \
+        --command-name 'threshold' 'python3 opencv_bench.py threshold' \
+        --command-name 'opencv-all' 'python3 opencv_bench.py all'
+  when: run_benchmarks_opencv_check.rc == 0
+  changed_when: false
