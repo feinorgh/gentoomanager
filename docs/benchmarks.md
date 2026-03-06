@@ -102,7 +102,7 @@ package manager differences across OS families:
 | Debian     | apt             | Includes build-essential                 |
 | Archlinux  | pacman          | Includes Manjaro, CachyOS                |
 | Suse       | zypper          | openSUSE, SLES                           |
-| FreeBSD    | pkg             | Uses llvm for clang                      |
+| FreeBSD    | ports           | Compiled from /usr/ports with BATCH=yes   |
 
 If a package fails to install, provisioning continues with the remaining
 packages and reports a summary at the end.

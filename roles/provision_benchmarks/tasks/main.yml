@@ -43,7 +43,9 @@
     name: "{{ provision_benchmarks_packages[ansible_os_family] }}"
     state: present
   become: true
-  when: ansible_os_family in provision_benchmarks_packages
+  when: >-
+    ansible_os_family in provision_benchmarks_packages and
+    ansible_os_family != 'FreeBSD'
   failed_when: false
   register: provision_benchmarks_pkg_result
 
@@ -55,6 +57,7 @@
   loop: "{{ provision_benchmarks_packages[ansible_os_family] }}"
   when: >-
     ansible_os_family in provision_benchmarks_packages and
+    ansible_os_family != 'FreeBSD' and
     provision_benchmarks_pkg_result is defined and
     provision_benchmarks_pkg_result is failed
   failed_when: false
@@ -106,10 +109,12 @@
     ansible_os_family | default('') == 'Suse'
   failed_when: false
 
-- name: Install hyperfine on FreeBSD
-  ansible.builtin.package:
-    name: hyperfine
-    state: present
+- name: Install hyperfine from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_hyperfine_port }}"
+    target: install
+    params:
+      BATCH: "yes"
   become: true
   when: >-
     provision_benchmarks_hf_check.rc != 0 and
@@ -242,7 +247,49 @@
   changed_when: true
   failed_when: false
 
-# ── 11. Verify installation ─────────────────────────────────────────────
+# ── 11. Install FreeBSD packages via ports ────────────────────────────────
+- name: Ensure ports tree is available (FreeBSD)
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      if [ ! -d /usr/ports/Mk ]; then
+        if command -v portsnap >/dev/null 2>&1; then
+          portsnap fetch extract
+        elif command -v git >/dev/null 2>&1; then
+          git clone --depth 1 https://git.FreeBSD.org/ports.git /usr/ports
+        else
+          echo "No method to fetch ports tree" >&2
+          exit 1
+        fi
+      fi
+    creates: /usr/ports/Mk
+  become: true
+  when: ansible_os_family | default('') == 'FreeBSD'
+
+- name: Install benchmark dependencies from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ item }}"
+    target: install
+    params:
+      BATCH: "yes"
+  become: true
+  loop: "{{ provision_benchmarks_packages['FreeBSD'] }}"
+  when: ansible_os_family | default('') == 'FreeBSD'
+  failed_when: false
+
+- name: Install ffmpeg from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_ffmpeg_port }}"
+    target: install
+    params:
+      BATCH: "yes"
+  become: true
+  when: >-
+    provision_benchmarks_install_ffmpeg | bool and
+    ansible_os_family | default('') == 'FreeBSD'
+  failed_when: false
+
+# ── 12. Verify installation ─────────────────────────────────────────────
 - name: Verify essential tools are available
   ansible.builtin.shell:
     cmd: |

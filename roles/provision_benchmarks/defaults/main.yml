@@ -85,20 +85,17 @@ provision_benchmarks_packages:
     - gpg2
     - diffutils
   FreeBSD:
-    - gcc
-    - llvm
-    - openssl
-    - python3
-    - rust
-    - go
-    - git
-    - gzip
-    - bzip2
-    - xz
-    - zstd
-    - lz4
-    - gnupg
-    - diffutils
+    - lang/gcc13
+    - devel/llvm
+    - security/openssl
+    - lang/python311
+    - lang/rust
+    - lang/go
+    - devel/git
+    - archivers/zstd
+    - archivers/liblz4
+    - security/gnupg
+    - textproc/diffutils
 
 # Packages available only via EPEL on RHEL/CentOS
 provision_benchmarks_epel_packages:
@@ -111,6 +108,10 @@ provision_benchmarks_hyperfine_url: >-
 
 # Optional: also install ffmpeg (may need extra repos on some distros)
 provision_benchmarks_install_ffmpeg: true
+
+# FreeBSD ports for hyperfine and ffmpeg
+provision_benchmarks_freebsd_hyperfine_port: benchmarks/hyperfine
+provision_benchmarks_freebsd_ffmpeg_port: multimedia/ffmpeg
 
 # Optional: install OpenCV Python bindings
 provision_benchmarks_install_opencv: false
