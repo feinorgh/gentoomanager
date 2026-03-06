@@ -36,9 +36,15 @@ CHART_COLORS = [
 
 CATEGORY_TITLES = {
     "compression": "Compression",
-    "crypto_aes": "Cryptography — AES",
-    "crypto_hash": "Hashing",
+    "crypto_symmetric": "Cryptography — Symmetric Ciphers",
+    "crypto_hash": "Cryptography — Digests (OpenSSL)",
+    "crypto_hash_coreutils": "Cryptography — Digests (Coreutils)",
+    "crypto_openssl_speed": "OpenSSL Speed — Symmetric & AEAD Throughput",
+    "crypto_asymmetric": "Cryptography — Asymmetric / Public Key",
+    "crypto_hmac": "Cryptography — HMAC",
+    "crypto_kdf": "Cryptography — Key Derivation",
     "crypto_gpg": "GPG Sign / Verify",
+    "crypto_aes": "Cryptography — AES (legacy)",
     "compiler_c_compile": "C Compilation Speed",
     "compiler_c_runtime": "C Runtime Performance",
     "compiler_rust": "Rust Compilation Speed",

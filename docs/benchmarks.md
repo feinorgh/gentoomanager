@@ -205,16 +205,83 @@ Tests compression and decompression speed with a random data file.
 
 ### Cryptography
 
-Tests encryption, hashing, and GPG operations.
+Tests symmetric ciphers, hash digests, asymmetric key operations, HMAC, and
+key derivation using OpenSSL, plus GPG sign/verify.  These benchmarks are
+especially sensitive to compiler flags (`-march=native` enables AES-NI and
+SHA-NI), LTO, and `-O` level.
 
-| Benchmark          | Tool     | Description                       |
-|--------------------|----------|-----------------------------------|
-| aes-256-cbc        | openssl  | AES-256-CBC encryption            |
-| sha256sum          | sha256sum| SHA-256 hash                      |
-| sha512sum          | sha512sum| SHA-512 hash                      |
-| b2sum              | b2sum    | BLAKE2 hash                       |
-| gpg-sign           | gpg      | Sign a file with GPG              |
-| gpg-verify         | gpg      | Verify a GPG signature            |
+**Symmetric ciphers** (file-level encryption via `openssl enc`):
+
+| Benchmark          | Tool     | Description                              |
+|--------------------|----------|------------------------------------------|
+| aes-256-cbc        | openssl  | AES-256-CBC — hardware-accelerated (AES-NI) |
+| aes-128-cbc        | openssl  | AES-128-CBC — smaller key variant        |
+| aes-256-ctr        | openssl  | AES-256-CTR — parallelizable counter mode |
+| chacha20           | openssl  | ChaCha20 — pure software, no HW accel   |
+
+**OpenSSL speed** (internal throughput, includes AEAD modes):
+
+| Benchmark               | Tool          | Description                       |
+|-------------------------|---------------|-----------------------------------|
+| speed-aes-256-gcm       | openssl speed | AES-256-GCM — TLS 1.3 default    |
+| speed-aes-256-cbc       | openssl speed | AES-256-CBC throughput            |
+| speed-chacha20-poly1305 | openssl speed | ChaCha20-Poly1305 — compiler-sensitive |
+| speed-sha256            | openssl speed | SHA-256 throughput                |
+| speed-sha512            | openssl speed | SHA-512 throughput                |
+
+**Digests** (OpenSSL vs coreutils comparison):
+
+| Benchmark          | Tool            | Description                       |
+|--------------------|-----------------|-----------------------------------|
+| openssl-sha256     | openssl dgst    | SHA-256 via OpenSSL               |
+| openssl-sha512     | openssl dgst    | SHA-512 via OpenSSL               |
+| openssl-sha3-256   | openssl dgst    | SHA-3-256 via OpenSSL             |
+| openssl-sha1       | openssl dgst    | SHA-1 via OpenSSL                 |
+| openssl-md5        | openssl dgst    | MD5 via OpenSSL                   |
+| openssl-blake2b512 | openssl dgst    | BLAKE2b-512 via OpenSSL           |
+| sha256sum          | coreutils       | SHA-256 via coreutils             |
+| sha512sum          | coreutils       | SHA-512 via coreutils             |
+| md5sum             | coreutils       | MD5 via coreutils                 |
+| b2sum              | coreutils       | BLAKE2 via coreutils              |
+
+**Asymmetric / public key**:
+
+| Benchmark          | Tool     | Description                              |
+|--------------------|----------|------------------------------------------|
+| rsa-2048-sign      | openssl  | RSA-2048 signature                       |
+| rsa-2048-verify    | openssl  | RSA-2048 verification                    |
+| rsa-4096-sign      | openssl  | RSA-4096 signature                       |
+| ecdsa-p256-sign    | openssl  | ECDSA P-256 (NIST curve) signature       |
+| ecdsa-p256-verify  | openssl  | ECDSA P-256 verification                 |
+| ed25519-sign       | openssl  | Ed25519 signature (Curve25519)           |
+| ed25519-verify     | openssl  | Ed25519 verification                     |
+
+**HMAC**:
+
+| Benchmark          | Tool     | Description                              |
+|--------------------|----------|------------------------------------------|
+| hmac-sha256        | openssl  | HMAC-SHA256 keyed hash                   |
+| hmac-sha512        | openssl  | HMAC-SHA512 keyed hash                   |
+| hmac-sha3-256      | openssl  | HMAC-SHA3-256 keyed hash                 |
+
+**Key derivation**:
+
+| Benchmark             | Tool     | Description                           |
+|-----------------------|----------|---------------------------------------|
+| pbkdf2-sha256-100k   | openssl  | PBKDF2-SHA256 with 100k iterations   |
+| pbkdf2-sha256-10k    | openssl  | PBKDF2-SHA256 with 10k iterations    |
+
+**GPG**:
+
+| Benchmark          | Tool     | Description                              |
+|--------------------|----------|------------------------------------------|
+| gpg-sign           | gpg      | Sign a file with GPG (RSA-2048)          |
+| gpg-verify         | gpg      | Verify a GPG signature                   |
+
+> **Note:** Comparing AES-GCM (hardware-accelerated via AES-NI) against
+> ChaCha20-Poly1305 (pure software) reveals how much compiler optimizations
+> matter for software-only code paths.  ChaCha20 performance is highly
+> sensitive to `-march`, auto-vectorization, and LTO.
 
 ### Compiler
 
@@ -554,7 +621,7 @@ ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
 │   │       ├── main.yml            # Category dispatcher
 │   │       ├── setup.yml           # Verify tools, create test data, metadata
 │   │       ├── compression.yml     # gzip, bzip2, xz, zstd, lz4
-│   │       ├── crypto.yml          # OpenSSL, GPG
+│   │       ├── crypto.yml          # OpenSSL symmetric, digest, asymmetric, HMAC, KDF, GPG
 │   │       ├── compiler.yml        # GCC, Clang, Rust, Go
 │   │       ├── python.yml          # Python micro-benchmarks
 │   │       ├── ffmpeg.yml          # Video/audio encode/decode (all codecs)

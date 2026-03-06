@@ -1,33 +1,315 @@
 ---
-# Crypto benchmarks: OpenSSL speed tests, GPG sign/verify
+# Crypto benchmarks: OpenSSL speed tests (symmetric, hash, asymmetric), GPG sign/verify
+#
+# These benchmarks are especially sensitive to compiler flags (-march, -O level,
+# LTO) because OpenSSL's crypto primitives rely on hardware acceleration
+# (AES-NI, SHA-NI, AVX2) and compiler auto-vectorization.
 
-- name: Run OpenSSL speed benchmarks
+# ── 1. Detect available OpenSSL algorithms ────────────────────────────────
+- name: Detect available OpenSSL ciphers and algorithms
   ansible.builtin.shell:
     cmd: |
-      set -e
-      cd {{ run_benchmarks_work_dir }}
+      set -eo pipefail
+      python3 -c "
+      import subprocess, json, re
 
-      # AES benchmark
-      {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
-        --export-json {{ run_benchmarks_work_dir }}/crypto_aes.json \
-        --command-name 'aes-256-cbc-encrypt' \
-          'openssl enc -aes-256-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2' \
-        --command-name 'aes-256-gcm-encrypt' \
-          'openssl enc -aes-256-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'
+      def probe(args):
+          r = subprocess.run(['openssl'] + args,
+                             capture_output=True, text=True, timeout=10)
+          return r.stdout + r.stderr
 
-      # Hash benchmarks
-      {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
-        --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
-        --command-name 'sha256' 'sha256sum testdata.bin' \
-        --command-name 'sha512' 'sha512sum testdata.bin' \
-        --command-name 'md5' 'md5sum testdata.bin' \
-        --command-name 'blake2' 'b2sum testdata.bin'
+      # Probe symmetric ciphers
+      sym_out = probe(['enc', '-list'])
+      avail_ciphers = set(re.findall(r'-(\S+)', sym_out))
+
+      # Probe digest algorithms
+      dgst_out = probe(['dgst', '-list'])
+      avail_digests = set(re.findall(r'-(\S+)', dgst_out))
+
+      # Probe asymmetric via 'openssl speed -help' or known list
+      speed_help = probe(['speed', '-help'])
+
+      result = {
+          'ciphers': sorted(avail_ciphers),
+          'digests': sorted(avail_digests),
+          'speed_help': speed_help[:2000],
+      }
+      print(json.dumps(result))
+      "
+  register: run_benchmarks_crypto_detect
   changed_when: false
 
+- name: Parse available crypto algorithms
+  ansible.builtin.set_fact:
+    run_benchmarks_crypto_info: "{{ run_benchmarks_crypto_detect.stdout | from_json }}"
+
+# ── 2. Symmetric cipher benchmarks (AES, ChaCha20) ──────────────────────
+- name: Run symmetric cipher benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      has_cipher() { echo "{{ run_benchmarks_crypto_info.ciphers | join(' ') }}" | grep -qw "$1"; }
+
+      CMDS=""
+
+      # AES-256-CBC — block cipher, benefits from AES-NI
+      if has_cipher aes-256-cbc; then
+        CMDS="$CMDS --command-name 'aes-256-cbc' \
+          'openssl enc -aes-256-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+      fi
+
+      # AES-256-GCM — authenticated encryption, TLS 1.3 default
+      # GCM is not available via 'openssl enc', use 'openssl speed' instead
+      # We'll benchmark it separately below
+
+      # AES-128-CBC — smaller key, still AES-NI accelerated
+      if has_cipher aes-128-cbc; then
+        CMDS="$CMDS --command-name 'aes-128-cbc' \
+          'openssl enc -aes-128-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+      fi
+
+      # AES-256-CTR — counter mode, parallelizable
+      if has_cipher aes-256-ctr; then
+        CMDS="$CMDS --command-name 'aes-256-ctr' \
+          'openssl enc -aes-256-ctr -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+      fi
+
+      # ChaCha20-Poly1305 — no hardware accel, pure software, very compiler-sensitive
+      if has_cipher chacha20; then
+        CMDS="$CMDS --command-name 'chacha20' \
+          'openssl enc -chacha20 -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+      fi
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
+          $CMDS
+      fi
+  changed_when: false
+
+# ── 3. Hash / digest benchmarks via OpenSSL ──────────────────────────────
+- name: Run OpenSSL digest benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      has_dgst() { echo "{{ run_benchmarks_crypto_info.digests | join(' ') }}" | grep -qw "$1"; }
+
+      CMDS=""
+
+      if has_dgst sha256; then
+        CMDS="$CMDS --command-name 'openssl-sha256' \
+          'openssl dgst -sha256 testdata.bin'"
+      fi
+
+      if has_dgst sha512; then
+        CMDS="$CMDS --command-name 'openssl-sha512' \
+          'openssl dgst -sha512 testdata.bin'"
+      fi
+
+      if has_dgst sha3-256; then
+        CMDS="$CMDS --command-name 'openssl-sha3-256' \
+          'openssl dgst -sha3-256 testdata.bin'"
+      fi
+
+      if has_dgst sha1; then
+        CMDS="$CMDS --command-name 'openssl-sha1' \
+          'openssl dgst -sha1 testdata.bin'"
+      fi
+
+      if has_dgst md5; then
+        CMDS="$CMDS --command-name 'openssl-md5' \
+          'openssl dgst -md5 testdata.bin'"
+      fi
+
+      if has_dgst blake2b512; then
+        CMDS="$CMDS --command-name 'openssl-blake2b512' \
+          'openssl dgst -blake2b512 testdata.bin'"
+      fi
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
+          $CMDS
+      fi
+  changed_when: false
+
+# ── 4. Coreutils hash benchmarks (for comparison) ───────────────────────
+- name: Run coreutils hash benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      has_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+      CMDS=""
+      if has_cmd sha256sum; then
+        CMDS="$CMDS --command-name 'sha256sum' 'sha256sum testdata.bin'"
+      fi
+      if has_cmd sha512sum; then
+        CMDS="$CMDS --command-name 'sha512sum' 'sha512sum testdata.bin'"
+      fi
+      if has_cmd md5sum; then
+        CMDS="$CMDS --command-name 'md5sum' 'md5sum testdata.bin'"
+      fi
+      if has_cmd b2sum; then
+        CMDS="$CMDS --command-name 'b2sum' 'b2sum testdata.bin'"
+      fi
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
+          $CMDS
+      fi
+  changed_when: false
+
+# ── 5. OpenSSL speed — built-in throughput benchmarks ────────────────────
+# These use OpenSSL's internal benchmarking, wrapped in hyperfine for
+# consistent measurement. The '-seconds 3' flag keeps each run short.
+- name: Run OpenSSL speed benchmarks (symmetric + AEAD)
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/crypto_openssl_speed.json \
+        --command-name 'speed-aes-256-gcm' \
+          'openssl speed -seconds 3 -bytes 16384 aes-256-gcm 2>/dev/null' \
+        --command-name 'speed-aes-256-cbc' \
+          'openssl speed -seconds 3 -bytes 16384 aes-256-cbc 2>/dev/null' \
+        --command-name 'speed-chacha20-poly1305' \
+          'openssl speed -seconds 3 -bytes 16384 chacha20-poly1305 2>/dev/null' \
+        --command-name 'speed-sha256' \
+          'openssl speed -seconds 3 -bytes 16384 sha256 2>/dev/null' \
+        --command-name 'speed-sha512' \
+          'openssl speed -seconds 3 -bytes 16384 sha512 2>/dev/null'
+  changed_when: false
+
+# ── 6. Asymmetric / public-key benchmarks ────────────────────────────────
+- name: Run OpenSSL asymmetric benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      # Generate keys if not already present
+      [ -f rsa2048.pem ] || openssl genrsa -out rsa2048.pem 2048 2>/dev/null
+      [ -f rsa4096.pem ] || openssl genrsa -out rsa4096.pem 4096 2>/dev/null
+      [ -f ec256.pem ]   || openssl ecparam -genkey -name prime256v1 -out ec256.pem 2>/dev/null
+      [ -f ed25519.pem ] || openssl genpkey -algorithm Ed25519 -out ed25519.pem 2>/dev/null
+
+      # Create data to sign
+      dd if=/dev/urandom of=signdata.bin bs=256 count=1 2>/dev/null
+
+      CMDS=""
+
+      # RSA-2048 sign
+      CMDS="$CMDS --command-name 'rsa-2048-sign' \
+        'openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin'"
+
+      # RSA-2048 verify
+      openssl rsa -in rsa2048.pem -pubout -out rsa2048pub.pem 2>/dev/null
+      openssl dgst -sha256 -sign rsa2048.pem -out sig_rsa2048.bin signdata.bin
+      CMDS="$CMDS --command-name 'rsa-2048-verify' \
+        'openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin'"
+
+      # RSA-4096 sign
+      CMDS="$CMDS --command-name 'rsa-4096-sign' \
+        'openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin'"
+
+      # ECDSA P-256 sign
+      CMDS="$CMDS --command-name 'ecdsa-p256-sign' \
+        'openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin'"
+
+      # ECDSA P-256 verify
+      openssl ec -in ec256.pem -pubout -out ec256pub.pem 2>/dev/null
+      openssl dgst -sha256 -sign ec256.pem -out sig_ec256.bin signdata.bin
+      CMDS="$CMDS --command-name 'ecdsa-p256-verify' \
+        'openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin'"
+
+      # Ed25519 sign
+      CMDS="$CMDS --command-name 'ed25519-sign' \
+        'openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin'"
+
+      # Ed25519 verify
+      openssl pkey -in ed25519.pem -pubout -out ed25519pub.pem 2>/dev/null
+      openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig_ed25519.bin
+      CMDS="$CMDS --command-name 'ed25519-verify' \
+        'openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin'"
+
+      eval {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
+        $CMDS
+  changed_when: false
+
+# ── 7. HMAC benchmarks ──────────────────────────────────────────────────
+- name: Run HMAC benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      has_dgst() { echo "{{ run_benchmarks_crypto_info.digests | join(' ') }}" | grep -qw "$1"; }
+
+      CMDS=""
+
+      if has_dgst sha256; then
+        CMDS="$CMDS --command-name 'hmac-sha256' \
+          'openssl dgst -sha256 -hmac benchmarkkey testdata.bin'"
+      fi
+
+      if has_dgst sha512; then
+        CMDS="$CMDS --command-name 'hmac-sha512' \
+          'openssl dgst -sha512 -hmac benchmarkkey testdata.bin'"
+      fi
+
+      if has_dgst sha3-256; then
+        CMDS="$CMDS --command-name 'hmac-sha3-256' \
+          'openssl dgst -sha3-256 -hmac benchmarkkey testdata.bin'"
+      fi
+
+      if [ -n "$CMDS" ]; then
+        eval {{ run_benchmarks_hyperfine_bin }} \
+          --runs {{ run_benchmarks_runs }} \
+          --warmup {{ run_benchmarks_warmup }} \
+          --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
+          $CMDS
+      fi
+  changed_when: false
+
+# ── 8. Key derivation benchmarks ────────────────────────────────────────
+- name: Run key derivation benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --export-json {{ run_benchmarks_work_dir }}/crypto_kdf.json \
+        --command-name 'pbkdf2-sha256-100k' \
+          'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:100000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 100000 -in signdata.bin -out /dev/null 2>/dev/null' \
+        --command-name 'pbkdf2-sha256-10k' \
+          'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:10000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 10000 -in signdata.bin -out /dev/null 2>/dev/null'
+  changed_when: false
+
+# ── 9. GPG sign/verify (kept from original) ──────────────────────────────
 - name: Check if GPG is available
   ansible.builtin.command:
     cmd: command -v gpg
