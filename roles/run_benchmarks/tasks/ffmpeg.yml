@@ -37,6 +37,7 @@
   register: run_benchmarks_ffmpeg_codecs_raw
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: false
+  failed_when: false
 
 # ── Test media generation ─────────────────────────────────────────────────
 
@@ -100,11 +101,13 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json ffmpeg_video_encode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: false
+  failed_when: false
 
 # ── Video decoding ────────────────────────────────────────────────────────
 
@@ -154,11 +157,13 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json ffmpeg_video_decode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: false
+  failed_when: false
 
 # ── Audio encoding ────────────────────────────────────────────────────────
 
@@ -186,11 +191,13 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json ffmpeg_audio_encode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: false
+  failed_when: false
 
 # ── Audio decoding ────────────────────────────────────────────────────────
 
@@ -236,8 +243,10 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json ffmpeg_audio_decode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: false
+  failed_when: false

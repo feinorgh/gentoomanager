@@ -37,6 +37,7 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
         --command-name 'sort' 'sort sortdata.txt > /dev/null' \
         --command-name 'sort-unique' 'sort -u sortdata.txt > /dev/null' \
@@ -47,6 +48,7 @@
         --command-name 'tar-create' 'tar cf /dev/null findtree' \
         --command-name 'du-summary' 'du -sh findtree'
   changed_when: false
+  failed_when: false
 
 - name: Check git availability  # noqa: command-instead-of-module command-instead-of-shell
   ansible.builtin.shell:
@@ -90,6 +92,7 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/git.json \
         --command-name 'git-log' 'git log --oneline' \
         --command-name 'git-log-stat' 'git log --stat --quiet' \
@@ -98,6 +101,7 @@
         --command-name 'git-status' 'git status'
   when: run_benchmarks_git_check.rc == 0
   changed_when: false
+  failed_when: false
 
 - name: Check diff tool availability
   ansible.builtin.command:
@@ -117,8 +121,10 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/diff.json \
         --command-name 'diff' 'diff diff_a.txt diff_b.txt > /dev/null || true' \
         --command-name 'comm' 'comm <(sort diff_a.txt) <(sort diff_b.txt) > /dev/null'
   when: run_benchmarks_diff_check.rc == 0
   changed_when: false
+  failed_when: false

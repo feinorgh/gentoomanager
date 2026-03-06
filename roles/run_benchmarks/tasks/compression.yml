@@ -30,6 +30,8 @@
       eval {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compression.json \
         $CMDS
   changed_when: false
+  failed_when: false

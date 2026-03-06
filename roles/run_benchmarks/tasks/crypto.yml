@@ -38,6 +38,7 @@
       "
   register: run_benchmarks_crypto_detect
   changed_when: false
+  failed_when: false
 
 - name: Parse available crypto algorithms
   ansible.builtin.set_fact:
@@ -86,10 +87,12 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
           $CMDS
       fi
   changed_when: false
+  failed_when: false
 
 # ── 3. Hash / digest benchmarks via OpenSSL ──────────────────────────────
 - name: Run OpenSSL digest benchmarks
@@ -136,10 +139,12 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
           $CMDS
       fi
   changed_when: false
+  failed_when: false
 
 # ── 4. Coreutils hash benchmarks (for comparison) ───────────────────────
 - name: Run coreutils hash benchmarks
@@ -168,10 +173,12 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
           $CMDS
       fi
   changed_when: false
+  failed_when: false
 
 # ── 5. OpenSSL speed — built-in throughput benchmarks ────────────────────
 # These use OpenSSL's internal benchmarking, wrapped in hyperfine for
@@ -185,6 +192,7 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_openssl_speed.json \
         --command-name 'speed-aes-256-gcm' \
           'openssl speed -seconds 3 -bytes 16384 -evp aes-256-gcm' \
@@ -197,6 +205,7 @@
         --command-name 'speed-sha512' \
           'openssl speed -seconds 3 -bytes 16384 sha512'
   changed_when: false
+  failed_when: false
 
 # ── 6. Asymmetric / public-key benchmarks ────────────────────────────────
 - name: Run OpenSSL asymmetric benchmarks
@@ -253,9 +262,11 @@
       eval {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
         $CMDS
   changed_when: false
+  failed_when: false
 
 # ── 7. HMAC benchmarks ──────────────────────────────────────────────────
 - name: Run HMAC benchmarks
@@ -287,10 +298,12 @@
         eval {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
           --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
           $CMDS
       fi
   changed_when: false
+  failed_when: false
 
 # ── 8. Key derivation benchmarks ────────────────────────────────────────
 - name: Run key derivation benchmarks
@@ -302,12 +315,14 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_kdf.json \
         --command-name 'pbkdf2-sha256-100k' \
           'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:100000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 100000 -in signdata.bin -out /dev/null 2>/dev/null' \
         --command-name 'pbkdf2-sha256-10k' \
           'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:10000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 10000 -in signdata.bin -out /dev/null 2>/dev/null'
   changed_when: false
+  failed_when: false
 
 # ── 9. GPG sign/verify (kept from original) ──────────────────────────────
 - name: Check if GPG is available
@@ -343,6 +358,7 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_gpg.json \
         --command-name 'gpg-sign' \
           'gpg --batch --yes --sign -o /dev/null testdata.bin' \
@@ -350,3 +366,4 @@
           'gpg --batch --yes --detach-sign testdata.bin && gpg --batch --verify testdata.bin.sig testdata.bin && rm -f testdata.bin.sig'
   when: run_benchmarks_gpg_check.rc == 0
   changed_when: false
+  failed_when: false

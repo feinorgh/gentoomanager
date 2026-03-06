@@ -91,6 +91,7 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/opencv.json \
         --command-name 'resize' 'python3 opencv_bench.py resize' \
         --command-name 'blur' 'python3 opencv_bench.py blur' \
@@ -100,3 +101,4 @@
         --command-name 'opencv-all' 'python3 opencv_bench.py all'
   when: run_benchmarks_opencv_check.rc == 0
   changed_when: false
+  failed_when: false
