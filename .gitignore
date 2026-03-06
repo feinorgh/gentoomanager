@@ -174,3 +174,5 @@ cython_debug/
 benchmarks/
 inventory_generator_rs/target/
 hypervisors.txt
+host_vars/
+group_vars/
