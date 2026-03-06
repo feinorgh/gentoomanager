@@ -187,15 +187,15 @@
         --warmup {{ run_benchmarks_warmup }} \
         --export-json {{ run_benchmarks_work_dir }}/crypto_openssl_speed.json \
         --command-name 'speed-aes-256-gcm' \
-          'openssl speed -seconds 3 -bytes 16384 aes-256-gcm 2>/dev/null' \
+          'openssl speed -seconds 3 -bytes 16384 -evp aes-256-gcm' \
         --command-name 'speed-aes-256-cbc' \
-          'openssl speed -seconds 3 -bytes 16384 aes-256-cbc 2>/dev/null' \
+          'openssl speed -seconds 3 -bytes 16384 aes-256-cbc' \
         --command-name 'speed-chacha20-poly1305' \
-          'openssl speed -seconds 3 -bytes 16384 chacha20-poly1305 2>/dev/null' \
+          'openssl speed -seconds 3 -bytes 16384 -evp chacha20-poly1305' \
         --command-name 'speed-sha256' \
-          'openssl speed -seconds 3 -bytes 16384 sha256 2>/dev/null' \
+          'openssl speed -seconds 3 -bytes 16384 sha256' \
         --command-name 'speed-sha512' \
-          'openssl speed -seconds 3 -bytes 16384 sha512 2>/dev/null'
+          'openssl speed -seconds 3 -bytes 16384 sha512'
   changed_when: false
 
 # ── 6. Asymmetric / public-key benchmarks ────────────────────────────────
