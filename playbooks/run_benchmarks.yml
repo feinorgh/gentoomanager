@@ -31,6 +31,10 @@
     run_benchmarks_work_dir: /tmp/ansible-benchmarks
     run_benchmarks_work_dir_win: C:\ansible-benchmarks
     run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
+    # Hypervisor load thresholds — skip VM if any are exceeded
+    run_benchmarks_max_load_factor: 2.0
+    run_benchmarks_min_free_mem_mb: 1024
+    run_benchmarks_max_swap_used_pct: 90
 
   pre_tasks:
     - name: Check host is reachable
@@ -63,6 +67,102 @@
           {{ run_benchmarks_work_dir_win
              if (ansible_os_family | default('') == 'Windows')
              else run_benchmarks_work_dir }}
+
+    # ── Hypervisor health check ─────────────────────────────────────────
+    - name: Collect hypervisor status
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          echo "::load::$(cat /proc/loadavg)"
+          echo "::cpus::$(nproc)"
+          echo "::mem::$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{print t,a}' /proc/meminfo)"
+          echo "::swap::$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{print t,f}' /proc/meminfo)"
+          echo "::procs::$(ps -e --no-headers | wc -l)"
+      delegate_to: "{{ hypervisor_host }}"
+      register: _hv_status_raw
+      changed_when: false
+      check_mode: false
+
+    - name: Parse hypervisor status
+      ansible.builtin.set_fact:
+        _hv_load_1m: >-
+          {{ (_hv_status_raw.stdout_lines
+              | select('match', '^::load::')
+              | first
+              | regex_replace('^::load::', '')
+             ).split()[0] | float }}
+        _hv_cpus: >-
+          {{ _hv_status_raw.stdout_lines
+             | select('match', '^::cpus::')
+             | first
+             | regex_replace('^::cpus::', '')
+             | int }}
+        _hv_mem_total_mb: >-
+          {{ ((_hv_status_raw.stdout_lines
+               | select('match', '^::mem::')
+               | first
+               | regex_replace('^::mem::', '')
+              ).split()[0] | int / 1024) | round(0) | int }}
+        _hv_mem_avail_mb: >-
+          {{ ((_hv_status_raw.stdout_lines
+               | select('match', '^::mem::')
+               | first
+               | regex_replace('^::mem::', '')
+              ).split()[1] | int / 1024) | round(0) | int }}
+        _hv_swap_total_kb: >-
+          {{ (_hv_status_raw.stdout_lines
+              | select('match', '^::swap::')
+              | first
+              | regex_replace('^::swap::', '')
+             ).split()[0] | int }}
+        _hv_swap_free_kb: >-
+          {{ (_hv_status_raw.stdout_lines
+              | select('match', '^::swap::')
+              | first
+              | regex_replace('^::swap::', '')
+             ).split()[1] | int }}
+        _hv_procs: >-
+          {{ _hv_status_raw.stdout_lines
+             | select('match', '^::procs::')
+             | first
+             | regex_replace('^::procs::', '')
+             | int }}
+
+    - name: Compute hypervisor health metrics
+      ansible.builtin.set_fact:
+        _hv_load_per_cpu: >-
+          {{ (_hv_load_1m | float / (_hv_cpus | int)) | round(2) }}
+        _hv_swap_used_pct: >-
+          {{ (100 - (_hv_swap_free_kb | int * 100 / (_hv_swap_total_kb | int)))
+             | round(1)
+             if (_hv_swap_total_kb | int > 0)
+             else 0 }}
+
+    - name: Log hypervisor status
+      ansible.builtin.debug:
+        msg: >-
+          Hypervisor {{ hypervisor_host }}:
+          load={{ _hv_load_1m }} ({{ _hv_load_per_cpu }}/cpu),
+          mem={{ _hv_mem_avail_mb }}MB free / {{ _hv_mem_total_mb }}MB,
+          swap={{ _hv_swap_used_pct }}% used,
+          procs={{ _hv_procs }}
+
+    - name: Abort — hypervisor too loaded
+      ansible.builtin.fail:
+        msg: >-
+          Hypervisor {{ hypervisor_host }} is overloaded — skipping
+          {{ inventory_hostname }}.
+          Load/CPU={{ _hv_load_per_cpu }}
+          (threshold={{ run_benchmarks_max_load_factor }}),
+          free mem={{ _hv_mem_avail_mb }}MB
+          (threshold={{ run_benchmarks_min_free_mem_mb }}MB),
+          swap used={{ _hv_swap_used_pct }}%
+          (threshold={{ run_benchmarks_max_swap_used_pct }}%).
+      when: >-
+        (_hv_load_per_cpu | float > run_benchmarks_max_load_factor | float) or
+        (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int) or
+        ((_hv_swap_used_pct | float > run_benchmarks_max_swap_used_pct | float) and
+         (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int * 2))
 
   tasks:
     - name: Benchmark with RAM scaling and automatic restore
