@@ -8,21 +8,23 @@ name: "gentoomanager"
 version: 1.0.0
 readme: README.md
 authors:
-  - your name <example@domain.com>
+  - feinorgh
 
-description: your collection description
+description: >-
+  Ansible collection for managing Gentoo Linux systems and running
+  cross-platform performance benchmarks across VMs and physical hosts.
 license_file: LICENSE
 
 # TO-DO: update the tags based on your content type
-tags: ["linux", "tools"]
-# TO-DO: maintain this list to reflect the collection's dependencies
+tags: ["linux", "gentoo", "benchmark", "portage", "performance"]
+# Pinned to avoid breaking changes from ansible.utils 6.x
 dependencies:
-  "ansible.utils": "*" # note: "*" selects the latest version available
+  "ansible.utils": ">=2.0.0,<7.0.0"
 
-repository: http://example.com/repository
-documentation: http://docs.example.com
-homepage: http://example.com
-issues: http://example.com/issue/tracker
+repository: https://github.com/feinorgh/gentoomanager
+documentation: https://github.com/feinorgh/gentoomanager/blob/master/README.md
+homepage: https://github.com/feinorgh/gentoomanager
+issues: https://github.com/feinorgh/gentoomanager/issues
 
 # A list of file glob-like patterns used to filter any files or directories that should not be included in the build
 # artifact. A pattern is matched from the relative path of the file or directory of the collection directory. This

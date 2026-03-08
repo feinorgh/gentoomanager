@@ -103,6 +103,7 @@ def load_passmark_data() -> dict[str, tuple[int, int]]:
 
     Returns a dict mapping normalized CPU name → (passmark_mt, passmark_st).
     Returns an empty dict if the CSV is missing or unreadable.
+    The result is cached globally after the first call.
     """
     global _PASSMARK_DATA
     if _PASSMARK_DATA is not None:
@@ -129,25 +130,25 @@ def lookup_passmark(cpu_model: str) -> tuple[int, int] | tuple[None, None]:
     """Return (passmark_mt, passmark_st) for a CPU model, or (None, None) if unknown.
 
     Matching strategy:
-    1. Exact normalized match.
-    2. First entry whose normalized key is a substring of the query (or vice versa).
+    1. Exact normalized match — O(1).
+    2. First entry whose normalized key is a substring of the query (or vice versa),
+       preferring the longest (most specific) key — O(n) over the CSV, done once.
     """
     data = load_passmark_data()
     if not data:
         return None, None
     query = _normalize_cpu_name(cpu_model)
-    # Exact match
+    # Exact match (O(1))
     if query in data:
         return data[query]
     # Substring match — prefer longer keys (more specific)
-    candidates = [
-        (k, v) for k, v in data.items()
-        if k in query or query in k
-    ]
-    if candidates:
-        best_key, best_val = max(candidates, key=lambda kv: len(kv[0]))
-        return best_val
-    return None, None
+    best_key: str | None = None
+    best_val: tuple[int, int] | None = None
+    for k, v in data.items():
+        if k in query or query in k:
+            if best_key is None or len(k) > len(best_key):
+                best_key, best_val = k, v
+    return best_val if best_val is not None else (None, None)
 
 
 def anonymize_hosts(

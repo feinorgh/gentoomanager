@@ -81,32 +81,15 @@
   changed_when: false
   failed_when: false
 
-- name: Install hyperfine on Fedora
+- name: Install hyperfine via native package manager (Linux distros with repo support)
   ansible.builtin.package:
     name: hyperfine
     state: present
   become: true
   when: >-
     provision_benchmarks_hf_check.rc != 0 and
-    ansible_distribution | default('') == 'Fedora'
-
-- name: Install hyperfine on Arch-based
-  ansible.builtin.package:
-    name: hyperfine
-    state: present
-  become: true
-  when: >-
-    provision_benchmarks_hf_check.rc != 0 and
-    ansible_os_family | default('') == 'Archlinux'
-
-- name: Install hyperfine on openSUSE
-  ansible.builtin.package:
-    name: hyperfine
-    state: present
-  become: true
-  when: >-
-    provision_benchmarks_hf_check.rc != 0 and
-    ansible_os_family | default('') == 'Suse'
+    (ansible_distribution | default('') == 'Fedora' or
+     ansible_os_family | default('') in ['Archlinux', 'Suse'])
   failed_when: false
 
 - name: Install hyperfine from ports (FreeBSD)
@@ -119,6 +102,7 @@
   when: >-
     provision_benchmarks_hf_check.rc != 0 and
     ansible_os_family | default('') == 'FreeBSD'
+  failed_when: false
 
 # ── 6. Hyperfine binary fallback (download from GitHub releases) ─────────
 - name: Re-check hyperfine after package install attempts

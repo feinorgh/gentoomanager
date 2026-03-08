@@ -31,6 +31,9 @@
     run_benchmarks_work_dir: /tmp/ansible-benchmarks
     run_benchmarks_work_dir_win: C:\ansible-benchmarks
     run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
+    # hypervisor_host is injected by inventory_generator.py for each VM.
+    # Set to empty string as a safe default; health check is skipped when unset.
+    hypervisor_host: "{{ hostvars[inventory_hostname].hypervisor_host | default('') }}"
     # Hypervisor load thresholds — skip VM if any are exceeded
     run_benchmarks_max_load_factor: 2.0
     run_benchmarks_min_free_mem_mb: 1024
@@ -82,6 +85,7 @@
       register: _hv_status_raw
       changed_when: false
       check_mode: false
+      when: hypervisor_host != ''
 
     - name: Parse hypervisor status
       ansible.builtin.set_fact:
@@ -127,6 +131,7 @@
              | first
              | regex_replace('^::procs::', '')
              | int }}
+      when: hypervisor_host != '' and _hv_status_raw is not skipped
 
     - name: Compute hypervisor health metrics
       ansible.builtin.set_fact:
@@ -137,6 +142,7 @@
              | round(1)
              if (_hv_swap_total_kb | int > 0)
              else 0 }}
+      when: hypervisor_host != '' and _hv_status_raw is not skipped
 
     - name: Log hypervisor status
       ansible.builtin.debug:
@@ -146,6 +152,7 @@
           mem={{ _hv_mem_avail_mb }}MB free / {{ _hv_mem_total_mb }}MB,
           swap={{ _hv_swap_used_pct }}% used,
           procs={{ _hv_procs }}
+      when: hypervisor_host != '' and _hv_status_raw is not skipped
 
     - name: Abort — hypervisor too loaded
       ansible.builtin.fail:
@@ -159,10 +166,11 @@
           swap used={{ _hv_swap_used_pct }}%
           (threshold={{ run_benchmarks_max_swap_used_pct }}%).
       when: >-
-        (_hv_load_per_cpu | float > run_benchmarks_max_load_factor | float) or
-        (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int) or
-        ((_hv_swap_used_pct | float > run_benchmarks_max_swap_used_pct | float) and
-         (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int * 2))
+        hypervisor_host != '' and _hv_status_raw is not skipped and
+        ((_hv_load_per_cpu | float > run_benchmarks_max_load_factor | float) or
+         (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int) or
+         ((_hv_swap_used_pct | float > run_benchmarks_max_swap_used_pct | float) and
+          (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int * 2)))
 
   tasks:
     - name: Benchmark with RAM scaling and automatic restore

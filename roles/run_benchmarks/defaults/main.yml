@@ -6,8 +6,17 @@ run_benchmarks_runs: 5
 run_benchmarks_warmup: 1
 
 # Categories to run (empty list = all)
-# Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup
+# Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup, gentoo_build_times
 run_benchmarks_categories: []
+
+# Categories that have a Windows-specific task file variant (<name>_win.yml).
+# Any category not in this list is silently skipped on Windows hosts.
+run_benchmarks_windows_categories:
+  - compression
+  - crypto
+  - compiler
+  - python
+  - coreutils
 
 # Local directory for collected results
 run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"

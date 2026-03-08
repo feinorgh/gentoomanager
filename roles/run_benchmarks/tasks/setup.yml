@@ -134,8 +134,14 @@
 
 - name: Parse distro build flags
   ansible.builtin.set_fact:
-    run_benchmarks_distro_cflags: "{{ (run_benchmarks_distro_flags_raw.stdout_lines | default(['']))[0] | default('') | trim }}"
-    run_benchmarks_distro_ldflags: "{{ (run_benchmarks_distro_flags_raw.stdout_lines | default(['', '']))[1] | default('') | trim }}"
+    run_benchmarks_distro_cflags: >-
+      {{ (run_benchmarks_distro_flags_raw.stdout_lines | default([])
+          | first | default('')) | trim }}
+    run_benchmarks_distro_ldflags: >-
+      {{ (run_benchmarks_distro_flags_raw.stdout_lines | default([]))
+         [1] | default('') | trim
+         if (run_benchmarks_distro_flags_raw.stdout_lines | default([]) | length > 1)
+         else '' }}
   when: >-
     run_benchmarks_distro_flags_raw is defined and
     run_benchmarks_distro_flags_raw is not skipped

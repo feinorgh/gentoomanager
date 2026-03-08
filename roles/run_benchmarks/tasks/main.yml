@@ -1,30 +1,26 @@
 ---
-# Main tasks: orchestrate benchmark setup, normalization, and all categories
+# Main tasks: orchestrate benchmark setup, normalization, and all categories.
 # Dispatches to Windows-specific task files when ansible_os_family == 'Windows'.
+# Windows variants exist for: compression, crypto, compiler, python, coreutils
+# (controlled by run_benchmarks_windows_categories in defaults/main.yml).
 
 - name: Set OS dispatch flag
   ansible.builtin.set_fact:
     run_benchmarks_is_windows: "{{ ansible_os_family | default('') == 'Windows' }}"
 
-# ── Setup ────────────────────────────────────────────────────────────────
-- name: Run benchmark setup (Unix)
-  ansible.builtin.include_tasks: setup.yml
-  when: not run_benchmarks_is_windows
+# ── Setup ─────────────────────────────────────────────────────────────────
+- name: Run benchmark setup
+  ansible.builtin.include_tasks:
+    file: "setup{{ '_win' if run_benchmarks_is_windows else '' }}.yml"
+  tags: [benchmark, setup]
 
-- name: Run benchmark setup (Windows)
-  ansible.builtin.include_tasks: setup_win.yml
-  when: run_benchmarks_is_windows
+# ── Normalize ─────────────────────────────────────────────────────────────
+- name: Normalize VM state
+  ansible.builtin.include_tasks:
+    file: "normalize{{ '_win' if run_benchmarks_is_windows else '' }}.yml"
+  tags: [benchmark, normalize]
 
-# ── Normalize ────────────────────────────────────────────────────────────
-- name: Normalize VM state (Unix)
-  ansible.builtin.include_tasks: normalize.yml
-  when: not run_benchmarks_is_windows
-
-- name: Normalize VM state (Windows)
-  ansible.builtin.include_tasks: normalize_win.yml
-  when: run_benchmarks_is_windows
-
-# ── Benchmarks ───────────────────────────────────────────────────────────
+# ── Benchmark categories ───────────────────────────────────────────────────
 - name: Define active benchmark categories
   ansible.builtin.set_fact:
     run_benchmarks_active_categories: >-
@@ -35,71 +31,23 @@
               'ffmpeg', 'coreutils', 'opencv', 'startup',
               'gentoo_build_times']
       }}
+  tags: [benchmark]
 
-# Unix benchmarks
-- name: Run compression benchmarks
-  ansible.builtin.include_tasks: compression.yml
-  when: "'compression' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
+- name: Run benchmark category
+  ansible.builtin.include_tasks:
+    file: >-
+      {{ item }}{{ '_win' if (run_benchmarks_is_windows and
+         item in run_benchmarks_windows_categories) else '' }}.yml
+  loop: "{{ run_benchmarks_active_categories }}"
+  loop_control:
+    label: "{{ item }}"
+  when: >-
+    not run_benchmarks_is_windows or
+    item in run_benchmarks_windows_categories
+  tags: [benchmark]
 
-- name: Run crypto benchmarks
-  ansible.builtin.include_tasks: crypto.yml
-  when: "'crypto' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-- name: Run compiler benchmarks
-  ansible.builtin.include_tasks: compiler.yml
-  when: "'compiler' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-- name: Run Python benchmarks
-  ansible.builtin.include_tasks: python.yml
-  when: "'python' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-- name: Run FFmpeg benchmarks
-  ansible.builtin.include_tasks: ffmpeg.yml
-  when: "'ffmpeg' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-- name: Run coreutils benchmarks
-  ansible.builtin.include_tasks: coreutils.yml
-  when: "'coreutils' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-- name: Run OpenCV benchmarks
-  ansible.builtin.include_tasks: opencv.yml
-  when: "'opencv' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-- name: Run application startup benchmarks
-  ansible.builtin.include_tasks: startup.yml
-  when: "'startup' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-# Gentoo-specific: package build time analysis
-- name: Run Gentoo build time analysis
-  ansible.builtin.include_tasks: gentoo_build_times.yml
-  when: "'gentoo_build_times' in run_benchmarks_active_categories and not run_benchmarks_is_windows"
-
-# Windows benchmarks
-- name: Run compression benchmarks (Windows)
-  ansible.builtin.include_tasks: compression_win.yml
-  when: "'compression' in run_benchmarks_active_categories and run_benchmarks_is_windows"
-
-- name: Run crypto benchmarks (Windows)
-  ansible.builtin.include_tasks: crypto_win.yml
-  when: "'crypto' in run_benchmarks_active_categories and run_benchmarks_is_windows"
-
-- name: Run compiler benchmarks (Windows)
-  ansible.builtin.include_tasks: compiler_win.yml
-  when: "'compiler' in run_benchmarks_active_categories and run_benchmarks_is_windows"
-
-- name: Run Python benchmarks (Windows)
-  ansible.builtin.include_tasks: python_win.yml
-  when: "'python' in run_benchmarks_active_categories and run_benchmarks_is_windows"
-
-- name: Run coreutils benchmarks (Windows)
-  ansible.builtin.include_tasks: coreutils_win.yml
-  when: "'coreutils' in run_benchmarks_active_categories and run_benchmarks_is_windows"
-
-# ── Denormalize ──────────────────────────────────────────────────────────
-- name: Restore VM to original state (Unix)
-  ansible.builtin.include_tasks: denormalize.yml
-  when: not run_benchmarks_is_windows
-
-- name: Restore VM to original state (Windows)
-  ansible.builtin.include_tasks: denormalize_win.yml
-  when: run_benchmarks_is_windows
+# ── Denormalize ───────────────────────────────────────────────────────────
+- name: Restore VM to original state
+  ansible.builtin.include_tasks:
+    file: "denormalize{{ '_win' if run_benchmarks_is_windows else '' }}.yml"
+  tags: [benchmark, denormalize]
