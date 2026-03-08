@@ -201,7 +201,7 @@ fi
 [[ "${BECOME_PASS}" -eq 1 ]] && CMD+=(-K)
 
 # ── Build extra-vars dict ────────────────────────────────────────────────────
-declare -A EVARS
+declare -A EVARS=()
 
 if [[ -n "${CATEGORIES}" ]]; then
     # Convert comma-separated list to JSON array: "compression,crypto" → ["compression","crypto"]
