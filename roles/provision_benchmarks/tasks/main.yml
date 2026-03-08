@@ -190,6 +190,8 @@
     - imagemagick
     - gnupg2
     - p7zip
+    - sqlite
+    - python3-numpy
   when: ansible_distribution | default('') == 'Void'
   changed_when: true
   failed_when: false
@@ -209,6 +211,8 @@
     - git
     - ffmpeg
     - gnupg
+    - sqlite
+    - python3Packages.numpy
   when: ansible_distribution | default('') == 'NixOS'
   changed_when: true
   failed_when: false
@@ -229,6 +233,8 @@
     - git
     - ffmpeg
     - gnupg
+    - sqlite3
+    - python3-numpy
   when: ansible_distribution | default('') == 'Solus'
   changed_when: true
   failed_when: false

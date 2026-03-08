@@ -22,6 +22,7 @@ provision_benchmarks_packages:
     - app-crypt/gnupg
     - sys-apps/diffutils
     - app-arch/p7zip
+    - dev-db/sqlite
   RedHat:
     - gcc
     - clang
@@ -41,6 +42,7 @@ provision_benchmarks_packages:
     - p7zip
     - p7zip-plugins
     - ImageMagick
+    - sqlite
   Debian:
     - gcc
     - clang
@@ -60,6 +62,7 @@ provision_benchmarks_packages:
     - build-essential
     - 7zip
     - imagemagick
+    - sqlite3
   Archlinux:
     - gcc
     - clang
@@ -77,6 +80,7 @@ provision_benchmarks_packages:
     - diffutils
     - p7zip
     - imagemagick
+    - sqlite
   Suse:
     - gcc
     - clang
@@ -95,6 +99,7 @@ provision_benchmarks_packages:
     - diffutils
     - 7zip
     - ImageMagick
+    - sqlite3
   FreeBSD:
     - lang/gcc13
     - devel/llvm
@@ -109,6 +114,7 @@ provision_benchmarks_packages:
     - textproc/diffutils
     - archivers/p7zip
     - graphics/ImageMagick7
+    - databases/sqlite3
 
 # Packages available only via EPEL on RHEL/CentOS
 provision_benchmarks_epel_packages:
