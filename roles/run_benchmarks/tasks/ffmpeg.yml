@@ -9,35 +9,32 @@
   failed_when: false
 
 - name: Discover available FFmpeg codecs
-  ansible.builtin.shell:
-    cmd: |
-      set -eo pipefail
-      python3 -c "
-      import json, subprocess, re
-
-      def get_names(cmd, type_char):
-          r = subprocess.run(cmd, capture_output=True, text=True)
-          names = set()
-          for line in r.stdout.splitlines():
-              m = re.match(r'^\s*' + type_char + r'[\.\w]{5}\s+(\S+)', line)
-              if m:
-                  names.add(m.group(1))
-          return sorted(names)
-
-      data = {
-          'video_encoders': get_names(['ffmpeg', '-encoders'], 'V'),
-          'audio_encoders': get_names(['ffmpeg', '-encoders'], 'A'),
-          'video_decoders': get_names(['ffmpeg', '-decoders'], 'V'),
-          'audio_decoders': get_names(['ffmpeg', '-decoders'], 'A'),
-      }
-      with open('{{ run_benchmarks_work_dir }}/ffmpeg_codecs.json', 'w') as f:
-          json.dump(data, f, indent=2)
-      print(json.dumps(data))
-      "
+  probe_command_output:
+    probes:
+      - key: video_encoders
+        command: [ffmpeg, -encoders]
+        pattern: '^\s*V[\.\w]{5}\s+(\S+)'
+      - key: audio_encoders
+        command: [ffmpeg, -encoders]
+        pattern: '^\s*A[\.\w]{5}\s+(\S+)'
+      - key: video_decoders
+        command: [ffmpeg, -decoders]
+        pattern: '^\s*V[\.\w]{5}\s+(\S+)'
+      - key: audio_decoders
+        command: [ffmpeg, -decoders]
+        pattern: '^\s*A[\.\w]{5}\s+(\S+)'
   register: run_benchmarks_ffmpeg_codecs_raw
   when: run_benchmarks_ffmpeg_check.rc == 0
-  changed_when: false
   failed_when: false
+
+- name: Write FFmpeg codec list to JSON
+  ansible.builtin.copy:
+    content: "{{ run_benchmarks_ffmpeg_codecs_raw.data | to_nice_json }}"
+    dest: "{{ run_benchmarks_work_dir }}/ffmpeg_codecs.json"
+    mode: "0644"
+  when: >-
+    run_benchmarks_ffmpeg_check.rc == 0 and
+    run_benchmarks_ffmpeg_codecs_raw is not skipped
 
 # ── Test media generation ─────────────────────────────────────────────────
 

@@ -1,33 +1,26 @@
 ---
 # Coreutils and development tools benchmarks
 
-- name: Create test data for coreutils benchmarks
+- name: Generate sort test data for coreutils benchmarks
+  ansible.builtin.script:
+    cmd: gen_sortdata.py
+    chdir: "{{ run_benchmarks_work_dir }}"
+    creates: "{{ run_benchmarks_work_dir }}/sortdata.txt"
+
+- name: Create directory tree for find benchmarks
   ansible.builtin.shell:
     cmd: |
       set -e
       cd {{ run_benchmarks_work_dir }}
-      # Create a text file with sortable data
-      if [ ! -f sortdata.txt ]; then
-        python3 -c "
-      import random, string
-      random.seed(42)
-      with open('sortdata.txt', 'w') as f:
-          for _ in range(500000):
-              f.write(''.join(random.choices(string.ascii_letters + string.digits, k=80)) + '\n')
-      "
-      fi
-      # Create a directory tree for find benchmarks
-      if [ ! -d findtree ]; then
-        mkdir -p findtree
-        for i in $(seq 1 50); do
-          mkdir -p "findtree/dir_$i/sub_a" "findtree/dir_$i/sub_b"
-          for j in $(seq 1 20); do
-            dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_a/file_$j.txt" 2>/dev/null
-            dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_b/file_$j.dat" 2>/dev/null
-          done
+      mkdir -p findtree
+      for i in $(seq 1 50); do
+        mkdir -p "findtree/dir_$i/sub_a" "findtree/dir_$i/sub_b"
+        for j in $(seq 1 20); do
+          dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_a/file_$j.txt" 2>/dev/null
+          dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_b/file_$j.dat" 2>/dev/null
         done
-      fi
-    creates: "{{ run_benchmarks_work_dir }}/sortdata.txt"
+      done
+    creates: "{{ run_benchmarks_work_dir }}/findtree"
 
 - name: Run coreutils benchmarks
   ansible.builtin.shell:

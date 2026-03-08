@@ -7,42 +7,28 @@
 
 # ── 1. Detect available OpenSSL algorithms ────────────────────────────────
 - name: Detect available OpenSSL ciphers and algorithms
-  ansible.builtin.shell:
-    cmd: |
-      set -eo pipefail
-      python3 -c "
-      import subprocess, json, re
-
-      def probe(args):
-          r = subprocess.run(['openssl'] + args,
-                             capture_output=True, text=True, timeout=10)
-          return r.stdout + r.stderr
-
-      # Probe symmetric ciphers
-      sym_out = probe(['enc', '-list'])
-      avail_ciphers = set(re.findall(r'-(\S+)', sym_out))
-
-      # Probe digest algorithms
-      dgst_out = probe(['dgst', '-list'])
-      avail_digests = set(re.findall(r'-(\S+)', dgst_out))
-
-      # Probe asymmetric via 'openssl speed -help' or known list
-      speed_help = probe(['speed', '-help'])
-
-      result = {
-          'ciphers': sorted(avail_ciphers),
-          'digests': sorted(avail_digests),
-          'speed_help': speed_help[:2000],
-      }
-      print(json.dumps(result))
-      "
+  probe_command_output:
+    timeout: 15
+    probes:
+      - key: ciphers
+        command: [openssl, enc, -list]
+        pattern: '-(\S+)'
+        combine_stderr: true
+      - key: digests
+        command: [openssl, dgst, -list]
+        pattern: '-(\S+)'
+        combine_stderr: true
+      - key: speed_help
+        command: [openssl, speed, -help]
+        combine_stderr: true
+        raw: true
+        max_length: 2000
   register: run_benchmarks_crypto_detect
-  changed_when: false
   failed_when: false
 
-- name: Parse available crypto algorithms
+- name: Set available crypto algorithms fact
   ansible.builtin.set_fact:
-    run_benchmarks_crypto_info: "{{ run_benchmarks_crypto_detect.stdout | from_json }}"
+    run_benchmarks_crypto_info: "{{ run_benchmarks_crypto_detect.data }}"
 
 # ── 2. Symmetric cipher benchmarks (AES, ChaCha20) ──────────────────────
 - name: Run symmetric cipher benchmarks

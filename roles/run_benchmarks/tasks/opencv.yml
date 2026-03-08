@@ -2,11 +2,18 @@
 # OpenCV benchmarks via Python bindings
 
 - name: Check OpenCV Python availability
-  ansible.builtin.shell:
-    cmd: python3 -c "import cv2; print(cv2.__version__)"
-  register: run_benchmarks_opencv_check
-  changed_when: false
+  community.general.python_requirements_info:
+    dependencies:
+      - cv2
+  register: run_benchmarks_opencv_pkg_info
   failed_when: false
+
+- name: Set OpenCV availability fact
+  ansible.builtin.set_fact:
+    run_benchmarks_opencv_check:
+      rc: >-
+        {{ 0 if ('cv2' not in (run_benchmarks_opencv_pkg_info.not_found | default([])))
+           else 1 }}
 
 - name: Create OpenCV benchmark script
   ansible.builtin.copy:
