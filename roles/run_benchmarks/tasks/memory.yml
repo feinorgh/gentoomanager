@@ -1,0 +1,105 @@
+---
+# Memory benchmarks: sequential bandwidth (dd → /dev/shm tmpfs) and
+# random-access latency (compiled pointer-chasing program).
+# Results expose DRAM speed, cache hierarchy, and NUMA topology —
+# characteristics not captured by compute-bound benchmarks.
+
+# ── Availability checks ───────────────────────────────────────────────────
+
+- name: Check gcc availability for memory latency benchmark
+  ansible.builtin.command:
+    cmd: gcc --version
+  register: run_benchmarks_memory_gcc_check
+  changed_when: false
+  failed_when: false
+
+- name: Check /dev/shm availability for bandwidth benchmark
+  ansible.builtin.stat:
+    path: /dev/shm
+  register: run_benchmarks_memory_shm_stat
+
+# ── Latency: compile pointer-chasing binary ───────────────────────────────
+
+- name: Copy bench_latency.c to work directory
+  ansible.builtin.copy:
+    src: bench_latency.c
+    dest: "{{ run_benchmarks_work_dir }}/bench_latency.c"
+    mode: "0644"
+  when: run_benchmarks_memory_gcc_check.rc == 0
+
+- name: Compile bench_latency
+  ansible.builtin.command:
+    cmd: >-
+      gcc -O2
+      -o {{ run_benchmarks_work_dir }}/bench_latency
+      {{ run_benchmarks_work_dir }}/bench_latency.c
+    creates: "{{ run_benchmarks_work_dir }}/bench_latency"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_memory_gcc_check.rc == 0
+
+# ── Bandwidth benchmarks ──────────────────────────────────────────────────
+
+- name: Run memory bandwidth benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/memory_bandwidth.json \
+        --prepare "rm -f /dev/shm/bench_bw_write" \
+        --command-name "shm-write-512m" \
+          "dd if=/dev/zero of=/dev/shm/bench_bw_write bs=64M count=8 2>&1" \
+        --prepare "dd if=/dev/zero of=/dev/shm/bench_bw_read bs=64M count=8 2>/dev/null; true" \
+        --command-name "shm-read-512m" \
+          "dd if=/dev/shm/bench_bw_read of=/dev/null bs=64M count=8 2>&1"
+  register: run_benchmarks_memory_bw_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_memory_shm_stat.stat.exists
+
+- name: Warn if memory bandwidth benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] memory_bandwidth benchmark failed or timed out"
+  when:
+    - run_benchmarks_memory_shm_stat.stat.exists
+    - run_benchmarks_memory_bw_result.rc != 0
+
+# ── Latency benchmarks ────────────────────────────────────────────────────
+
+- name: Run memory latency benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/memory_latency.json \
+        --command-name "pointer-chase-64m" \
+          "{{ run_benchmarks_work_dir }}/bench_latency"
+  register: run_benchmarks_memory_latency_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_memory_gcc_check.rc == 0
+
+- name: Warn if memory latency benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] memory_latency benchmark failed or timed out"
+  when:
+    - run_benchmarks_memory_gcc_check.rc == 0
+    - run_benchmarks_memory_latency_result.rc != 0
+
+# ── Cleanup ───────────────────────────────────────────────────────────────
+
+- name: Remove bandwidth test files from /dev/shm
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /dev/shm/bench_bw_write
+    - /dev/shm/bench_bw_read
+  when: run_benchmarks_memory_shm_stat.stat.exists
+  failed_when: false

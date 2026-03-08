@@ -66,6 +66,12 @@ CATEGORY_TITLES = {
     "diff": "Diff / Comm",
     "opencv": "OpenCV Image Processing",
     "startup": "Application Startup",
+    "numeric_compiled": "Numeric — Compiled C (N-body, Mandelbrot, Spectral Norm)",
+    "numeric_numpy": "Numeric — NumPy (matmul, FFT, sort)",
+    "sqlite_write": "SQLite — Write (bulk INSERT, UPDATE)",
+    "sqlite_read": "SQLite — Read (indexed SELECT, full scan, ORDER BY)",
+    "memory_bandwidth": "Memory — Sequential Bandwidth (write/read to tmpfs)",
+    "memory_latency": "Memory — Random Access Latency (pointer chasing)",
 }
 
 # Greek mythology names for host anonymization (deterministic order)

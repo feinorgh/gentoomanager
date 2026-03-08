@@ -6,7 +6,8 @@ run_benchmarks_runs: 5
 run_benchmarks_warmup: 1
 
 # Categories to run (empty list = all)
-# Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup, gentoo_build_times
+# Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup, gentoo_build_times,
+#        numeric, sqlite, memory
 run_benchmarks_categories: []
 
 # Categories that have a Windows-specific task file variant (<name>_win.yml).
@@ -58,3 +59,6 @@ run_benchmarks_hypervisor_categories:
   - opencv
   - startup
   - gentoo_build_times
+  - numeric
+  - sqlite
+  - memory

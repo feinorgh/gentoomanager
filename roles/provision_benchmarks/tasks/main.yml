@@ -275,7 +275,18 @@
     ansible_os_family | default('') == 'FreeBSD'
   failed_when: false
 
-# ── 12. Verify installation ─────────────────────────────────────────────
+# ── 12. Install numpy (optional, for numeric benchmarks) ─────────────────
+- name: Install numpy packages
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages[ansible_os_family] | default([]) }}"
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_install_numpy | bool and
+    ansible_os_family in provision_benchmarks_numpy_packages
+  failed_when: false
+
+# ── 13. Verify installation ─────────────────────────────────────────────
 - name: Verify essential tools are available
   ansible.builtin.shell:
     cmd: |

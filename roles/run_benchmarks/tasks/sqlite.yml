@@ -1,0 +1,102 @@
+---
+# SQLite benchmarks: bulk INSERT, indexed SELECT, full-table scan, ORDER BY.
+# Tests B-tree manipulation, query planner, and branch-prediction-sensitive
+# code paths in the SQLite library — a strong PGO and branch-opt signal.
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check sqlite3 availability
+  ansible.builtin.command:
+    cmd: sqlite3 --version
+  register: run_benchmarks_sqlite_check
+  changed_when: false
+  failed_when: false
+
+# ── Setup: generate SQL and template database ─────────────────────────────
+
+- name: Generate SQLite bulk-insert SQL file
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - <<'PYEOF'
+      import random, sys
+      random.seed(42)
+      out = sys.stdout
+      out.write("CREATE TABLE bench(id INTEGER PRIMARY KEY, val REAL, str TEXT);\n")
+      out.write("CREATE INDEX idx_val ON bench(val);\n")
+      out.write("BEGIN;\n")
+      for i in range(100000):
+          out.write(f"INSERT INTO bench VALUES({i},{random.random():.8f},'{i:08x}');\n")
+      out.write("COMMIT;\n")
+      PYEOF
+  args:
+    chdir: "{{ run_benchmarks_work_dir }}"
+    creates: "{{ run_benchmarks_work_dir }}/sqlite_setup.sql"
+  failed_when: false
+  when: run_benchmarks_sqlite_check.rc == 0
+
+- name: Create SQLite template database
+  ansible.builtin.shell:
+    cmd: sqlite3 "{{ run_benchmarks_work_dir }}/sqlite_template.db" < "{{ run_benchmarks_work_dir }}/sqlite_setup.sql"
+  args:
+    creates: "{{ run_benchmarks_work_dir }}/sqlite_template.db"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_sqlite_check.rc == 0
+
+# ── Write benchmarks ──────────────────────────────────────────────────────
+
+- name: Run SQLite write benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/sqlite_write.json \
+        --command-name "insert-100k" \
+          "sqlite3 :memory: < {{ run_benchmarks_work_dir }}/sqlite_setup.sql" \
+        --prepare "cp {{ run_benchmarks_work_dir }}/sqlite_template.db /tmp/sqlite_bench_upd.db" \
+        --command-name "update-50k" \
+          "sqlite3 /tmp/sqlite_bench_upd.db 'UPDATE bench SET val=1.0-val WHERE id%2=0'"
+  register: run_benchmarks_sqlite_write_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_sqlite_check.rc == 0
+
+- name: Warn if SQLite write benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] sqlite_write benchmark failed or timed out"
+  when:
+    - run_benchmarks_sqlite_check.rc == 0
+    - run_benchmarks_sqlite_write_result.rc != 0
+
+# ── Read benchmarks ───────────────────────────────────────────────────────
+
+- name: Run SQLite read benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/sqlite_read.json \
+        --command-name "indexed-select" \
+          "sqlite3 {{ run_benchmarks_work_dir }}/sqlite_template.db 'SELECT COUNT(*) FROM bench WHERE val > 0.5'" \
+        --command-name "full-scan" \
+          "sqlite3 {{ run_benchmarks_work_dir }}/sqlite_template.db 'SELECT COUNT(*) FROM bench WHERE id%7=0'" \
+        --command-name "order-by-1k" \
+          "sqlite3 {{ run_benchmarks_work_dir }}/sqlite_template.db 'SELECT id FROM bench ORDER BY val LIMIT 1000'"
+  register: run_benchmarks_sqlite_read_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_sqlite_check.rc == 0
+
+- name: Warn if SQLite read benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] sqlite_read benchmark failed or timed out"
+  when:
+    - run_benchmarks_sqlite_check.rc == 0
+    - run_benchmarks_sqlite_read_result.rc != 0

@@ -29,7 +29,7 @@
         if (run_benchmarks_categories | length > 0)
         else ['compression', 'crypto', 'compiler', 'python',
               'ffmpeg', 'imagemagick', 'coreutils', 'opencv', 'startup',
-              'gentoo_build_times']
+              'gentoo_build_times', 'numeric', 'sqlite', 'memory']
       }}
   tags: [benchmark]
 

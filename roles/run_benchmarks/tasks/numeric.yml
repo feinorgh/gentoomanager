@@ -1,0 +1,121 @@
+---
+# Numeric floating-point benchmarks: compiled C (nbody, mandelbrot, spectral norm)
+# and numpy (matmul, FFT, sort).  Results stress FP vectorisation, FMA, and
+# BLAS tuning — providing strong compiler-flag and CPU_FLAGS_X86 signal.
+
+# ── Availability checks ───────────────────────────────────────────────────
+
+- name: Check gcc availability for numeric benchmarks
+  ansible.builtin.command:
+    cmd: gcc --version
+  register: run_benchmarks_numeric_gcc_check
+  changed_when: false
+  failed_when: false
+
+- name: Check numpy availability
+  ansible.builtin.command:
+    cmd: python3 -c "import numpy"
+  register: run_benchmarks_numeric_numpy_check
+  changed_when: false
+  failed_when: false
+
+# ── C source setup ────────────────────────────────────────────────────────
+
+- name: Copy numeric C benchmark sources to work directory
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ run_benchmarks_work_dir }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - bench_nbody.c
+    - bench_mandelbrot.c
+    - bench_spectral_norm.c
+  when: run_benchmarks_numeric_gcc_check.rc == 0
+
+- name: Compile bench_nbody
+  ansible.builtin.command:
+    cmd: >-
+      gcc -O3 -march=native -ffast-math -lm
+      -o {{ run_benchmarks_work_dir }}/bench_nbody
+      {{ run_benchmarks_work_dir }}/bench_nbody.c
+    creates: "{{ run_benchmarks_work_dir }}/bench_nbody"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_numeric_gcc_check.rc == 0
+
+- name: Compile bench_mandelbrot
+  ansible.builtin.command:
+    cmd: >-
+      gcc -O3 -march=native -ffast-math
+      -o {{ run_benchmarks_work_dir }}/bench_mandelbrot
+      {{ run_benchmarks_work_dir }}/bench_mandelbrot.c
+    creates: "{{ run_benchmarks_work_dir }}/bench_mandelbrot"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_numeric_gcc_check.rc == 0
+
+- name: Compile bench_spectral_norm
+  ansible.builtin.command:
+    cmd: >-
+      gcc -O3 -march=native -ffast-math -lm
+      -o {{ run_benchmarks_work_dir }}/bench_spectral_norm
+      {{ run_benchmarks_work_dir }}/bench_spectral_norm.c
+    creates: "{{ run_benchmarks_work_dir }}/bench_spectral_norm"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_numeric_gcc_check.rc == 0
+
+# ── Compiled C benchmarks ─────────────────────────────────────────────────
+
+- name: Run compiled numeric benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/numeric_compiled.json \
+        --command-name "nbody-5m"           "{{ run_benchmarks_work_dir }}/bench_nbody 5000000" \
+        --command-name "mandelbrot-4000"    "{{ run_benchmarks_work_dir }}/bench_mandelbrot 4000" \
+        --command-name "spectral-norm-1000" "{{ run_benchmarks_work_dir }}/bench_spectral_norm 1000"
+  register: run_benchmarks_numeric_c_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_numeric_gcc_check.rc == 0
+
+- name: Warn if compiled numeric benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] numeric_compiled benchmark failed or timed out"
+  when:
+    - run_benchmarks_numeric_gcc_check.rc == 0
+    - run_benchmarks_numeric_c_result.rc != 0
+
+# ── NumPy benchmarks ──────────────────────────────────────────────────────
+
+- name: Run numpy numeric benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/numeric_numpy.json \
+        --command-name "numpy-matmul-2000" \
+          "python3 -c \"import numpy as np; a=np.random.rand(2000,2000); np.matmul(a,a)\"" \
+        --command-name "numpy-fft2-2048" \
+          "python3 -c \"import numpy as np; a=np.random.rand(2048,2048); np.fft.fft2(a)\"" \
+        --command-name "numpy-sort-10m" \
+          "python3 -c \"import numpy as np; a=np.random.rand(10_000_000); np.sort(a)\""
+  register: run_benchmarks_numeric_numpy_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_numeric_numpy_check.rc == 0
+
+- name: Warn if numpy benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] numeric_numpy benchmark failed or timed out"
+  when:
+    - run_benchmarks_numeric_numpy_check.rc == 0
+    - run_benchmarks_numeric_numpy_result.rc != 0
