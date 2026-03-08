@@ -43,7 +43,7 @@ class TestMakeConfTemplate:
             make_conf={"COMMON_FLAGS": "-O2 -pipe", "ACCEPT_LICENSE": "@FREE"},
             build_profile={"CFLAGS": "${COMMON_FLAGS}"},
         )
-        lines = [l for l in result.splitlines() if l and not l.startswith("#")]
+        lines = [ln for ln in result.splitlines() if ln and not ln.startswith("#")]
         assert lines[0] == 'COMMON_FLAGS="-O2 -pipe"'
         assert lines[1] == 'CFLAGS="${COMMON_FLAGS}"'
 
@@ -71,9 +71,9 @@ class TestMakeConfTemplate:
         result = _render(
             make_conf={"PORTDIR": "/var/db/repos/gentoo", "ACCEPT_LICENSE": "@FREE"},
         )
-        lines = [l for l in result.splitlines() if l and not l.startswith("#")]
-        accept_idx = next(i for i, l in enumerate(lines) if "ACCEPT_LICENSE" in l)
-        portdir_idx = next(i for i, l in enumerate(lines) if "PORTDIR" in l)
+        lines = [ln for ln in result.splitlines() if ln and not ln.startswith("#")]
+        accept_idx = next(i for i, ln in enumerate(lines) if "ACCEPT_LICENSE" in ln)
+        portdir_idx = next(i for i, ln in enumerate(lines) if "PORTDIR" in ln)
         assert accept_idx < portdir_idx
 
     def test_managed_header_present(self):

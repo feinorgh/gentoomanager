@@ -34,7 +34,7 @@ _list:
   type: list
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ansible.errors import AnsibleError  # type: ignore
 from ansible.plugins.lookup import LookupBase  # type: ignore
@@ -51,9 +51,9 @@ class LookupModule(LookupBase):  # type: ignore[misc]
 
     def run(
         self,
-        terms: List[str],
-        variables: Optional[Dict[str, Any]] = None,
-        **kwargs: Dict[str, Any],
+        terms: list[str],
+        variables: dict[str, Any] | None = None,
+        **kwargs: dict[str, Any],
     ) -> list[str]:
         """
         Run the lookup with the specified terms.

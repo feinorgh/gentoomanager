@@ -11,6 +11,7 @@ Usage::
     ansible-inventory -i inventory_generator.py --list
     ansible-inventory -i inventory_generator.py --list --probe-cflags
 """
+
 import argparse
 import concurrent.futures
 import json
@@ -69,7 +70,10 @@ def get_vms_from_host(host):
             os_name = "unknown_os"
 
             # 1. Try QEMU guest agent for the most accurate OS detection
-            agent_cmd = f'virsh --connect qemu:///system qemu-agent-command {shlex.quote(vm)} \'{{"execute": "guest-get-osinfo"}}\''
+            agent_cmd = (
+                f"virsh --connect qemu:///system qemu-agent-command {shlex.quote(vm)}"
+                ' \'{"execute": "guest-get-osinfo"}\''
+            )
             agent_result = subprocess.run(
                 ["ssh"] + SSH_OPTIONS + [host, agent_cmd],
                 capture_output=True,
@@ -97,9 +101,7 @@ def get_vms_from_host(host):
                         root = ET.fromstring(xml_result.stdout)
 
                         # Try to extract the OS from libosinfo metadata
-                        ns = {
-                            "libosinfo": "http://libosinfo.org/xmlns/libvirt/domain/1.0"
-                        }
+                        ns = {"libosinfo": "http://libosinfo.org/xmlns/libvirt/domain/1.0"}
                         elem = root.find(".//libosinfo:short-id", ns)
                         if elem is not None and elem.text:
                             os_name = elem.text
@@ -118,7 +120,10 @@ def get_vms_from_host(host):
 
             # 4. Try to get the actual hostname from the QEMU guest agent
             actual_hostname = vm  # default: fall back to libvirt VM name
-            hostname_cmd = f'virsh --connect qemu:///system qemu-agent-command {shlex.quote(vm)} \'{{"execute":"guest-get-host-name"}}\''
+            hostname_cmd = (
+                f"virsh --connect qemu:///system qemu-agent-command {shlex.quote(vm)}"
+                ' \'{"execute":"guest-get-host-name"}\''
+            )
             hostname_result = subprocess.run(
                 ["ssh"] + SSH_OPTIONS + [host, hostname_cmd],
                 capture_output=True,
@@ -180,12 +185,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate Ansible inventory from hypervisor VMs via SSH"
     )
-    parser.add_argument(
-        "--hosts", nargs="+", help="List of hypervisor hosts", required=False
-    )
-    parser.add_argument(
-        "--list", action="store_true", help="Ansible dynamic inventory --list flag"
-    )
+    parser.add_argument("--hosts", nargs="+", help="List of hypervisor hosts", required=False)
+    parser.add_argument("--list", action="store_true", help="Ansible dynamic inventory --list flag")
     parser.add_argument("--host", help="Ansible dynamic inventory --host flag")
     parser.add_argument(
         "--probe-cflags",
@@ -235,7 +236,8 @@ def main():
                         vm_name = vm["name"]
                         os_group = vm["os"]
 
-                        # Sanitize os_group for Ansible (must start with letter, only contain letters, numbers, and underscores)
+                        # Sanitize os_group for Ansible (must start with letter,
+                        # only contain letters, numbers, and underscores)
                         os_group = re.sub(r"[^a-zA-Z0-9_]", "_", os_group)
                         if not os_group[0].isalpha():
                             os_group = "os_" + os_group
@@ -250,10 +252,7 @@ def main():
 
                         # Prevent group and host name collisions (e.g. host win11 and group win11)
                         inventory_vm_name = vm_name
-                        if (
-                            inventory_vm_name == os_group
-                            or inventory_vm_name == base_os
-                        ):
+                        if inventory_vm_name == os_group or inventory_vm_name == base_os:
                             # To avoid naming collisions in the dynamic inventory
                             inventory_vm_name = f"{vm_name}_host"
 
@@ -308,9 +307,7 @@ def main():
                                     if cap_grp not in inventory["all"]["children"]:
                                         inventory["all"]["children"].append(cap_grp)
                                 if inventory_vm_name not in inventory[cap_grp]["hosts"]:
-                                    inventory[cap_grp]["hosts"].append(
-                                        inventory_vm_name
-                                    )
+                                    inventory[cap_grp]["hosts"].append(inventory_vm_name)
 
                 except Exception as exc:
                     print(f"Host {host} generated an exception: {exc}", file=sys.stderr)

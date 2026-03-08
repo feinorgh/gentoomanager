@@ -17,10 +17,9 @@ import argparse
 import csv
 import json
 import re
-import statistics
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,10 +29,22 @@ from typing import Any
 
 # Chart.js colors — one per host, cycling if >16 hosts
 CHART_COLORS = [
-    "#4dc9f6", "#f67019", "#f53794", "#537bc4",
-    "#acc236", "#166a8f", "#00a950", "#58595b",
-    "#8549ba", "#e6194b", "#3cb44b", "#ffe119",
-    "#4363d8", "#f58231", "#911eb4", "#42d4f4",
+    "#4dc9f6",
+    "#f67019",
+    "#f53794",
+    "#537bc4",
+    "#acc236",
+    "#166a8f",
+    "#00a950",
+    "#58595b",
+    "#8549ba",
+    "#e6194b",
+    "#3cb44b",
+    "#ffe119",
+    "#4363d8",
+    "#f58231",
+    "#911eb4",
+    "#42d4f4",
 ]
 
 CATEGORY_TITLES = {
@@ -78,15 +89,56 @@ CATEGORY_TITLES = {
 
 # Greek mythology names for host anonymization (deterministic order)
 _GREEK_NAMES = [
-    "Zeus", "Hera", "Poseidon", "Demeter", "Athena", "Apollo",
-    "Artemis", "Ares", "Aphrodite", "Hephaestus", "Hermes", "Hestia",
-    "Dionysus", "Persephone", "Hades", "Prometheus", "Achilles",
-    "Odysseus", "Heracles", "Perseus", "Theseus", "Orpheus",
-    "Icarus", "Minos", "Medea", "Cassandra", "Electra", "Antigone",
-    "Andromeda", "Atalanta", "Calypso", "Circe", "Daphne", "Echo",
-    "Eurydice", "Galatea", "Hecate", "Iris", "Penelope", "Selene",
-    "Pandora", "Psyche", "Ariadne", "Phaedra", "Niobe", "Io",
-    "Thetis", "Nemesis", "Tyche", "Nike",
+    "Zeus",
+    "Hera",
+    "Poseidon",
+    "Demeter",
+    "Athena",
+    "Apollo",
+    "Artemis",
+    "Ares",
+    "Aphrodite",
+    "Hephaestus",
+    "Hermes",
+    "Hestia",
+    "Dionysus",
+    "Persephone",
+    "Hades",
+    "Prometheus",
+    "Achilles",
+    "Odysseus",
+    "Heracles",
+    "Perseus",
+    "Theseus",
+    "Orpheus",
+    "Icarus",
+    "Minos",
+    "Medea",
+    "Cassandra",
+    "Electra",
+    "Antigone",
+    "Andromeda",
+    "Atalanta",
+    "Calypso",
+    "Circe",
+    "Daphne",
+    "Echo",
+    "Eurydice",
+    "Galatea",
+    "Hecate",
+    "Iris",
+    "Penelope",
+    "Selene",
+    "Pandora",
+    "Psyche",
+    "Ariadne",
+    "Phaedra",
+    "Niobe",
+    "Io",
+    "Thetis",
+    "Nemesis",
+    "Tyche",
+    "Nike",
 ]
 
 # ---------------------------------------------------------------------------
@@ -363,7 +415,12 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     if isinstance(swap_val, bool):
         features["swap"] = "yes" if swap_val else "no"
     elif isinstance(swap_val, str):
-        features["swap"] = "yes" if swap_val.lower() in ("true", "yes", "enabled") else "no" if swap_val else "—"
+        if swap_val.lower() in ("true", "yes", "enabled"):
+            features["swap"] = "yes"
+        elif swap_val:
+            features["swap"] = "no"
+        else:
+            features["swap"] = "—"
     else:
         features["swap"] = "—"
 
@@ -446,9 +503,8 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     features["rustflags"] = metadata.get("rustflags", "") or "—"
 
     # Derive parallel job count from makeflags for easy display
-    import re as _re
     mf = features["makeflags"]
-    m = _re.search(r"-j\s*([0-9]+)", mf)
+    m = re.search(r"-j\s*([0-9]+)", mf)
     features["parallel_jobs"] = m.group(1) if m else ("auto" if "-j" in mf else "—")
 
     return features
@@ -468,13 +524,10 @@ def _md_table(headers: list[str], rows: list[list[str]]) -> str:
                 widths[i] = max(widths[i], len(cell))
 
     sep = "| " + " | ".join("-" * w for w in widths) + " |"
-    hdr = "| " + " | ".join(h.ljust(w) for h, w in zip(headers, widths)) + " |"
+    hdr = "| " + " | ".join(h.ljust(w) for h, w in zip(headers, widths, strict=False)) + " |"
     lines = [hdr, sep]
     for row in rows:
-        padded = [
-            cell.ljust(widths[i]) if i < len(widths) else cell
-            for i, cell in enumerate(row)
-        ]
+        padded = [cell.ljust(widths[i]) if i < len(widths) else cell for i, cell in enumerate(row)]
         lines.append("| " + " | ".join(padded) + " |")
     return "\n".join(lines)
 
@@ -492,14 +545,16 @@ def _collect_build_times(
         bt = host_data.get("gentoo_build_times", {})
         for pkg_name, pkg_info in bt.items():
             for build in pkg_info.get("builds", []):
-                result[pkg_name].append({
-                    "host": hostname,
-                    "version": build.get("version", "?"),
-                    "duration_secs": build.get("duration_secs", 0),
-                    "kernel": build.get("kernel", "unknown"),
-                    "compiler": build.get("compiler", "unknown"),
-                    "timestamp": build.get("timestamp", 0),
-                })
+                result[pkg_name].append(
+                    {
+                        "host": hostname,
+                        "version": build.get("version", "?"),
+                        "duration_secs": build.get("duration_secs", 0),
+                        "kernel": build.get("kernel", "unknown"),
+                        "compiler": build.get("compiler", "unknown"),
+                        "timestamp": build.get("timestamp", 0),
+                    }
+                )
     return dict(result)
 
 
@@ -526,7 +581,7 @@ def generate_markdown(
     """Generate the full Markdown report."""
     lines: list[str] = []
     hostnames = sorted(hosts.keys())
-    timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     lines.append("# Gentoo VM Benchmark Report")
     lines.append("")
@@ -538,9 +593,25 @@ def generate_markdown(
     lines.append("")
 
     summary_headers = [
-        "Host", "OS", "Kernel", "CPU", "Clock", "Cores", "Opt", "March",
-        "March (native)", "LTO", "Hardening", "Scheduler", "Filesystem",
-        "Swap", "7z MIPS", "PassMark (ST)", "PassMark (MT)", "GCC", "Clang",
+        "Host",
+        "OS",
+        "Kernel",
+        "CPU",
+        "Clock",
+        "Cores",
+        "Opt",
+        "March",
+        "March (native)",
+        "LTO",
+        "Hardening",
+        "Scheduler",
+        "Filesystem",
+        "Swap",
+        "7z MIPS",
+        "PassMark (ST)",
+        "PassMark (MT)",
+        "GCC",
+        "Clang",
     ]
     summary_rows: list[list[str]] = []
     for hostname in hostnames:
@@ -550,27 +621,29 @@ def generate_markdown(
         if feat.get("os_version", "—") != "—":
             os_label += " " + feat["os_version"]
         hv_prefix = "[HV] " if feat.get("is_hypervisor") else ""
-        summary_rows.append([
-            hv_prefix + hostname,
-            os_label,
-            feat.get("kernel", "—"),
-            feat.get("cpu_model", "?")[:40],
-            feat.get("cpu_clock", "—"),
-            feat.get("cpu_cores", "?"),
-            feat.get("opt_level", "—"),
-            feat.get("march", "—"),
-            feat.get("march_native", "—"),
-            feat.get("lto", "—"),
-            feat.get("hardening", "—"),
-            feat.get("scheduler", "—"),
-            feat.get("filesystem", "—"),
-            feat.get("swap", "—"),
-            feat.get("calibration_mips", "—"),
-            feat.get("passmark_st", "—"),
-            feat.get("passmark_mt", "—"),
-            feat.get("ver_gcc", "?")[:20],
-            feat.get("ver_clang", "?")[:20],
-        ])
+        summary_rows.append(
+            [
+                hv_prefix + hostname,
+                os_label,
+                feat.get("kernel", "—"),
+                feat.get("cpu_model", "?")[:40],
+                feat.get("cpu_clock", "—"),
+                feat.get("cpu_cores", "?"),
+                feat.get("opt_level", "—"),
+                feat.get("march", "—"),
+                feat.get("march_native", "—"),
+                feat.get("lto", "—"),
+                feat.get("hardening", "—"),
+                feat.get("scheduler", "—"),
+                feat.get("filesystem", "—"),
+                feat.get("swap", "—"),
+                feat.get("calibration_mips", "—"),
+                feat.get("passmark_st", "—"),
+                feat.get("passmark_mt", "—"),
+                feat.get("ver_gcc", "?")[:20],
+                feat.get("ver_clang", "?")[:20],
+            ]
+        )
     lines.append(_md_table(summary_headers, summary_rows))
     lines.append("")
 
@@ -578,28 +651,40 @@ def generate_markdown(
     lines.append("## Host Runtime Environment")
     lines.append("")
     env_headers = [
-        "Host", "Virt", "Governor", "SMT", "THP", "Mitigations",
-        "Preempt", "I/O Sched", "NUMA", "Mem Speed", "L3 Cache", "CPU_FLAGS_X86",
+        "Host",
+        "Virt",
+        "Governor",
+        "SMT",
+        "THP",
+        "Mitigations",
+        "Preempt",
+        "I/O Sched",
+        "NUMA",
+        "Mem Speed",
+        "L3 Cache",
+        "CPU_FLAGS_X86",
     ]
     env_rows: list[list[str]] = []
     for hostname in hostnames:
         meta = hosts[hostname].get("metadata", {})
         feat = extract_features(meta)
         hv_prefix = "[HV] " if feat.get("is_hypervisor") else ""
-        env_rows.append([
-            hv_prefix + hostname,
-            feat.get("virt_type", "—"),
-            feat.get("cpu_governor", "—"),
-            feat.get("smt", "—"),
-            feat.get("thp", "—"),
-            feat.get("mitigations", "default"),
-            feat.get("preempt_model", "—"),
-            feat.get("io_scheduler", "—"),
-            feat.get("numa_nodes", "—"),
-            feat.get("mem_speed", "—"),
-            feat.get("cpu_cache_l3", "—"),
-            feat.get("cpu_flags_x86", "—")[:50],
-        ])
+        env_rows.append(
+            [
+                hv_prefix + hostname,
+                feat.get("virt_type", "—"),
+                feat.get("cpu_governor", "—"),
+                feat.get("smt", "—"),
+                feat.get("thp", "—"),
+                feat.get("mitigations", "default"),
+                feat.get("preempt_model", "—"),
+                feat.get("io_scheduler", "—"),
+                feat.get("numa_nodes", "—"),
+                feat.get("mem_speed", "—"),
+                feat.get("cpu_cache_l3", "—"),
+                feat.get("cpu_flags_x86", "—")[:50],
+            ]
+        )
     lines.append(_md_table(env_headers, env_rows))
     lines.append("")
 
@@ -649,11 +734,7 @@ def generate_markdown(
             row = [bench_name]
 
             # Find the fastest host for this benchmark
-            means = {
-                h: r["mean"]
-                for h, r in host_results.items()
-                if r["mean"] > 0
-            }
+            means = {h: r["mean"] for h, r in host_results.items() if r["mean"] > 0}
             fastest = min(means, key=means.get) if means else None
 
             for hostname in hostnames:
@@ -693,18 +774,18 @@ def generate_markdown(
                 dur_str = f"{dur // 60}m {dur % 60:02d}s"
                 ts = entry.get("timestamp", 0)
                 date_str = (
-                    datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-                    if ts > 0
-                    else "—"
+                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
                 )
-                bt_rows.append([
-                    entry["host"],
-                    entry["version"],
-                    date_str,
-                    dur_str,
-                    entry["kernel"],
-                    entry["compiler"],
-                ])
+                bt_rows.append(
+                    [
+                        entry["host"],
+                        entry["version"],
+                        date_str,
+                        dur_str,
+                        entry["kernel"],
+                        entry["compiler"],
+                    ]
+                )
             lines.append(_md_table(bt_headers, bt_rows))
             lines.append("")
 
@@ -720,13 +801,20 @@ def _color_for(idx: int) -> str:
     return CHART_COLORS[idx % len(CHART_COLORS)]
 
 
+# Badge injected next to hypervisor hostnames in HTML tables
+_HV_BADGE = (
+    ' <span style="background:#5c4200;color:#ffd600;font-size:0.75em;'
+    'padding:1px 5px;border-radius:3px;vertical-align:middle">HV</span>'
+)
+
+
 def generate_html(
     hosts: dict[str, dict[str, Any]],
     table: dict[str, dict[str, dict[str, dict[str, float]]]],
 ) -> str:
     """Generate an interactive HTML report with Chart.js."""
     hostnames = sorted(hosts.keys())
-    timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # Pre-build Chart.js datasets per category
     chart_blocks: list[str] = []
@@ -758,13 +846,15 @@ def generate_html(
                 else:
                     data_points.append(None)
                     error_bars.append(None)
-            datasets.append({
-                "label": hostname,
-                "data": data_points,
-                "backgroundColor": _color_for(idx) + "cc",
-                "borderColor": _color_for(idx),
-                "borderWidth": 1,
-            })
+            datasets.append(
+                {
+                    "label": hostname,
+                    "data": data_points,
+                    "backgroundColor": _color_for(idx) + "cc",
+                    "borderColor": _color_for(idx),
+                    "borderWidth": 1,
+                }
+            )
 
         labels_json = json.dumps(bench_names)
         datasets_json = json.dumps(datasets, indent=2)
@@ -841,7 +931,10 @@ def generate_html(
                 cells = ""
                 for h in avail_hosts:
                     available = codec in codec_avail[h].get(group_key, [])
-                    badge = '<span style="color:#00e676">✓</span>' if available else '<span style="color:#888">—</span>'
+                    if available:
+                        badge = '<span style="color:#00e676">✓</span>'
+                    else:
+                        badge = '<span style="color:#888">—</span>'
                     cells += f"<td>{badge}</td>"
                 ca_rows_html += f"          <tr><td><code>{codec}</code></td>{cells}</tr>\n"
             ca_groups.append(f"""
@@ -876,17 +969,15 @@ def generate_html(
                 dur_str = f"{dur // 60}m {dur % 60:02d}s"
                 ts = entry.get("timestamp", 0)
                 date_str = (
-                    datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-                    if ts > 0
-                    else "—"
+                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
                 )
                 rows_html += f"""          <tr>
-            <td>{entry['host']}</td>
-            <td>{entry['version']}</td>
+            <td>{entry["host"]}</td>
+            <td>{entry["version"]}</td>
             <td>{date_str}</td>
             <td>{dur_str}</td>
-            <td><code>{entry['kernel']}</code></td>
-            <td><code>{entry['compiler']}</code></td>
+            <td><code>{entry["kernel"]}</code></td>
+            <td><code>{entry["compiler"]}</code></td>
           </tr>\n"""
             bt_sections.append(f"""
         <h3>{pkg_name}</h3>
@@ -1032,9 +1123,7 @@ def generate_html(
     return html
 
 
-def _html_runtime_env_rows(
-    hosts: dict[str, dict[str, Any]], hostnames: list[str]
-) -> str:
+def _html_runtime_env_rows(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -> str:
     """Build HTML <tr> rows for the runtime environment table."""
     rows: list[str] = []
     for hostname in hostnames:
@@ -1045,27 +1134,25 @@ def _html_runtime_env_rows(
         mit_style = ' style="color:#ff5252"' if mit == "off" else ""
         flags = feat.get("cpu_flags_x86", "—")
         flags_cell = f'<code title="{flags}">{flags[:40]}{"…" if len(flags) > 40 else ""}</code>'
-        hv_badge = ' <span style="background:#5c4200;color:#ffd600;font-size:0.75em;padding:1px 5px;border-radius:3px;vertical-align:middle">HV</span>' if feat.get("is_hypervisor") else ""
+        hv_badge = _HV_BADGE if feat.get("is_hypervisor") else ""
         rows.append(f"""      <tr>
         <td><strong>{hostname}</strong>{hv_badge}</td>
-        <td>{feat.get('virt_type', '—')}</td>
-        <td>{feat.get('cpu_governor', '—')}</td>
+        <td>{feat.get("virt_type", "—")}</td>
+        <td>{feat.get("cpu_governor", "—")}</td>
         <td>{smt_cell}</td>
-        <td>{feat.get('thp', '—')}</td>
+        <td>{feat.get("thp", "—")}</td>
         <td{mit_style}>{mit}</td>
-        <td>{feat.get('preempt_model', '—')}</td>
-        <td>{feat.get('io_scheduler', '—')}</td>
-        <td>{feat.get('numa_nodes', '—')}</td>
-        <td>{feat.get('mem_speed', '—')}</td>
-        <td>{feat.get('cpu_cache_l3', '—')}</td>
+        <td>{feat.get("preempt_model", "—")}</td>
+        <td>{feat.get("io_scheduler", "—")}</td>
+        <td>{feat.get("numa_nodes", "—")}</td>
+        <td>{feat.get("mem_speed", "—")}</td>
+        <td>{feat.get("cpu_cache_l3", "—")}</td>
         <td>{flags_cell}</td>
       </tr>""")
     return "\n".join(rows)
 
 
-def _html_host_summary(
-    hosts: dict[str, dict[str, Any]], hostnames: list[str]
-) -> str:
+def _html_host_summary(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -> str:
     """Build an HTML summary table of host configurations."""
     rows: list[str] = []
     for hostname in hostnames:
@@ -1076,33 +1163,35 @@ def _html_host_summary(
             "thin": '<span style="color:#4dc9f6">✓ thin</span>',
             "no": '<span style="color:#888">✗</span>',
         }.get(feat.get("lto", "no"), "?")
-        hv_badge = ' <span style="background:#5c4200;color:#ffd600;font-size:0.75em;padding:1px 5px;border-radius:3px;vertical-align:middle">HV</span>' if feat.get("is_hypervisor") else ""
+        hv_badge = _HV_BADGE if feat.get("is_hypervisor") else ""
+        swap_s = feat.get("swap", "—")
+        swap_cell = "✓" if swap_s == "yes" else "✗" if swap_s == "no" else "—"
 
         rows.append(f"""      <tr>
         <td><strong>{hostname}</strong>{hv_badge}</td>
-        <td>{feat.get('kernel', '—')}</td>
-        <td>{feat.get('cpu_model', '?')}</td>
-        <td>{feat.get('cpu_clock', '—')}</td>
-        <td>{feat.get('cpu_cores', '?')}</td>
-        <td><code>{feat.get('opt_level', '?')}</code></td>
-        <td><code>{feat.get('march', '?')}</code></td>
-        <td><code>{feat.get('march_native', '—')}</code></td>
+        <td>{feat.get("kernel", "—")}</td>
+        <td>{feat.get("cpu_model", "?")}</td>
+        <td>{feat.get("cpu_clock", "—")}</td>
+        <td>{feat.get("cpu_cores", "?")}</td>
+        <td><code>{feat.get("opt_level", "?")}</code></td>
+        <td><code>{feat.get("march", "?")}</code></td>
+        <td><code>{feat.get("march_native", "—")}</code></td>
         <td>{lto_badge}</td>
-        <td>{feat.get('hardening', '—')}</td>
-        <td>{feat.get('scheduler', '—')}</td>
-        <td>{feat.get('filesystem', '—')}</td>
-        <td>{'✓' if feat.get('swap', '—') == 'yes' else '✗' if feat.get('swap', '—') == 'no' else '—'}</td>
-        <td>{feat.get('calibration_mips', '—')}</td>
-        <td>{feat.get('passmark_st', '—')}</td>
-        <td>{feat.get('passmark_mt', '—')}</td>
-        <td>{feat.get('ver_gcc', '—')}</td>
-        <td>{feat.get('ver_clang', '—')}</td>
-        <td>{feat.get('ver_rustc', '—')}</td>
-        <td>{feat.get('ver_python', '—')}</td>
-        <td><code>{feat.get('libc', '—')}</code></td>
-        <td>{feat.get('gcc_config', '—')}</td>
-        <td><code>{feat.get('makeflags', '—')}</code></td>
-        <td>{feat.get('parallel_jobs', '—')}</td>
+        <td>{feat.get("hardening", "—")}</td>
+        <td>{feat.get("scheduler", "—")}</td>
+        <td>{feat.get("filesystem", "—")}</td>
+        <td>{swap_cell}</td>
+        <td>{feat.get("calibration_mips", "—")}</td>
+        <td>{feat.get("passmark_st", "—")}</td>
+        <td>{feat.get("passmark_mt", "—")}</td>
+        <td>{feat.get("ver_gcc", "—")}</td>
+        <td>{feat.get("ver_clang", "—")}</td>
+        <td>{feat.get("ver_rustc", "—")}</td>
+        <td>{feat.get("ver_python", "—")}</td>
+        <td><code>{feat.get("libc", "—")}</code></td>
+        <td>{feat.get("gcc_config", "—")}</td>
+        <td><code>{feat.get("makeflags", "—")}</code></td>
+        <td>{feat.get("parallel_jobs", "—")}</td>
       </tr>""")
 
     return f"""    <h3>Host Configuration Summary</h3>
@@ -1147,9 +1236,7 @@ def _html_benchmark_table(
 
     for bench_name in bench_names:
         host_results = benchmarks.get(bench_name, {})
-        means = {
-            h: r["mean"] for h, r in host_results.items() if r["mean"] > 0
-        }
+        means = {h: r["mean"] for h, r in host_results.items() if r["mean"] > 0}
         fastest = min(means, key=means.get) if means else None
 
         cells: list[str] = [f"<td><strong>{bench_name}</strong></td>"]

@@ -44,12 +44,13 @@ except ImportError:
     sys.exit(1)
 
 import re as _re
-_SAFE_NAME = _re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$')
+
+_SAFE_NAME = _re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 
 
 def _safe_path_component(name: str, kind: str) -> str:
     """Raise ValueError if name is unsafe to use as a filesystem path component."""
-    if not name or '..' in name or '/' in name or '\\' in name:
+    if not name or ".." in name or "/" in name or "\\" in name:
         raise ValueError(f"Unsafe {kind} name: {name!r}")
     if not _SAFE_NAME.match(name):
         raise ValueError(f"Unsafe {kind} name: {name!r}")
@@ -62,14 +63,26 @@ def _safe_path_component(name: str, kind: str) -> str:
 
 # USE_EXPAND variable names to extract from make.conf as flag-list domains.
 USE_EXPAND_VARS = [
-    "VIDEO_CARDS", "INPUT_DEVICES", "CPU_FLAGS_X86", "CPU_FLAGS_ARM",
-    "L10N", "LINGUAS", "GRUB_PLATFORMS",
-    "QEMU_SOFTMMU_TARGETS", "QEMU_USER_TARGETS",
-    "PYTHON_TARGETS", "PYTHON_SINGLE_TARGET",
-    "LUA_TARGETS", "LUA_SINGLE_TARGET",
-    "RUBY_TARGETS", "PHP_TARGETS",
-    "LIBREOFFICE_EXTENSIONS", "OFFICE_IMPLEMENTATION",
-    "CALLIGRA_FEATURES", "COLLECTD_PLUGINS", "NETBEANS_MODULES",
+    "VIDEO_CARDS",
+    "INPUT_DEVICES",
+    "CPU_FLAGS_X86",
+    "CPU_FLAGS_ARM",
+    "L10N",
+    "LINGUAS",
+    "GRUB_PLATFORMS",
+    "QEMU_SOFTMMU_TARGETS",
+    "QEMU_USER_TARGETS",
+    "PYTHON_TARGETS",
+    "PYTHON_SINGLE_TARGET",
+    "LUA_TARGETS",
+    "LUA_SINGLE_TARGET",
+    "RUBY_TARGETS",
+    "PHP_TARGETS",
+    "LIBREOFFICE_EXTENSIONS",
+    "OFFICE_IMPLEMENTATION",
+    "CALLIGRA_FEATURES",
+    "COLLECTD_PLUGINS",
+    "NETBEANS_MODULES",
 ]
 
 # Build-profile variables (string-equality collapse with group support).
@@ -86,6 +99,7 @@ CollapseResult = tuple[dict, dict[str, dict], dict[str, dict]]
 # YAML helpers
 # ---------------------------------------------------------------------------
 
+
 def _ordered_dump(data: Any, stream=None, **kwargs) -> str:
     """Dump YAML with a stable key order, 2-space indent, and indented sequences."""
 
@@ -95,12 +109,17 @@ def _ordered_dump(data: Any, stream=None, **kwargs) -> str:
 
     _Dumper.add_representer(
         dict,
-        lambda dumper, d: dumper.represent_mapping(
-            "tag:yaml.org,2002:map", sorted(d.items())
-        ),
+        lambda dumper, d: dumper.represent_mapping("tag:yaml.org,2002:map", sorted(d.items())),
     )
-    return yaml.dump(data, stream=stream, Dumper=_Dumper, default_flow_style=False,
-                     allow_unicode=True, indent=2, **kwargs)
+    return yaml.dump(
+        data,
+        stream=stream,
+        Dumper=_Dumper,
+        default_flow_style=False,
+        allow_unicode=True,
+        indent=2,
+        **kwargs,
+    )
 
 
 def _load_yaml(path: Path) -> dict:
@@ -147,7 +166,7 @@ def _diff_yaml(path: Path, new_content: str) -> None:
 # ---------------------------------------------------------------------------
 
 _MAKE_CONF_VAR_RE = re.compile(
-    r'^([A-Z_][A-Z0-9_]*)='
+    r"^([A-Z_][A-Z0-9_]*)="
     r'(?:"([^"]*)"|\'([^\']*)\'|([^#\n]*))',
     re.MULTILINE,
 )
@@ -159,9 +178,9 @@ def parse_make_conf(text: str) -> dict[str, str]:
     for m in _MAKE_CONF_VAR_RE.finditer(text):
         name = m.group(1)
         if m.group(2) is not None:
-            value = m.group(2)          # double-quoted
+            value = m.group(2)  # double-quoted
         elif m.group(3) is not None:
-            value = m.group(3)          # single-quoted
+            value = m.group(3)  # single-quoted
         else:
             value = (m.group(4) or "").strip()  # unquoted
         result[name] = value
@@ -171,6 +190,7 @@ def parse_make_conf(text: str) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Fact loading and preprocessing
 # ---------------------------------------------------------------------------
+
 
 def load_facts(facts_dir: Path) -> dict[str, dict]:
     """Return mapping hostname → fact dict."""
@@ -264,6 +284,7 @@ def promote_wildcard_package_use(facts: dict[str, dict]) -> None:
 # Collapse helpers
 # ---------------------------------------------------------------------------
 
+
 def _intersection_of_sets(host_sets: list[frozenset]) -> frozenset:
     if not host_sets:
         return frozenset()
@@ -324,6 +345,7 @@ def _collapse_flag_sets(
 # Domain: global USE flags
 # ---------------------------------------------------------------------------
 
+
 def collapse_global_use(
     facts: dict[str, dict],
     group_map: dict[str, list[str]],
@@ -343,6 +365,7 @@ def collapse_global_use(
 # Domain: USE_EXPAND variables
 # ---------------------------------------------------------------------------
 
+
 def collapse_use_expand(
     facts: dict[str, dict],
     group_map: dict[str, list[str]],
@@ -359,8 +382,7 @@ def collapse_use_expand(
 
     for var in sorted(all_expand_vars):
         per_host = {
-            h: _flags_to_set(facts[h].get("use_expand", {}).get(var, []))
-            for h in all_hosts
+            h: _flags_to_set(facts[h].get("use_expand", {}).get(var, [])) for h in all_hosts
         }
         common, grp_flags, remainder = _collapse_flag_sets(per_host, group_map, all_hosts)
 
@@ -383,6 +405,7 @@ def collapse_use_expand(
 # ---------------------------------------------------------------------------
 # Domain: build_profile (CFLAGS, FEATURES, …)
 # ---------------------------------------------------------------------------
+
 
 def collapse_build_profile(
     facts: dict[str, dict],
@@ -434,6 +457,7 @@ def collapse_build_profile(
 # Domain: package_use
 # ---------------------------------------------------------------------------
 
+
 def collapse_package_use(
     facts: dict[str, dict],
     group_map: dict[str, list[str]],
@@ -456,8 +480,7 @@ def collapse_package_use(
     sorted_groups = sorted(group_map.items(), key=lambda kv: -len(kv[1]))
     for atom in sorted(all_atoms):
         per_host = {
-            h: _flags_to_set(facts[h].get("package_use", {}).get(atom, []))
-            for h in all_hosts
+            h: _flags_to_set(facts[h].get("package_use", {}).get(atom, [])) for h in all_hosts
         }
 
         # Only hosts that actually mention this atom
@@ -499,6 +522,7 @@ def collapse_package_use(
 # Domain: make_conf (remaining variable assignments from make.conf)
 # ---------------------------------------------------------------------------
 
+
 def collapse_make_conf(
     facts: dict[str, dict],
     group_map: dict[str, list[str]],
@@ -537,6 +561,7 @@ def collapse_make_conf(
 # ---------------------------------------------------------------------------
 # Domain: use_flag_types
 # ---------------------------------------------------------------------------
+
 
 def collapse_use_flag_types(
     facts: dict[str, dict],
@@ -582,6 +607,7 @@ def collapse_use_flag_types(
 # Deep merge helpers
 # ---------------------------------------------------------------------------
 
+
 def _deep_merge(*dicts: dict) -> dict:
     result: dict = {}
     for d in dicts:
@@ -596,6 +622,7 @@ def _deep_merge(*dicts: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -688,6 +715,7 @@ def main() -> None:
             _safe_path_component(grp, "group")
         except ValueError as exc:
             import logging
+
             logging.warning("Skipping group: %s", exc)
             continue
         out = output_dir / "group_vars" / grp / "use_flags.yml"
@@ -700,6 +728,7 @@ def main() -> None:
             _safe_path_component(host, "host")
         except ValueError as exc:
             import logging
+
             logging.warning("Skipping host: %s", exc)
             continue
         out = output_dir / "host_vars" / host / "use_flags.yml"

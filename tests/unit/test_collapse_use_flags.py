@@ -3,20 +3,16 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
-import pytest
 import sys
+from pathlib import Path
 
 # Make the scripts/ directory importable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from collapse_use_flags import (  # noqa: E402
     _collapse_flag_sets,
-    _deep_merge,
     _flags_to_set,
     _set_to_list,
-    _write_yaml,
     build_group_map,
     collapse_build_profile,
     collapse_global_use,
@@ -30,10 +26,10 @@ from collapse_use_flags import (  # noqa: E402
     promote_wildcard_package_use,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _write_facts(tmp_path: Path, facts_list: list[dict]) -> Path:
     """Write a list of host-fact dicts to per-host JSON files in tmp_path."""
@@ -69,6 +65,7 @@ def _make_host(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class TestFlagsToSet:
     def test_bare_flag_becomes_plus(self):
@@ -120,6 +117,7 @@ class TestCollapseFlagSets:
 # load_facts / build_group_map
 # ---------------------------------------------------------------------------
 
+
 class TestLoadFacts:
     def test_loads_all_json_files(self, tmp_path):
         h1 = _make_host("host1", ["gentoo"])
@@ -152,6 +150,7 @@ class TestBuildGroupMap:
 # ---------------------------------------------------------------------------
 # parse_make_conf / preprocess_facts
 # ---------------------------------------------------------------------------
+
 
 class TestParseMakeConf:
     def test_double_quoted(self):
@@ -211,6 +210,7 @@ class TestPreprocessFacts:
 # collapse_global_use
 # ---------------------------------------------------------------------------
 
+
 class TestCollapseGlobalUse:
     def _run(self, hosts: list[dict]):
         facts = {h["hostname"]: h for h in hosts}
@@ -262,6 +262,7 @@ class TestCollapseGlobalUse:
 # collapse_use_expand
 # ---------------------------------------------------------------------------
 
+
 class TestCollapseUseExpand:
     def _run(self, hosts: list[dict]):
         facts = {h["hostname"]: h for h in hosts}
@@ -292,6 +293,7 @@ class TestCollapseUseExpand:
 # collapse_build_profile
 # ---------------------------------------------------------------------------
 
+
 class TestCollapseBuildProfile:
     def _run(self, hosts: list[dict]):
         facts = {h["hostname"]: h for h in hosts}
@@ -321,6 +323,7 @@ class TestCollapseBuildProfile:
 # ---------------------------------------------------------------------------
 # collapse_package_use
 # ---------------------------------------------------------------------------
+
 
 class TestCollapsePackageUse:
     def _run(self, hosts: list[dict]):
@@ -362,6 +365,7 @@ class TestCollapsePackageUse:
 # collapse_make_conf
 # ---------------------------------------------------------------------------
 
+
 class TestCollapseMakeConf:
     def _run(self, hosts: list[dict]):
         facts = {h["hostname"]: h for h in hosts}
@@ -389,11 +393,13 @@ class TestCollapseMakeConf:
     def test_skips_use_and_use_expand_and_build_vars(self):
         hosts = [
             _make_host(
-                "h1", ["gentoo"],
+                "h1",
+                ["gentoo"],
                 make_conf_raw='USE="X"\nVIDEO_CARDS="amdgpu"\nCFLAGS="-O2"\nACCEPT_LICENSE="@FREE"',
             ),
             _make_host(
-                "h2", ["gentoo"],
+                "h2",
+                ["gentoo"],
                 make_conf_raw='USE="X"\nVIDEO_CARDS="amdgpu"\nCFLAGS="-O2"\nACCEPT_LICENSE="@FREE"',
             ),
         ]
@@ -409,6 +415,7 @@ class TestCollapseMakeConf:
 # collapse_use_flag_types
 # ---------------------------------------------------------------------------
 
+
 class TestCollapseUseFlagTypes:
     def _run(self, hosts: list[dict]):
         facts = {h["hostname"]: h for h in hosts}
@@ -421,13 +428,15 @@ class TestCollapseUseFlagTypes:
         profile_local = ["gnome-shell"]
         hosts = [
             _make_host(
-                "h1", ["gentoo"],
+                "h1",
+                ["gentoo"],
                 global_use=["+X", "+gnome-shell", "+custom"],
                 profile_global_flags=profile_global,
                 profile_local_flags=profile_local,
             ),
             _make_host(
-                "h2", ["gentoo"],
+                "h2",
+                ["gentoo"],
                 global_use=["+X", "+gnome-shell", "+custom"],
                 profile_global_flags=profile_global,
                 profile_local_flags=profile_local,
@@ -442,13 +451,15 @@ class TestCollapseUseFlagTypes:
     def test_different_flags_merged_to_all(self):
         hosts = [
             _make_host(
-                "h1", ["gentoo"],
+                "h1",
+                ["gentoo"],
                 global_use=["+X"],
                 profile_global_flags=["X"],
                 profile_local_flags=[],
             ),
             _make_host(
-                "h2", ["gentoo"],
+                "h2",
+                ["gentoo"],
                 global_use=["+X", "+extra"],
                 profile_global_flags=["X"],
                 profile_local_flags=[],
@@ -464,11 +475,13 @@ class TestCollapseUseFlagTypes:
 # Promote */* package.use entries
 # ---------------------------------------------------------------------------
 
+
 class TestPromoteWildcardPackageUse:
     def test_plain_flags_go_to_global_use(self):
         facts = {
             "h1": _make_host(
-                "h1", ["gentoo"],
+                "h1",
+                ["gentoo"],
                 global_use=["+X"],
                 package_use={"*/*": ["lto", "-wayland"]},
             ),
@@ -483,7 +496,8 @@ class TestPromoteWildcardPackageUse:
     def test_use_expand_tokens_go_to_use_expand(self):
         facts = {
             "h1": _make_host(
-                "h1", ["gentoo"],
+                "h1",
+                ["gentoo"],
                 use_expand={"L10N": ["en"]},
                 package_use={"*/*": ["VIDEO_CARDS:", "-*", "dummy", "intel"]},
             ),
@@ -499,7 +513,8 @@ class TestPromoteWildcardPackageUse:
     def test_mixed_plain_and_use_expand(self):
         facts = {
             "h1": _make_host(
-                "h1", ["gentoo"],
+                "h1",
+                ["gentoo"],
                 package_use={"*/*": ["lto", "VIDEO_CARDS:", "dummy", "intel"]},
             ),
         }
@@ -519,6 +534,7 @@ class TestPromoteWildcardPackageUse:
 # Integration: dry-run does not write files
 # ---------------------------------------------------------------------------
 
+
 class TestDryRun:
     def test_dry_run_writes_nothing(self, tmp_path, capsys):
         facts_dir = tmp_path / "facts"
@@ -533,6 +549,7 @@ class TestDryRun:
         _write_facts(facts_dir, hosts)
 
         import collapse_use_flags as cuf
+
         facts = cuf.load_facts(facts_dir)
         all_hosts = sorted(facts.keys())
         group_map = cuf.build_group_map(facts)

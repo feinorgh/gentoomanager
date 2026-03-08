@@ -5,6 +5,7 @@ Creates sortdata.txt in the current working directory containing 500 000
 lines of 80-character alphanumeric strings with a fixed random seed, so
 the file is identical on every run and the benchmark is reproducible.
 """
+
 import random
 import string
 

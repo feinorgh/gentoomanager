@@ -2,16 +2,12 @@
 # Author: Your Name
 # License: GPL-3.0-or-later
 
-from __future__ import absolute_import, annotations, division, print_function
-
-
-__metaclass__ = type  # pylint: disable=C0103
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
 
 DOCUMENTATION = """

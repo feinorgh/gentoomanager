@@ -61,8 +61,8 @@
   ansible.builtin.shell:
     cmd: |
       set +e
-      {
-        # PATH-based discovery: versioned patterns gcc-N, clang-N, gccN, clangN
+      set -o pipefail
+      {: versioned patterns gcc-N, clang-N, gccN, clangN
         IFS=:
         for d in $PATH; do
           [ -d "$d" ] || continue
@@ -107,7 +107,7 @@
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
       {% set cc_label = cc_parts[0] %}
-      {% set cc_exe   = cc_parts[1] %}
+      {% set cc_exe = cc_parts[1] %}
       if [ -x "{{ cc_exe }}" ]; then
         for opt in "-O0" "-O2" "-O3" "-O3 -flto" "-Os"; do
           OPTLABEL=$(echo "$opt" | tr ' ' '_')
@@ -149,7 +149,7 @@
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
       {% set cc_label = cc_parts[0] %}
-      {% set cc_exe   = cc_parts[1] %}
+      {% set cc_exe = cc_parts[1] %}
       if [ -x "{{ cc_exe }}" ]; then
         for opt in "-O2" "-O3" "-O3 -flto"; do
           OPTLABEL=$(echo "$opt" | tr ' ' '_')

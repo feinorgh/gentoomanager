@@ -20,7 +20,6 @@ from generate_benchmark_report import (
     load_results,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -78,58 +77,68 @@ def sample_results(tmp_path: Path) -> Path:
         host_dir.mkdir(parents=True)
 
         # Metadata
-        flags = "-O2 -march=native -pipe" if host == "gentoo-alice" else "-O3 -march=alderlake -flto"
+        flags = (
+            "-O2 -march=native -pipe" if host == "gentoo-alice" else "-O3 -march=alderlake -flto"
+        )
         (host_dir / "metadata.json").write_text(
             json.dumps(_make_metadata(host, common_flags=flags))
         )
 
         # Compression benchmarks
         mult = 1.0 if host == "gentoo-alice" else 0.9
-        (host_dir / "compression.json").write_text(json.dumps(
-            _make_hyperfine_json(
-                ("gzip-compress", 1.234 * mult, 0.05),
-                ("zstd-compress", 0.456 * mult, 0.02),
-                ("lz4-compress", 0.123 * mult, 0.01),
+        (host_dir / "compression.json").write_text(
+            json.dumps(
+                _make_hyperfine_json(
+                    ("gzip-compress", 1.234 * mult, 0.05),
+                    ("zstd-compress", 0.456 * mult, 0.02),
+                    ("lz4-compress", 0.123 * mult, 0.01),
+                )
             )
-        ))
+        )
 
         # Python benchmarks
-        (host_dir / "python.json").write_text(json.dumps(
-            _make_hyperfine_json(
-                ("fibonacci", 2.5 * mult, 0.1),
-                ("json-serde", 1.8 * mult, 0.08),
+        (host_dir / "python.json").write_text(
+            json.dumps(
+                _make_hyperfine_json(
+                    ("fibonacci", 2.5 * mult, 0.1),
+                    ("json-serde", 1.8 * mult, 0.08),
+                )
             )
-        ))
+        )
 
         # Gentoo build times (only for alice)
         if host == "gentoo-alice":
-            (host_dir / "gentoo_build_times.json").write_text(json.dumps({
-                "hostname": host,
-                "min_build_threshold_secs": 300,
-                "packages": {
-                    "www-client/firefox": {
-                        "max_duration_secs": 2690,
-                        "builds": [
-                            {
-                                "timestamp": 1772678142,
-                                "version": "140.8.0",
-                                "duration_secs": 2690,
-                                "kernel": "6.18.12-gentoo-dist",
-                                "compiler": "x86_64-pc-linux-gnu-clang-21",
-                                "cflags": "-march=native -pipe",
+            (host_dir / "gentoo_build_times.json").write_text(
+                json.dumps(
+                    {
+                        "hostname": host,
+                        "min_build_threshold_secs": 300,
+                        "packages": {
+                            "www-client/firefox": {
+                                "max_duration_secs": 2690,
+                                "builds": [
+                                    {
+                                        "timestamp": 1772678142,
+                                        "version": "140.8.0",
+                                        "duration_secs": 2690,
+                                        "kernel": "6.18.12-gentoo-dist",
+                                        "compiler": "x86_64-pc-linux-gnu-clang-21",
+                                        "cflags": "-march=native -pipe",
+                                    },
+                                    {
+                                        "timestamp": 1772160151,
+                                        "version": "140.7.1",
+                                        "duration_secs": 2612,
+                                        "kernel": "6.12.68",
+                                        "compiler": "x86_64-pc-linux-gnu-clang-21",
+                                        "cflags": "-march=native -pipe",
+                                    },
+                                ],
                             },
-                            {
-                                "timestamp": 1772160151,
-                                "version": "140.7.1",
-                                "duration_secs": 2612,
-                                "kernel": "6.12.68",
-                                "compiler": "x86_64-pc-linux-gnu-clang-21",
-                                "cflags": "-march=native -pipe",
-                            },
-                        ],
-                    },
-                },
-            }))
+                        },
+                    }
+                )
+            )
 
         # FFmpeg codec availability
         video_encs = ["libx264", "libx265", "libvpx", "libvpx-vp9", "mpeg2video", "mjpeg"]
@@ -137,12 +146,16 @@ def sample_results(tmp_path: Path) -> Path:
         if host == "gentoo-alice":
             video_encs += ["libsvtav1", "libaom-av1"]
             audio_encs += ["wavpack", "alac"]
-        (host_dir / "ffmpeg_codecs.json").write_text(json.dumps({
-            "video_encoders": sorted(video_encs),
-            "audio_encoders": sorted(audio_encs),
-            "video_decoders": ["av1", "h264", "hevc", "mjpeg", "mpeg2video", "vp8", "vp9"],
-            "audio_decoders": ["aac", "flac", "mp3", "opus", "vorbis"],
-        }))
+        (host_dir / "ffmpeg_codecs.json").write_text(
+            json.dumps(
+                {
+                    "video_encoders": sorted(video_encs),
+                    "audio_encoders": sorted(audio_encs),
+                    "video_decoders": ["av1", "h264", "hevc", "mjpeg", "mpeg2video", "vp8", "vp9"],
+                    "audio_decoders": ["aac", "flac", "mp3", "opus", "vorbis"],
+                }
+            )
+        )
 
         # FFmpeg video encoding benchmarks
         ffmpeg_benches = [
@@ -152,9 +165,9 @@ def sample_results(tmp_path: Path) -> Path:
         ]
         if host == "gentoo-alice":
             ffmpeg_benches.append(("av1-svt-encode", 4.2, 0.2))
-        (host_dir / "ffmpeg_video_encode.json").write_text(json.dumps(
-            _make_hyperfine_json(*ffmpeg_benches)
-        ))
+        (host_dir / "ffmpeg_video_encode.json").write_text(
+            json.dumps(_make_hyperfine_json(*ffmpeg_benches))
+        )
 
     return tmp_path
 
