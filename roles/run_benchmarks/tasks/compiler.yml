@@ -53,25 +53,75 @@
   changed_when: false
   failed_when: false
 
+# Discover all installed gcc/clang versions, including versioned binaries
+# (gcc-13, clang-17) and Gentoo gcc-config slots not on the active PATH.
+# Output: one "LABEL EXECUTABLE" line per unique binary (deduplicated by
+# resolved real path so the active-slot symlink is not benchmarked twice).
+- name: Discover versioned C compiler binaries
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      {
+        # PATH-based discovery: versioned patterns gcc-N, clang-N, gccN, clangN
+        IFS=:
+        for d in $PATH; do
+          [ -d "$d" ] || continue
+          for f in "$d"/gcc-[0-9]* "$d"/clang-[0-9]* "$d"/gcc[0-9]* "$d"/clang[0-9]*; do
+            [ -x "$f" ] || continue
+            name=$(basename "$f")
+            full=$(command -v "$name" 2>/dev/null) || full="$f"
+            printf '%s %s\n' "$name" "$full"
+          done
+        done
+        unset IFS
+        # Generic gcc / clang (added after versioned so they sort last and
+        # are dropped by dedup if a versioned binary resolves to the same path)
+        for cc in gcc clang; do
+          full=$(command -v "$cc" 2>/dev/null) || continue
+          printf '%s %s\n' "$cc" "$full"
+        done
+        # Gentoo: non-active gcc-config slots (may not be on PATH)
+        if command -v gcc-config >/dev/null 2>&1; then
+          gcc-config -l 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' |
+          while read -r ver; do
+            for bin in /usr/*/gcc-bin/"$ver"/gcc; do
+              [ -x "$bin" ] && printf 'gcc-%s %s\n' "$ver" "$bin"
+            done
+          done
+        fi
+      } | while IFS=' ' read -r label path; do
+          real=$(readlink -f "$path" 2>/dev/null || echo "$path")
+          printf '%s\t%s\t%s\n' "$real" "$label" "$path"
+        done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
+  register: run_benchmarks_cc_versions
+  changed_when: false
+  failed_when: false
+
 - name: Run C compiler benchmarks
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
       CMDS=""
-      {% for compiler in ['gcc', 'clang'] %}
-      if command -v {{ compiler }} >/dev/null 2>&1; then
+      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% set cc_parts = cc.split() %}
+      {% if cc_parts | length >= 2 %}
+      {% set cc_label = cc_parts[0] %}
+      {% set cc_exe   = cc_parts[1] %}
+      if [ -x "{{ cc_exe }}" ]; then
         for opt in "-O0" "-O2" "-O3" "-O3 -flto" "-Os"; do
           OPTLABEL=$(echo "$opt" | tr ' ' '_')
-          CMDS="$CMDS --command-name '{{ compiler }}-${OPTLABEL}-compile' '{{ compiler }} $opt -o bench_${OPTLABEL} bench.c -lm'"
+          CMDS="$CMDS --command-name '{{ cc_label }}-${OPTLABEL}-compile' \
+            '{{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm'"
         done
       fi
+      {% endif %}
       {% endfor %}
       if [ -n "$CMDS" ]; then
         {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
-        --ignore-failure \
+          --ignore-failure \
           --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
           $CMDS
       fi
@@ -94,24 +144,29 @@
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
-      # Compile all variants first
       CMDS=""
-      {% for compiler in ['gcc', 'clang'] %}
-      if command -v {{ compiler }} >/dev/null 2>&1; then
+      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% set cc_parts = cc.split() %}
+      {% if cc_parts | length >= 2 %}
+      {% set cc_label = cc_parts[0] %}
+      {% set cc_exe   = cc_parts[1] %}
+      if [ -x "{{ cc_exe }}" ]; then
         for opt in "-O2" "-O3" "-O3 -flto"; do
           OPTLABEL=$(echo "$opt" | tr ' ' '_')
-          {{ compiler }} $opt -o bench_{{ compiler }}_${OPTLABEL} bench.c -lm 2>/dev/null || true
-          if [ -f bench_{{ compiler }}_${OPTLABEL} ]; then
-            CMDS="$CMDS --command-name '{{ compiler }}-${OPTLABEL}-run' './bench_{{ compiler }}_${OPTLABEL}'"
+          {{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm 2>/dev/null || true
+          if [ -f bench_{{ cc_label }}_${OPTLABEL} ]; then
+            CMDS="$CMDS --command-name '{{ cc_label }}-${OPTLABEL}-run' \
+              './bench_{{ cc_label }}_${OPTLABEL}'"
           fi
         done
       fi
+      {% endif %}
       {% endfor %}
       if [ -n "$CMDS" ]; then
         {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
-        --ignore-failure \
+          --ignore-failure \
           --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
           $CMDS
       fi
