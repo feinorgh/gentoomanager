@@ -122,6 +122,7 @@ provision_benchmarks_epel_packages:
 
 # Hyperfine GitHub release URL template for binary fallback
 provision_benchmarks_hyperfine_version: "1.20.0"
+provision_benchmarks_hyperfine_sha256: "bbe795c84f0c1d2b6c0a03e5de2fb793cc8ad97fb56b6e2f9aef6d1c9c38031c"
 provision_benchmarks_hyperfine_url: >-
   https://github.com/sharkdp/hyperfine/releases/download/v{{ provision_benchmarks_hyperfine_version }}/hyperfine-v{{ provision_benchmarks_hyperfine_version }}-x86_64-unknown-linux-gnu.tar.gz
 

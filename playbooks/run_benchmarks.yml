@@ -180,7 +180,7 @@
           ansible.builtin.shell:
             cmd: |
               set -eo pipefail
-              virsh --connect qemu:///system dumpxml {{ inventory_hostname }} \
+              virsh --connect qemu:///system dumpxml '{{ inventory_hostname }}' \
                 | grep -oP '<(memory|currentMemory)[^>]*>\K[0-9]+' \
                 | head -2
           delegate_to: "{{ hypervisor_host }}"
@@ -200,7 +200,7 @@
         - name: Scale VM RAM to max memory (live)
           ansible.builtin.command:
             cmd: >-
-              virsh --connect qemu:///system setmem {{ inventory_hostname }}
+              virsh --connect qemu:///system setmem '{{ inventory_hostname }}'
               {{ run_benchmarks_max_ram_kib }} --live
           delegate_to: "{{ hypervisor_host }}"
           changed_when: true
@@ -258,7 +258,7 @@
           ansible.builtin.shell:
             cmd: |
               set -eo pipefail
-              virsh --connect qemu:///system dumpxml --inactive {{ inventory_hostname }} \
+              virsh --connect qemu:///system dumpxml --inactive '{{ inventory_hostname }}' \
                 | grep -oP '<currentMemory[^>]*>\K[0-9]+'
           delegate_to: "{{ hypervisor_host }}"
           register: _bench_minimal_ram
@@ -270,7 +270,7 @@
         - name: Restore VM RAM to minimal allocation (live)
           ansible.builtin.command:
             cmd: >-
-              virsh --connect qemu:///system setmem {{ inventory_hostname }}
+              virsh --connect qemu:///system setmem '{{ inventory_hostname }}'
               {{ _bench_minimal_ram.stdout | trim }} --live
           delegate_to: "{{ hypervisor_host }}"
           changed_when: true

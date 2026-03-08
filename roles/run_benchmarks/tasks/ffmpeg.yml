@@ -95,7 +95,7 @@
         'ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null'"
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -162,7 +162,7 @@
       [ -f test_mjpeg.avi ]      && CMDS="$CMDS --command-name mjpeg-decode      'ffmpeg -y -i test_mjpeg.avi -f null /dev/null'"
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -207,7 +207,7 @@
       has alac       && CMDS="$CMDS --command-name alac-encode    'ffmpeg -y -i test_raw.wav -c:a alac -f null /dev/null'"
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -270,7 +270,7 @@
       [ -f test_enc_alac.m4a ]     && CMDS="$CMDS --command-name alac-decode    'ffmpeg -y -i test_enc_alac.m4a -f null /dev/null'"
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \

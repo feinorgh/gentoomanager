@@ -121,6 +121,7 @@
         url: "{{ provision_benchmarks_hyperfine_url }}"
         dest: /tmp/hyperfine.tar.gz
         mode: "0644"
+        checksum: "sha256:{{ provision_benchmarks_hyperfine_sha256 }}"
 
     - name: Extract and install hyperfine binary
       ansible.builtin.shell:
@@ -148,11 +149,16 @@
     ansible_os_family | default('') == 'RedHat'
   become: true
   block:
+    - name: Import RPM Fusion Free GPG key
+      ansible.builtin.rpm_key:
+        key: "https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-fedora-{{ ansible_distribution_major_version }}"
+        state: present
+      failed_when: false
+
     - name: Install RPM Fusion Free repository
       ansible.builtin.package:
         name: "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{ ansible_distribution_major_version }}.noarch.rpm"
         state: present
-        disable_gpg_check: true
       failed_when: false
 
     - name: Install ffmpeg from RPM Fusion

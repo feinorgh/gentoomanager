@@ -48,7 +48,7 @@
       {% endfor %}
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \

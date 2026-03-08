@@ -70,7 +70,7 @@
       fi
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -133,7 +133,7 @@
       fi
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -178,7 +178,7 @@
       fi
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -289,7 +289,7 @@
       CMDS="$CMDS --command-name 'ed25519-verify' \
         'openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin'"
 
-      eval {{ run_benchmarks_hyperfine_bin }} \
+      {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -336,7 +336,7 @@
       fi
 
       if [ -n "$CMDS" ]; then
-        eval {{ run_benchmarks_hyperfine_bin }} \
+        {{ run_benchmarks_hyperfine_bin }} \
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -410,7 +410,7 @@
       Key-Length: 2048
       Name-Real: Benchmark
       Name-Email: bench@test
-      Expire-Date: 0
+      Expire-Date: 1
       %no-protection
       %commit
       EOF
@@ -441,3 +441,15 @@
   when:
     - run_benchmarks_crypto_gpg_result is not skipped
     - run_benchmarks_crypto_gpg_result.rc | default(0) != 0
+
+- name: Remove private key material from benchmark work directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ run_benchmarks_work_dir }}/rsa2048.pem"
+    - "{{ run_benchmarks_work_dir }}/rsa4096.pem"
+    - "{{ run_benchmarks_work_dir }}/ec256.pem"
+    - "{{ run_benchmarks_work_dir }}/ed25519.pem"
+    - "{{ run_benchmarks_work_dir }}/gnupg"
+  failed_when: false

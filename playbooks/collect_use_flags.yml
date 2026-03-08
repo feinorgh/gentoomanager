@@ -42,11 +42,14 @@
   tasks:
     - name: Run collapse script
       ansible.builtin.command:
-        cmd: >-
-          python3 {{ _script }}
-          --facts-dir {{ _facts_dir }}
-          --output-dir {{ _output_dir }}
-          {{ '--dry-run' if ansible_check_mode else '' }}
+        argv:
+          - python3
+          - "{{ _script }}"
+          - "--facts-dir"
+          - "{{ _facts_dir }}"
+          - "--output-dir"
+          - "{{ _output_dir }}"
+          - "{{ '--dry-run' if ansible_check_mode else omit }}"
       changed_when: not ansible_check_mode
       register: _collapse_result
 

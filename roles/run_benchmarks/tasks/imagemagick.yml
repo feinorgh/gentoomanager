@@ -173,7 +173,7 @@
       ${IM} -list format 2>/dev/null | grep -qi '^ *AVIF.*W' && \
         CMDS="$CMDS --command-name avif-q60 '${IM} im_4k.png -quality 60 AVIF:/dev/null'"
 
-      eval {{ run_benchmarks_hyperfine_bin }} \
+      {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
@@ -209,7 +209,7 @@
       [ -f im_4k.webp ] && \
         CMDS="$CMDS --command-name webp-decode '${IM} im_4k.webp null:'"
 
-      eval {{ run_benchmarks_hyperfine_bin }} \
+      {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \

@@ -12,8 +12,11 @@
 
 # ── Power plan ───────────────────────────────────────────────────────────
 - name: Restore original power plan
-  ansible.windows.win_shell: >-
-    powercfg /setactive {{ run_benchmarks_orig_power_plan.stdout | trim }}
+  ansible.windows.win_shell: |
+    $guid = "{{ run_benchmarks_orig_power_plan.stdout | trim }}"
+    if ($guid -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+      powercfg /setactive $guid
+    }
   changed_when: true
   when: >-
     run_benchmarks_orig_power_plan is defined and

@@ -43,6 +43,18 @@ except ImportError:
     print("ERROR: PyYAML is required.  Install it with:  pip install pyyaml", file=sys.stderr)
     sys.exit(1)
 
+import re as _re
+_SAFE_NAME = _re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$')
+
+
+def _safe_path_component(name: str, kind: str) -> str:
+    """Raise ValueError if name is unsafe to use as a filesystem path component."""
+    if not name or '..' in name or '/' in name or '\\' in name:
+        raise ValueError(f"Unsafe {kind} name: {name!r}")
+    if not _SAFE_NAME.match(name):
+        raise ValueError(f"Unsafe {kind} name: {name!r}")
+    return name
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -672,12 +684,24 @@ def main() -> None:
 
     # group_vars/<group>/
     for grp, data in sorted(group_accumulator.items()):
+        try:
+            _safe_path_component(grp, "group")
+        except ValueError as exc:
+            import logging
+            logging.warning("Skipping group: %s", exc)
+            continue
         out = output_dir / "group_vars" / grp / "use_flags.yml"
         if _write_yaml(out, data, dry_run, update):
             changed_count += 1
 
     # host_vars/<host>/
     for host, data in sorted(host_accumulator.items()):
+        try:
+            _safe_path_component(host, "host")
+        except ValueError as exc:
+            import logging
+            logging.warning("Skipping host: %s", exc)
+            continue
         out = output_dir / "host_vars" / host / "use_flags.yml"
         if _write_yaml(out, data, dry_run, update):
             changed_count += 1

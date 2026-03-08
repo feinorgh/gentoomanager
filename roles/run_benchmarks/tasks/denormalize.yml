@@ -5,9 +5,13 @@
 # ── ASLR ──────────────────────────────────────────────────────────────────
 - name: Re-enable ASLR (Linux)
   ansible.builtin.shell:
-    cmd: >-
-      echo {{ run_benchmarks_orig_aslr.content | b64decode | trim }}
-      > /proc/sys/kernel/randomize_va_space
+    cmd: |
+      set -o pipefail
+      val="{{ run_benchmarks_orig_aslr.content | b64decode | trim }}"
+      case "$val" in
+        0|1|2) echo "$val" > /proc/sys/kernel/randomize_va_space ;;
+        *) echo "WARN: unexpected ASLR value: $val" >&2 ;;
+      esac
   become: true
   changed_when: true
   when: >-
@@ -39,10 +43,15 @@
 - name: Restore CPU governor (Linux)
   ansible.builtin.shell:
     cmd: |
-      GOV="{{ run_benchmarks_orig_governor.content | b64decode | trim }}"
-      for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-        [ -f "$gov" ] && echo "$GOV" > "$gov"
-      done
+      set -o pipefail
+      val="{{ run_benchmarks_orig_governor.content | b64decode | trim }}"
+      if echo "$val" | grep -qE '^[a-z_]+$'; then
+        for f in /sys/devices/system/cpu/*/cpufreq/scaling_governor; do
+          [ -f "$f" ] && echo "$val" > "$f"
+        done
+      else
+        echo "WARN: unexpected governor value: $val" >&2
+      fi
   become: true
   changed_when: true
   failed_when: false
