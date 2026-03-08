@@ -21,13 +21,15 @@
       import hashlib
       import time
 
-      def fib(n):
-          if n < 2:
-              return n
-          return fib(n - 1) + fib(n - 2)
-
-      def bench_fibonacci():
-          fib(32)
+      def bench_sieve():
+          """Sieve of Eratosthenes to 2,000,000 — integer + memory access."""
+          limit = 2_000_000
+          sieve = bytearray([1]) * (limit + 1)
+          sieve[0] = sieve[1] = 0
+          for i in range(2, int(limit ** 0.5) + 1):
+              if sieve[i]:
+                  sieve[i * i::i] = bytearray(len(sieve[i * i::i]))
+          return sum(sieve)
 
       def bench_json():
           data = {f"key_{i}": list(range(100)) for i in range(100)}
@@ -58,7 +60,7 @@
               _ = sum(d.values())
 
       benchmarks = {
-          "fibonacci": bench_fibonacci,
+          "sieve": bench_sieve,
           "json_serde": bench_json,
           "regex": bench_regex,
           "sha256_hash": bench_hash,
@@ -84,8 +86,9 @@
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
+        --interleave \
         --export-json {{ run_benchmarks_work_dir }}/python.json \
-        --command-name 'fibonacci' 'python3 pybench.py fibonacci' \
+        --command-name 'prime-sieve' 'python3 pybench.py sieve' \
         --command-name 'json-serde' 'python3 pybench.py json_serde' \
         --command-name 'regex' 'python3 pybench.py regex' \
         --command-name 'sha256-hash' 'python3 pybench.py sha256_hash' \

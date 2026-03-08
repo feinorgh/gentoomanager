@@ -76,8 +76,8 @@
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/numeric_compiled.json \
-        --command-name "nbody-5m"           "{{ run_benchmarks_work_dir }}/bench_nbody 5000000" \
-        --command-name "mandelbrot-4000"    "{{ run_benchmarks_work_dir }}/bench_mandelbrot 4000" \
+        --command-name "nbody-30m"          "{{ run_benchmarks_work_dir }}/bench_nbody 30000000" \
+        --command-name "mandelbrot-6000"    "{{ run_benchmarks_work_dir }}/bench_mandelbrot 6000" \
         --command-name "spectral-norm-1000" "{{ run_benchmarks_work_dir }}/bench_spectral_norm 1000"
   register: run_benchmarks_numeric_c_result
   changed_when: false

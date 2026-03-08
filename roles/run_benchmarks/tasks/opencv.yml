@@ -68,6 +68,12 @@
           gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
           for _ in range(20):
               cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+
+      def bench_adaptive_threshold():
+          import cv2
+          img = get_test_image()
+          gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+          for _ in range(20):
               cv2.adaptiveThreshold(
                   gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                   cv2.THRESH_BINARY, 11, 2
@@ -79,6 +85,7 @@
           "edge_detection": bench_edge_detection,
           "color_conversion": bench_color_conversion,
           "threshold": bench_threshold,
+          "adaptive_threshold": bench_adaptive_threshold,
       }
 
       if __name__ == "__main__":
@@ -105,6 +112,7 @@
         --command-name 'edge-detection' 'python3 opencv_bench.py edge_detection' \
         --command-name 'color-conversion' 'python3 opencv_bench.py color_conversion' \
         --command-name 'threshold' 'python3 opencv_bench.py threshold' \
+        --command-name 'adaptive-threshold' 'python3 opencv_bench.py adaptive_threshold' \
         --command-name 'opencv-all' 'python3 opencv_bench.py all'
   when: run_benchmarks_opencv_check.rc == 0
   register: run_benchmarks_opencv_result

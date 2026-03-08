@@ -99,7 +99,7 @@
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json ffmpeg_video_encode.json \
+          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
@@ -166,7 +166,7 @@
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json ffmpeg_video_decode.json \
+          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_decode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
@@ -211,7 +211,7 @@
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json ffmpeg_audio_encode.json \
+          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_encode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0
@@ -274,7 +274,7 @@
           --runs {{ run_benchmarks_runs }} \
           --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json ffmpeg_audio_decode.json \
+          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_decode.json \
           $CMDS
       fi
   when: run_benchmarks_ffmpeg_check.rc == 0

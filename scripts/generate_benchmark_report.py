@@ -54,7 +54,6 @@ CATEGORY_TITLES = {
     "python": "Python Performance",
     "ffmpeg_video_encode": "FFmpeg Video Encoding",
     "ffmpeg_video_decode": "FFmpeg Video Decoding",
-    "ffmpeg_audio": "FFmpeg Audio Encoding",
     "ffmpeg_audio_encode": "FFmpeg Audio Encoding",
     "ffmpeg_audio_decode": "FFmpeg Audio Decoding",
     "imagemagick_resize": "ImageMagick — Resize (filter comparison)",
@@ -72,6 +71,9 @@ CATEGORY_TITLES = {
     "sqlite_read": "SQLite — Read (indexed SELECT, full scan, ORDER BY)",
     "memory_bandwidth": "Memory — Sequential Bandwidth (write/read to tmpfs)",
     "memory_latency": "Memory — Random Access Latency (pointer chasing)",
+    "process": "Process Creation (fork/exec rate)",
+    "disk": "Disk I/O — Sequential (256 MiB write/read)",
+    "linker": "Linker Performance (bfd / lld / gold)",
 }
 
 # Greek mythology names for host anonymization (deterministic order)

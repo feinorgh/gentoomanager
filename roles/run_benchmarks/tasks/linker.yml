@@ -1,0 +1,97 @@
+---
+# Linker benchmarks: measure ld/lld link time for a synthetic multi-object
+# project.  Linking is the wall-clock bottleneck for large packages (LLVM,
+# Chromium, Firefox).  Results vary with gold vs bfd vs lld, memory bandwidth,
+# and LTO settings.
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check gcc and ld availability for linker benchmark
+  ansible.builtin.command:
+    cmd: gcc --version
+  register: run_benchmarks_linker_gcc_check
+  changed_when: false
+  failed_when: false
+
+# ── Generate synthetic multi-object project ───────────────────────────────
+
+- name: Generate synthetic C source files for linker benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      DIR="{{ run_benchmarks_work_dir }}/linker_src"
+      mkdir -p "$DIR"
+      # Generate 200 small C files each defining 10 functions
+      python3 - <<'PYEOF'
+      import os
+      outdir = "{{ run_benchmarks_work_dir }}/linker_src"
+      # header
+      with open(os.path.join(outdir, "bench_link.h"), "w") as f:
+          for i in range(200):
+              for j in range(10):
+                  f.write("double fn_%d_%d(double x);\n" % (i, j))
+      # source files
+      for i in range(200):
+          with open(os.path.join(outdir, "unit_%03d.c" % i), "w") as f:
+              f.write('#include "bench_link.h"\n')
+              for j in range(10):
+                  f.write('double fn_%d_%d(double x) { return x * %d.%d + %d.%d; }\n' % (i, j, i, j, j, i))
+      # main
+      with open(os.path.join(outdir, "main.c"), "w") as f:
+          f.write('#include "bench_link.h"\n#include <stdio.h>\n')
+          f.write("int main(void) {\n  double s = 0.0;\n")
+          for i in range(200):
+              for j in range(10):
+                  f.write("  s += fn_%d_%d((double)%d);\n" % (i, j, i*j))
+          f.write('  printf("%.3f\\n", s);\n  return 0;\n}\n')
+      PYEOF
+    creates: "{{ run_benchmarks_work_dir }}/linker_src/main.c"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_linker_gcc_check.rc == 0
+
+- name: Pre-compile object files for linker benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      DIR="{{ run_benchmarks_work_dir }}/linker_src"
+      cd "$DIR"
+      for src in unit_*.c main.c; do
+        obj="${src%.c}.o"
+        [ -f "$obj" ] || gcc -O2 -c -o "$obj" "$src"
+      done
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_linker_gcc_check.rc == 0
+
+# ── Linker benchmarks ─────────────────────────────────────────────────────
+
+- name: Run linker benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      DIR="{{ run_benchmarks_work_dir }}/linker_src"
+      OBJS=$(find "$DIR" -name '*.o' | sort | tr '\n' ' ')
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --interleave \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/linker.json \
+        --command-name "ld-bfd" \
+          "gcc -fuse-ld=bfd -o /dev/null $OBJS -lm 2>/dev/null" \
+        $(command -v ld.lld >/dev/null 2>&1 && \
+          echo "--command-name 'ld-lld' 'gcc -fuse-ld=lld -o /dev/null $OBJS -lm 2>/dev/null'") \
+        $(command -v ld.gold >/dev/null 2>&1 && \
+          echo "--command-name 'ld-gold' 'gcc -fuse-ld=gold -o /dev/null $OBJS -lm 2>/dev/null'")
+  register: run_benchmarks_linker_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_linker_gcc_check.rc == 0
+
+- name: Warn if linker benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] linker benchmark failed or timed out"
+  when:
+    - run_benchmarks_linker_gcc_check.rc == 0
+    - run_benchmarks_linker_result.rc != 0

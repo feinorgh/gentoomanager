@@ -1,0 +1,64 @@
+---
+# Process creation benchmarks: fork/exec rate, shell process spawn.
+# Fork+exec+waitpid latency is a primary bottleneck in Gentoo package builds
+# where thousands of short-lived processes (configure, ar, ranlib, strip) are
+# spawned sequentially.
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check gcc availability for process benchmark
+  ansible.builtin.command:
+    cmd: gcc --version
+  register: run_benchmarks_process_gcc_check
+  changed_when: false
+  failed_when: false
+
+# ── Compile fork/exec benchmark ───────────────────────────────────────────
+
+- name: Copy bench_fork.c to work directory
+  ansible.builtin.copy:
+    src: bench_fork.c
+    dest: "{{ run_benchmarks_work_dir }}/bench_fork.c"
+    mode: "0644"
+  when: run_benchmarks_process_gcc_check.rc == 0
+
+- name: Compile bench_fork
+  ansible.builtin.command:
+    cmd: >-
+      gcc -O2
+      -o {{ run_benchmarks_work_dir }}/bench_fork
+      {{ run_benchmarks_work_dir }}/bench_fork.c
+    creates: "{{ run_benchmarks_work_dir }}/bench_fork"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_process_gcc_check.rc == 0
+
+# ── Fork/exec benchmarks ──────────────────────────────────────────────────
+
+- name: Run process creation benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --interleave \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/process.json \
+        --command-name "fork-exec-1k" \
+          "{{ run_benchmarks_work_dir }}/bench_fork 1000" \
+        --command-name "shell-spawn-100" \
+          "sh -c 'for i in \$(seq 100); do /bin/true; done'" \
+        --command-name "python3-import" \
+          "python3 -c 'import os, sys, json, re, hashlib, pathlib'"
+  register: run_benchmarks_process_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_process_gcc_check.rc == 0
+
+- name: Warn if process benchmarks failed
+  ansible.builtin.debug:
+    msg: "[WARN] process benchmark failed or timed out"
+  when:
+    - run_benchmarks_process_gcc_check.rc == 0
+    - run_benchmarks_process_result.rc != 0

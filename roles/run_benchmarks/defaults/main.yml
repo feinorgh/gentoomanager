@@ -11,7 +11,7 @@ run_benchmarks_cpu_affinity: ""
 
 # Categories to run (empty list = all)
 # Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup, gentoo_build_times,
-#        numeric, sqlite, memory
+#        numeric, sqlite, memory, process, disk, linker
 run_benchmarks_categories: []
 
 # Categories that have a Windows-specific task file variant (<name>_win.yml).
@@ -66,3 +66,6 @@ run_benchmarks_hypervisor_categories:
   - numeric
   - sqlite
   - memory
+  - process
+  - disk
+  - linker
