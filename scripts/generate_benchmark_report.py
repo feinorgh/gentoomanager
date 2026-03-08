@@ -368,6 +368,9 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     kver = metadata.get("kernel_version", "") or features.get("ver_kernel", "")
     features["kernel"] = kver if kver else "—"
 
+    # Hypervisor flag — marks bare-metal hypervisor hosts in the report
+    features["is_hypervisor"] = metadata.get("is_hypervisor", False)
+
     # Runtime / hardware environment fields
     features["cpu_governor"] = metadata.get("cpu_governor", "") or "—"
     features["cpu_cache_l3"] = metadata.get("cpu_cache_l3", "") or "—"
@@ -491,8 +494,9 @@ def generate_markdown(
         os_label = feat.get("os", "?")
         if feat.get("os_version", "—") != "—":
             os_label += " " + feat["os_version"]
+        hv_prefix = "[HV] " if feat.get("is_hypervisor") else ""
         summary_rows.append([
-            hostname,
+            hv_prefix + hostname,
             os_label,
             feat.get("kernel", "—"),
             feat.get("cpu_model", "?")[:40],
@@ -526,8 +530,9 @@ def generate_markdown(
     for hostname in hostnames:
         meta = hosts[hostname].get("metadata", {})
         feat = extract_features(meta)
+        hv_prefix = "[HV] " if feat.get("is_hypervisor") else ""
         env_rows.append([
-            hostname,
+            hv_prefix + hostname,
             feat.get("virt_type", "—"),
             feat.get("cpu_governor", "—"),
             feat.get("smt", "—"),
@@ -985,8 +990,9 @@ def _html_runtime_env_rows(
         mit_style = ' style="color:#ff5252"' if mit == "off" else ""
         flags = feat.get("cpu_flags_x86", "—")
         flags_cell = f'<code title="{flags}">{flags[:40]}{"…" if len(flags) > 40 else ""}</code>'
+        hv_badge = ' <span style="background:#5c4200;color:#ffd600;font-size:0.75em;padding:1px 5px;border-radius:3px;vertical-align:middle">HV</span>' if feat.get("is_hypervisor") else ""
         rows.append(f"""      <tr>
-        <td><strong>{hostname}</strong></td>
+        <td><strong>{hostname}</strong>{hv_badge}</td>
         <td>{feat.get('virt_type', '—')}</td>
         <td>{feat.get('cpu_governor', '—')}</td>
         <td>{smt_cell}</td>
@@ -1015,9 +1021,10 @@ def _html_host_summary(
             "thin": '<span style="color:#4dc9f6">✓ thin</span>',
             "no": '<span style="color:#888">✗</span>',
         }.get(feat.get("lto", "no"), "?")
+        hv_badge = ' <span style="background:#5c4200;color:#ffd600;font-size:0.75em;padding:1px 5px;border-radius:3px;vertical-align:middle">HV</span>' if feat.get("is_hypervisor") else ""
 
         rows.append(f"""      <tr>
-        <td><strong>{hostname}</strong></td>
+        <td><strong>{hostname}</strong>{hv_badge}</td>
         <td>{feat.get('kernel', '—')}</td>
         <td>{feat.get('cpu_model', '?')}</td>
         <td>{feat.get('cpu_clock', '—')}</td>

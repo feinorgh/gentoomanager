@@ -84,10 +84,11 @@
     cmd: swapon -a
   become: true
   changed_when: true
-  when: >-
-    ansible_system | default('Linux') == 'Linux' and
-    run_benchmarks_orig_swap is defined and
-    (run_benchmarks_orig_swap.stdout | default('') | length > 0)
+  when:
+    - ansible_system | default('Linux') == 'Linux'
+    - not (run_benchmarks_is_hypervisor | default(false) | bool)
+    - run_benchmarks_orig_swap is defined
+    - run_benchmarks_orig_swap.stdout | default('') | length > 0
 
 - name: Re-enable swap (FreeBSD)
   ansible.builtin.command:
@@ -95,10 +96,11 @@
   become: true
   changed_when: true
   failed_when: false
-  when: >-
-    ansible_system | default('Linux') == 'FreeBSD' and
-    run_benchmarks_orig_swap_bsd is defined and
-    (run_benchmarks_orig_swap_bsd.stdout_lines | default([]) | length > 1)
+  when:
+    - ansible_system | default('Linux') == 'FreeBSD'
+    - not (run_benchmarks_is_hypervisor | default(false) | bool)
+    - run_benchmarks_orig_swap_bsd is defined
+    - run_benchmarks_orig_swap_bsd.stdout_lines | default([]) | length > 1
 
 # ── Caches ───────────────────────────────────────────────────────────────
 - name: Drop filesystem caches after benchmarks (Linux)

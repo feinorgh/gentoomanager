@@ -430,7 +430,7 @@
           else false
         }}
       calibration_mips: "{{ run_benchmarks_calibration_mips | default(0) | int }}"
-      kernel_version: "{{ ansible_kernel | default('') }}"
+      is_hypervisor: "{{ run_benchmarks_is_hypervisor | default(false) | bool }}"
       cpu_governor: >-
         {{
           run_benchmarks_cpu_governor_raw.stdout | default('') | trim

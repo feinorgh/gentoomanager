@@ -50,16 +50,19 @@
   register: run_benchmarks_orig_swap
   changed_when: false
   failed_when: false
-  when: ansible_system | default('Linux') == 'Linux'
+  when:
+    - ansible_system | default('Linux') == 'Linux'
+    - not (run_benchmarks_is_hypervisor | default(false) | bool)
 
 - name: Disable swap (Linux)
   ansible.builtin.command:
     cmd: swapoff -a
   become: true
   changed_when: true
-  when: >-
-    ansible_system | default('Linux') == 'Linux' and
-    run_benchmarks_orig_swap.stdout | default('') | length > 0
+  when:
+    - ansible_system | default('Linux') == 'Linux'
+    - not (run_benchmarks_is_hypervisor | default(false) | bool)
+    - run_benchmarks_orig_swap.stdout | default('') | length > 0
 
 - name: Save current swap state (FreeBSD)
   ansible.builtin.command:
@@ -67,7 +70,9 @@
   register: run_benchmarks_orig_swap_bsd
   changed_when: false
   failed_when: false
-  when: ansible_system | default('Linux') == 'FreeBSD'
+  when:
+    - ansible_system | default('Linux') == 'FreeBSD'
+    - not (run_benchmarks_is_hypervisor | default(false) | bool)
 
 - name: Disable swap (FreeBSD)
   ansible.builtin.command:
@@ -75,9 +80,10 @@
   become: true
   changed_when: true
   failed_when: false
-  when: >-
-    ansible_system | default('Linux') == 'FreeBSD' and
-    run_benchmarks_orig_swap_bsd.stdout_lines | default([]) | length > 1
+  when:
+    - ansible_system | default('Linux') == 'FreeBSD'
+    - not (run_benchmarks_is_hypervisor | default(false) | bool)
+    - run_benchmarks_orig_swap_bsd.stdout_lines | default([]) | length > 1
 
 # ── 3. Sync filesystems and drop caches ───────────────────────────────────
 - name: Sync filesystems

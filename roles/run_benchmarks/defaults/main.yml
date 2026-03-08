@@ -40,3 +40,18 @@ run_benchmarks_gentoo_min_build_secs: 300
 
 # Gentoo build time analysis: number of recent builds to collect per package
 run_benchmarks_gentoo_max_builds: 3
+
+# Set to true when targeting hypervisor hosts (prevents swap disabling,
+# skips VM-specific operations).
+run_benchmarks_is_hypervisor: false
+
+# Benchmark categories run on hypervisors (ffmpeg/opencv skipped by default
+# as they are typically not installed on KVM hypervisors).
+run_benchmarks_hypervisor_categories:
+  - compression
+  - crypto
+  - coreutils
+  - compiler
+  - python
+  - startup
+  - gentoo_build_times

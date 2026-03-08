@@ -280,6 +280,85 @@
             _bench_minimal_ram.stdout is defined and
             _bench_minimal_ram.stdout | trim | length > 0
 
+# ── Play 2: Provision and benchmark hypervisors (bare-metal reference) ───
+- name: Benchmark hypervisors as bare-metal reference
+  hosts: hypervisors
+  gather_facts: false
+  become: true
+  serial: 1
+  vars:
+    run_benchmarks_work_dir: /tmp/ansible-benchmarks
+    run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
+    run_benchmarks_is_hypervisor: true
+    # Only run categories likely present on a KVM hypervisor
+    run_benchmarks_categories: "{{ run_benchmarks_hypervisor_categories | default([]) }}"
+
+  pre_tasks:
+    - name: Check hypervisor is reachable
+      ansible.builtin.raw: echo ok
+      register: _hv_reachable
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      ignore_unreachable: true
+
+    - name: Skip unreachable hypervisors
+      ansible.builtin.meta: end_host
+      when: >-
+        _hv_reachable is unreachable or
+        _hv_reachable is failed or
+        _hv_reachable.rc | default(1) != 0
+
+    - name: Gather OS and hardware facts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - distribution
+          - os_family
+          - hardware
+
+    - name: Set effective work directory
+      ansible.builtin.set_fact:
+        run_benchmarks_effective_work_dir: "{{ run_benchmarks_work_dir }}"
+
+    - name: Install hyperfine and p7zip on hypervisor
+      ansible.builtin.package:
+        name:
+          - app-benchmarks/hyperfine
+          - app-arch/p7zip
+        state: present
+
+  tasks:
+    - name: Benchmark hypervisor with automatic restore
+      block:
+        - name: Run benchmark suite on hypervisor
+          ansible.builtin.include_role:
+            name: run_benchmarks
+
+        - name: Find all benchmark result files
+          ansible.builtin.find:
+            paths: "{{ run_benchmarks_effective_work_dir }}"
+            patterns: "*.json"
+          register: _hv_bench_result_files
+
+        - name: Create local results directory for hypervisor
+          ansible.builtin.file:
+            path: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
+            state: directory
+            mode: "0755"
+          delegate_to: localhost
+          become: false
+
+        - name: Fetch hypervisor benchmark results to controller
+          ansible.builtin.fetch:
+            src: "{{ item.path }}"
+            dest: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}/"
+            flat: true
+          loop: "{{ _hv_bench_result_files.files | default([]) }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
 # ── Play 2: Generate report ──────────────────────────────────────────────
 - name: Generate benchmark report
   hosts: localhost
