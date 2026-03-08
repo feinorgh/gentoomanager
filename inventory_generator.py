@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -49,6 +50,49 @@ SSH_OPTIONS = [
     "-o",
     "ControlPersist=60",
 ]
+
+
+def is_local_host(hostname: str) -> bool:
+    """Return True if *hostname* refers to the machine running this script.
+
+    Checks (in order):
+    1. Well-known loopback names/addresses (localhost, 127.0.0.1, ::1).
+    2. Exact match against the controller's short hostname or FQDN.
+    3. DNS resolution: if the hostname resolves to an address in the
+       127.0.0.0/8 loopback block, or to any address that the controller's
+       own hostname also resolves to, it is considered local.
+    """
+    name = hostname.strip().lower()
+
+    # 1. Explicit loopback identifiers
+    if name in {"localhost", "localhost.localdomain", "127.0.0.1", "::1"}:
+        return True
+
+    # 2. Hostname / FQDN match
+    try:
+        local_names = {socket.gethostname().lower(), socket.getfqdn().lower()}
+    except OSError:
+        local_names = set()
+    if name in local_names:
+        return True
+
+    # 3. Resolve to IP and compare against local addresses
+    try:
+        target_ip = socket.gethostbyname(hostname)
+        if target_ip.startswith("127."):
+            return True
+        local_ips: set[str] = set()
+        for local_name in local_names:
+            try:
+                local_ips.update(a[4][0] for a in socket.getaddrinfo(local_name, None))
+            except OSError:
+                pass
+        if target_ip in local_ips:
+            return True
+    except OSError:
+        pass
+
+    return False
 
 
 def get_vms_from_host(host):
@@ -330,7 +374,10 @@ def main():
                 if bm_host not in inventory["baremetal"]["hosts"]:
                     inventory["baremetal"]["hosts"].append(bm_host)
                 if bm_host not in inventory["_meta"]["hostvars"]:
-                    inventory["_meta"]["hostvars"][bm_host] = {"ansible_host": bm_host}
+                    hostvars: dict = {"ansible_host": bm_host}
+                    if is_local_host(bm_host):
+                        hostvars["ansible_connection"] = "local"
+                    inventory["_meta"]["hostvars"][bm_host] = hostvars
 
         print(json.dumps(inventory, indent=2))
         sys.exit(0)
