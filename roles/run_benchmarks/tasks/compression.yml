@@ -33,5 +33,16 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compression.json \
         $CMDS
+  register: run_benchmarks_compression_result
   changed_when: false
   failed_when: false
+
+- name: Warn on compression benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compression benchmark exited
+      rc={{ run_benchmarks_compression_result.rc }}.
+      {{ run_benchmarks_compression_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compression_result is not skipped
+    - run_benchmarks_compression_result.rc | default(0) != 0

@@ -107,5 +107,16 @@
         --command-name 'threshold' 'python3 opencv_bench.py threshold' \
         --command-name 'opencv-all' 'python3 opencv_bench.py all'
   when: run_benchmarks_opencv_check.rc == 0
+  register: run_benchmarks_opencv_result
   changed_when: false
   failed_when: false
+
+- name: Warn on opencv benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: opencv benchmark exited
+      rc={{ run_benchmarks_opencv_result.rc }}.
+      {{ run_benchmarks_opencv_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_opencv_result is not skipped
+    - run_benchmarks_opencv_result.rc | default(0) != 0

@@ -75,8 +75,19 @@
           --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
           $CMDS
       fi
+  register: run_benchmarks_compiler_c_result
   changed_when: false
   failed_when: false
+
+- name: Warn on compiler_c benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_c benchmark exited
+      rc={{ run_benchmarks_compiler_c_result.rc }}.
+      {{ run_benchmarks_compiler_c_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_c_result is not skipped
+    - run_benchmarks_compiler_c_result.rc | default(0) != 0
 
 - name: Run C runtime benchmarks (compiled binaries)
   ansible.builtin.shell:
@@ -104,8 +115,19 @@
           --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
           $CMDS
       fi
+  register: run_benchmarks_compiler_c_runtime_result
   changed_when: false
   failed_when: false
+
+- name: Warn on compiler_c_runtime benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_c_runtime benchmark exited
+      rc={{ run_benchmarks_compiler_c_runtime_result.rc }}.
+      {{ run_benchmarks_compiler_c_runtime_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_c_runtime_result is not skipped
+    - run_benchmarks_compiler_c_runtime_result.rc | default(0) != 0
 
 - name: Create Rust benchmark project
   ansible.builtin.shell:
@@ -170,8 +192,19 @@
         --command-name 'cargo-debug' 'cargo build 2>&1' \
         --command-name 'cargo-release' 'cargo build --release 2>&1'
   when: "'rustc' in run_benchmarks_compilers_available.stdout"
+  register: run_benchmarks_compiler_rust_result
   changed_when: false
   failed_when: false
+
+- name: Warn on compiler_rust benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_rust benchmark exited
+      rc={{ run_benchmarks_compiler_rust_result.rc }}.
+      {{ run_benchmarks_compiler_rust_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_rust_result is not skipped
+    - run_benchmarks_compiler_rust_result.rc | default(0) != 0
 
 - name: Create Go benchmark project
   ansible.builtin.shell:
@@ -231,5 +264,16 @@
         --export-json {{ run_benchmarks_work_dir }}/compiler_go.json \
         --command-name 'go-build' 'go build -o bench .'
   when: "'go' in run_benchmarks_compilers_available.stdout"
+  register: run_benchmarks_compiler_go_result
   changed_when: false
   failed_when: false
+
+- name: Warn on compiler_go benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_go benchmark exited
+      rc={{ run_benchmarks_compiler_go_result.rc }}.
+      {{ run_benchmarks_compiler_go_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_go_result is not skipped
+    - run_benchmarks_compiler_go_result.rc | default(0) != 0

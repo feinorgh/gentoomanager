@@ -61,5 +61,16 @@
         kill "$XVFB_PID" 2>/dev/null || true
       fi
       rm -rf "$XDG_RUNTIME_DIR"
+  register: run_benchmarks_startup_result
   changed_when: false
   failed_when: false
+
+- name: Warn on startup benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: startup benchmark exited
+      rc={{ run_benchmarks_startup_result.rc }}.
+      {{ run_benchmarks_startup_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_startup_result is not skipped
+    - run_benchmarks_startup_result.rc | default(0) != 0

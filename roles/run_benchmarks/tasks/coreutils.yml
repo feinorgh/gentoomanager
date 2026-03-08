@@ -40,8 +40,19 @@
         --command-name 'find-exec' 'find findtree -name "*.txt" -exec wc -c {} +' \
         --command-name 'tar-create' 'tar cf /dev/null findtree' \
         --command-name 'du-summary' 'du -sh findtree'
+  register: run_benchmarks_coreutils_result
   changed_when: false
   failed_when: false
+
+- name: Warn on coreutils benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: coreutils benchmark exited
+      rc={{ run_benchmarks_coreutils_result.rc }}.
+      {{ run_benchmarks_coreutils_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_coreutils_result is not skipped
+    - run_benchmarks_coreutils_result.rc | default(0) != 0
 
 - name: Check git availability  # noqa: command-instead-of-module command-instead-of-shell
   ansible.builtin.shell:
@@ -93,8 +104,19 @@
         --command-name 'git-blame' 'git blame file_1.txt' \
         --command-name 'git-status' 'git status'
   when: run_benchmarks_git_check.rc == 0
+  register: run_benchmarks_coreutils_git_result
   changed_when: false
   failed_when: false
+
+- name: Warn on coreutils_git benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: coreutils_git benchmark exited
+      rc={{ run_benchmarks_coreutils_git_result.rc }}.
+      {{ run_benchmarks_coreutils_git_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_coreutils_git_result is not skipped
+    - run_benchmarks_coreutils_git_result.rc | default(0) != 0
 
 - name: Check diff tool availability
   ansible.builtin.command:
@@ -119,5 +141,16 @@
         --command-name 'diff' 'diff diff_a.txt diff_b.txt > /dev/null || true' \
         --command-name 'comm' 'comm <(sort diff_a.txt) <(sort diff_b.txt) > /dev/null'
   when: run_benchmarks_diff_check.rc == 0
+  register: run_benchmarks_coreutils_diff_result
   changed_when: false
   failed_when: false
+
+- name: Warn on coreutils_diff benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: coreutils_diff benchmark exited
+      rc={{ run_benchmarks_coreutils_diff_result.rc }}.
+      {{ run_benchmarks_coreutils_diff_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_coreutils_diff_result is not skipped
+    - run_benchmarks_coreutils_diff_result.rc | default(0) != 0

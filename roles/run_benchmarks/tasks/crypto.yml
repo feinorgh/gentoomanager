@@ -77,8 +77,19 @@
           --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
           $CMDS
       fi
+  register: run_benchmarks_crypto_symmetric_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_symmetric benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_symmetric benchmark exited
+      rc={{ run_benchmarks_crypto_symmetric_result.rc }}.
+      {{ run_benchmarks_crypto_symmetric_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_symmetric_result is not skipped
+    - run_benchmarks_crypto_symmetric_result.rc | default(0) != 0
 
 # ── 3. Hash / digest benchmarks via OpenSSL ──────────────────────────────
 - name: Run OpenSSL digest benchmarks
@@ -129,8 +140,19 @@
           --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
           $CMDS
       fi
+  register: run_benchmarks_crypto_hash_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_hash benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_hash benchmark exited
+      rc={{ run_benchmarks_crypto_hash_result.rc }}.
+      {{ run_benchmarks_crypto_hash_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_hash_result is not skipped
+    - run_benchmarks_crypto_hash_result.rc | default(0) != 0
 
 # ── 4. Coreutils hash benchmarks (for comparison) ───────────────────────
 - name: Run coreutils hash benchmarks
@@ -163,8 +185,19 @@
           --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
           $CMDS
       fi
+  register: run_benchmarks_crypto_hash_coreutils_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_hash_coreutils benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_hash_coreutils benchmark exited
+      rc={{ run_benchmarks_crypto_hash_coreutils_result.rc }}.
+      {{ run_benchmarks_crypto_hash_coreutils_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_hash_coreutils_result is not skipped
+    - run_benchmarks_crypto_hash_coreutils_result.rc | default(0) != 0
 
 # ── 5. OpenSSL speed — built-in throughput benchmarks ────────────────────
 # These use OpenSSL's internal benchmarking, wrapped in hyperfine for
@@ -190,8 +223,19 @@
           'openssl speed -seconds 3 -bytes 16384 sha256' \
         --command-name 'speed-sha512' \
           'openssl speed -seconds 3 -bytes 16384 sha512'
+  register: run_benchmarks_crypto_speed_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_speed benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_speed benchmark exited
+      rc={{ run_benchmarks_crypto_speed_result.rc }}.
+      {{ run_benchmarks_crypto_speed_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_speed_result is not skipped
+    - run_benchmarks_crypto_speed_result.rc | default(0) != 0
 
 # ── 6. Asymmetric / public-key benchmarks ────────────────────────────────
 - name: Run OpenSSL asymmetric benchmarks
@@ -251,8 +295,19 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
         $CMDS
+  register: run_benchmarks_crypto_asymmetric_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_asymmetric benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_asymmetric benchmark exited
+      rc={{ run_benchmarks_crypto_asymmetric_result.rc }}.
+      {{ run_benchmarks_crypto_asymmetric_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_asymmetric_result is not skipped
+    - run_benchmarks_crypto_asymmetric_result.rc | default(0) != 0
 
 # ── 7. HMAC benchmarks ──────────────────────────────────────────────────
 - name: Run HMAC benchmarks
@@ -288,8 +343,19 @@
           --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
           $CMDS
       fi
+  register: run_benchmarks_crypto_hmac_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_hmac benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_hmac benchmark exited
+      rc={{ run_benchmarks_crypto_hmac_result.rc }}.
+      {{ run_benchmarks_crypto_hmac_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_hmac_result is not skipped
+    - run_benchmarks_crypto_hmac_result.rc | default(0) != 0
 
 # ── 8. Key derivation benchmarks ────────────────────────────────────────
 - name: Run key derivation benchmarks
@@ -307,8 +373,19 @@
           'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:100000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 100000 -in signdata.bin -out /dev/null 2>/dev/null' \
         --command-name 'pbkdf2-sha256-10k' \
           'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:10000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 10000 -in signdata.bin -out /dev/null 2>/dev/null'
+  register: run_benchmarks_crypto_kdf_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_kdf benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_kdf benchmark exited
+      rc={{ run_benchmarks_crypto_kdf_result.rc }}.
+      {{ run_benchmarks_crypto_kdf_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_kdf_result is not skipped
+    - run_benchmarks_crypto_kdf_result.rc | default(0) != 0
 
 # ── 9. GPG sign/verify (kept from original) ──────────────────────────────
 - name: Check if GPG is available
@@ -351,5 +428,16 @@
         --command-name 'gpg-verify' \
           'gpg --batch --yes --detach-sign testdata.bin && gpg --batch --verify testdata.bin.sig testdata.bin && rm -f testdata.bin.sig'
   when: run_benchmarks_gpg_check.rc == 0
+  register: run_benchmarks_crypto_gpg_result
   changed_when: false
   failed_when: false
+
+- name: Warn on crypto_gpg benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_gpg benchmark exited
+      rc={{ run_benchmarks_crypto_gpg_result.rc }}.
+      {{ run_benchmarks_crypto_gpg_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_gpg_result is not skipped
+    - run_benchmarks_crypto_gpg_result.rc | default(0) != 0
