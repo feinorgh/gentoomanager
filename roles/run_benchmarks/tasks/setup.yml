@@ -235,6 +235,122 @@
   failed_when: false
   when: ansible_system | default('') == 'FreeBSD'
 
+- name: Detect CPU frequency governor
+  ansible.builtin.shell:
+    cmd: cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo 'unknown'
+  register: run_benchmarks_cpu_governor_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect SMT / Hyper-threading state
+  ansible.builtin.shell:
+    cmd: cat /sys/devices/system/cpu/smt/active 2>/dev/null || echo ''
+  register: run_benchmarks_smt_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect virtualization type
+  ansible.builtin.command:
+    cmd: systemd-detect-virt
+  register: run_benchmarks_virt_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect Transparent Huge Pages setting
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '\[\K\w+(?=\])' /sys/kernel/mm/transparent_hugepage/enabled
+      2>/dev/null || echo 'unknown'
+  register: run_benchmarks_thp_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect L3 cache size
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      lscpu 2>/dev/null | awk -F':[[:space:]]+' '/^L3 cache/{print $2; exit}'
+  register: run_benchmarks_l3_cache_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect kernel mitigation settings
+  ansible.builtin.shell:
+    cmd: grep -oP 'mitigations=\S+' /proc/cmdline 2>/dev/null || echo 'default'
+  register: run_benchmarks_mitigations_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect kernel preemption model
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      for cfg in /boot/config-$(uname -r) /proc/config.gz; do
+        [ -f "$cfg" ] || continue
+        case "$cfg" in *.gz) zcat "$cfg";; *) cat "$cfg";; esac \
+          | grep -E '^CONFIG_PREEMPT' | head -8
+        break
+      done
+  register: run_benchmarks_preempt_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect I/O scheduler for work directory device
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      dev=$(df --output=source {{ run_benchmarks_work_dir }} 2>/dev/null \
+            | tail -1 | sed 's|/dev/||;s|[0-9]*$||;s|p[0-9]*$||')
+      sched_file="/sys/block/${dev}/queue/scheduler"
+      if [ -f "$sched_file" ]; then
+        grep -oP '\[\K[^\]]+' "$sched_file" 2>/dev/null || cat "$sched_file"
+      else
+        echo 'unknown'
+      fi
+  register: run_benchmarks_io_scheduler_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect NUMA node count
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      lscpu 2>/dev/null | awk -F':[[:space:]]+' '/^NUMA node\(s\)/{print $2; exit}' || echo '1'
+  register: run_benchmarks_numa_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect memory speed (via dmidecode)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      dmidecode -t 17 2>/dev/null \
+        | awk -F': ' '/^\s+Speed:/ && !/Unknown/{gsub(/^ +/,"",$2); print $2; exit}'
+  register: run_benchmarks_mem_speed_raw
+  become: true
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect Gentoo profile
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      eselect profile show 2>/dev/null | awk 'NR==2{gsub(/^ +/,""); print}' || echo ''
+  register: run_benchmarks_profile_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_distribution | default('') == 'Gentoo'
+
 - name: Read Gentoo make.conf
   ansible.builtin.slurp:
     src: /etc/portage/make.conf
@@ -314,6 +430,72 @@
           else false
         }}
       calibration_mips: "{{ run_benchmarks_calibration_mips | default(0) | int }}"
+      kernel_version: "{{ ansible_kernel | default('') }}"
+      cpu_governor: >-
+        {{
+          run_benchmarks_cpu_governor_raw.stdout | default('') | trim
+          if (ansible_system | default('') == 'Linux')
+          else 'unknown'
+        }}
+      smt_active: >-
+        {{
+          (run_benchmarks_smt_raw.stdout | default('') | trim == '1')
+          if (ansible_system | default('') == 'Linux')
+          else 'unknown'
+        }}
+      virt_type: >-
+        {{
+          run_benchmarks_virt_raw.stdout | default('none') | trim
+          if (ansible_system | default('') == 'Linux')
+          else 'unknown'
+        }}
+      thp: >-
+        {{
+          run_benchmarks_thp_raw.stdout | default('unknown') | trim
+          if (ansible_system | default('') == 'Linux')
+          else 'unknown'
+        }}
+      cpu_cache_l3: >-
+        {{
+          run_benchmarks_l3_cache_raw.stdout | default('') | trim
+          if (ansible_system | default('') == 'Linux')
+          else ''
+        }}
+      mitigations: >-
+        {{
+          run_benchmarks_mitigations_raw.stdout | default('default') | trim
+          if (ansible_system | default('') == 'Linux')
+          else 'unknown'
+        }}
+      preempt_model: >-
+        {%- set pc = run_benchmarks_preempt_raw.stdout | default('') -%}
+        {%- if 'CONFIG_PREEMPT_RT=y' in pc -%}RT{%- elif 'CONFIG_PREEMPT_DYNAMIC=y' in pc -%}DYNAMIC{%- elif 'CONFIG_PREEMPT=y' in pc -%}FULL{%- elif 'CONFIG_PREEMPT_VOLUNTARY=y' in pc -%}VOLUNTARY{%- elif 'CONFIG_PREEMPT_NONE=y' in pc -%}NONE{%- else -%}unknown{%- endif -%}
+      io_scheduler: >-
+        {{
+          run_benchmarks_io_scheduler_raw.stdout | default('') | trim
+          if (ansible_system | default('') == 'Linux')
+          else 'unknown'
+        }}
+      numa_nodes: >-
+        {{
+          run_benchmarks_numa_raw.stdout | default('1') | trim | int
+          if (ansible_system | default('') == 'Linux')
+          else 1
+        }}
+      mem_speed: >-
+        {{
+          run_benchmarks_mem_speed_raw.stdout | default('') | trim
+          if (ansible_system | default('') == 'Linux')
+          else ''
+        }}
+      cpu_flags_x86: "{{ (make_conf | default({})).get('CPU_FLAGS_X86', '') }}"
+      makeopts: "{{ (make_conf | default({})).get('MAKEOPTS', '') }}"
+      gentoo_profile: >-
+        {{
+          run_benchmarks_profile_raw.stdout | default('') | trim
+          if (ansible_distribution | default('') == 'Gentoo')
+          else ''
+        }}
 
 - name: Write host metadata JSON
   ansible.builtin.copy:

@@ -364,6 +364,35 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     features["passmark_mt"] = str(pm_mt) if pm_mt else "—"
     features["passmark_st"] = str(pm_st) if pm_st else "—"
 
+    # Prefer ansible_kernel over uname-based detection if available
+    kver = metadata.get("kernel_version", "") or features.get("ver_kernel", "")
+    features["kernel"] = kver if kver else "—"
+
+    # Runtime / hardware environment fields
+    features["cpu_governor"] = metadata.get("cpu_governor", "") or "—"
+    features["cpu_cache_l3"] = metadata.get("cpu_cache_l3", "") or "—"
+    features["mem_speed"] = metadata.get("mem_speed", "") or "—"
+    features["io_scheduler"] = metadata.get("io_scheduler", "") or "—"
+    features["mitigations"] = metadata.get("mitigations", "") or "default"
+    features["preempt_model"] = metadata.get("preempt_model", "") or "—"
+    features["thp"] = metadata.get("thp", "") or "—"
+    features["virt_type"] = metadata.get("virt_type", "") or "—"
+    features["cpu_flags_x86"] = metadata.get("cpu_flags_x86", "") or "—"
+    features["gentoo_profile"] = metadata.get("gentoo_profile", "") or "—"
+
+    numa = metadata.get("numa_nodes", "")
+    features["numa_nodes"] = str(int(numa)) if str(numa).strip().isdigit() else "—"
+
+    smt_raw = metadata.get("smt_active", "")
+    if isinstance(smt_raw, bool):
+        features["smt"] = "yes" if smt_raw else "no"
+    elif str(smt_raw).lower() in ("true", "1", "yes"):
+        features["smt"] = "yes"
+    elif str(smt_raw).lower() in ("false", "0", "no"):
+        features["smt"] = "no"
+    else:
+        features["smt"] = "—"
+
     return features
 
 
@@ -484,6 +513,34 @@ def generate_markdown(
             feat.get("ver_clang", "?")[:20],
         ])
     lines.append(_md_table(summary_headers, summary_rows))
+    lines.append("")
+
+    # --- Runtime environment table ---
+    lines.append("## Host Runtime Environment")
+    lines.append("")
+    env_headers = [
+        "Host", "Virt", "Governor", "SMT", "THP", "Mitigations",
+        "Preempt", "I/O Sched", "NUMA", "Mem Speed", "L3 Cache", "CPU_FLAGS_X86",
+    ]
+    env_rows: list[list[str]] = []
+    for hostname in hostnames:
+        meta = hosts[hostname].get("metadata", {})
+        feat = extract_features(meta)
+        env_rows.append([
+            hostname,
+            feat.get("virt_type", "—"),
+            feat.get("cpu_governor", "—"),
+            feat.get("smt", "—"),
+            feat.get("thp", "—"),
+            feat.get("mitigations", "default"),
+            feat.get("preempt_model", "—"),
+            feat.get("io_scheduler", "—"),
+            feat.get("numa_nodes", "—"),
+            feat.get("mem_speed", "—"),
+            feat.get("cpu_cache_l3", "—"),
+            feat.get("cpu_flags_x86", "—")[:50],
+        ])
+    lines.append(_md_table(env_headers, env_rows))
     lines.append("")
 
     # --- FFmpeg codec availability ---
@@ -915,6 +972,36 @@ def generate_html(
     return html
 
 
+def _html_runtime_env_rows(
+    hosts: dict[str, dict[str, Any]], hostnames: list[str]
+) -> str:
+    """Build HTML <tr> rows for the runtime environment table."""
+    rows: list[str] = []
+    for hostname in hostnames:
+        meta = hosts[hostname].get("metadata", {})
+        feat = extract_features(meta)
+        smt_cell = {"yes": "✓", "no": "✗"}.get(feat.get("smt", "—"), "—")
+        mit = feat.get("mitigations", "default")
+        mit_style = ' style="color:#ff5252"' if mit == "off" else ""
+        flags = feat.get("cpu_flags_x86", "—")
+        flags_cell = f'<code title="{flags}">{flags[:40]}{"…" if len(flags) > 40 else ""}</code>'
+        rows.append(f"""      <tr>
+        <td><strong>{hostname}</strong></td>
+        <td>{feat.get('virt_type', '—')}</td>
+        <td>{feat.get('cpu_governor', '—')}</td>
+        <td>{smt_cell}</td>
+        <td>{feat.get('thp', '—')}</td>
+        <td{mit_style}>{mit}</td>
+        <td>{feat.get('preempt_model', '—')}</td>
+        <td>{feat.get('io_scheduler', '—')}</td>
+        <td>{feat.get('numa_nodes', '—')}</td>
+        <td>{feat.get('mem_speed', '—')}</td>
+        <td>{feat.get('cpu_cache_l3', '—')}</td>
+        <td>{flags_cell}</td>
+      </tr>""")
+    return "\n".join(rows)
+
+
 def _html_host_summary(
     hosts: dict[str, dict[str, Any]], hostnames: list[str]
 ) -> str:
@@ -952,7 +1039,8 @@ def _html_host_summary(
         <td>{feat.get('ver_python', '—')}</td>
       </tr>""")
 
-    return f"""    <table>
+    return f"""    <h3>Host Configuration Summary</h3>
+    <table>
       <thead>
         <tr>
           <th>Host</th><th>Kernel</th><th>CPU</th><th>Clock</th><th>Cores</th><th>Opt</th>
@@ -964,6 +1052,19 @@ def _html_host_summary(
       </thead>
       <tbody>
 {"".join(rows)}
+      </tbody>
+    </table>
+    <h3>Host Runtime Environment</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Host</th><th>Virt</th><th>Governor</th><th>SMT</th><th>THP</th>
+          <th>Mitigations</th><th>Preempt</th><th>I/O Sched</th><th>NUMA</th>
+          <th>Mem Speed</th><th>L3 Cache</th><th>CPU_FLAGS_X86</th>
+        </tr>
+      </thead>
+      <tbody>
+{_html_runtime_env_rows(hosts, hostnames)}
       </tbody>
     </table>"""
 
