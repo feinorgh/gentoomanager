@@ -1,0 +1,45 @@
+---
+# Calibrate CPU performance using the 7-zip benchmark (single-threaded MIPS).
+# Sets run_benchmarks_calibration_mips (int). Silently skips if 7z is absent.
+
+- name: Find 7z binary
+  ansible.builtin.shell:
+    cmd: |
+      for b in 7zz 7z 7za; do
+        if command -v "$b" >/dev/null 2>&1; then
+          printf '%s' "$b"; exit 0
+        fi
+      done
+      exit 1
+    executable: /bin/sh
+  register: run_benchmarks_7z_bin_raw
+  changed_when: false
+  failed_when: false
+
+- name: Run 7-zip single-thread calibration benchmark
+  probe_command_output:
+    timeout: 120
+    probes:
+      - key: mips
+        command:
+          - "{{ run_benchmarks_7z_bin_raw.stdout | trim }}"
+          - b
+          - -mmt=1
+        pattern: '^Tot:\s+\d+\s+(\d+)'
+  register: run_benchmarks_calibration_raw
+  when: run_benchmarks_7z_bin_raw.rc | default(1) == 0
+  changed_when: false
+  failed_when: false
+
+- name: Set calibration MIPS fact
+  ansible.builtin.set_fact:
+    run_benchmarks_calibration_mips: >-
+      {{
+        (run_benchmarks_calibration_raw.data.mips | default([]) | first | default('0')) | int
+        if (
+          run_benchmarks_7z_bin_raw.rc | default(1) == 0 and
+          run_benchmarks_calibration_raw is not failed and
+          run_benchmarks_calibration_raw is not skipped
+        )
+        else 0
+      }}

@@ -236,6 +236,9 @@
   failed_when: false
   when: ansible_distribution | default('') == 'Gentoo'
 
+- name: Run CPU calibration benchmark
+  ansible.builtin.include_tasks: calibrate.yml
+
 - name: Parse host metadata
   ansible.builtin.set_fact:
     run_benchmarks_metadata:
@@ -304,6 +307,7 @@
           if (ansible_system | default('') == 'FreeBSD')
           else false
         }}
+      calibration_mips: "{{ run_benchmarks_calibration_mips | default(0) | int }}"
 
 - name: Write host metadata JSON
   ansible.builtin.copy:

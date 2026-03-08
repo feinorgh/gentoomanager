@@ -1,0 +1,67 @@
+# PassMark CPU benchmark reference data.
+# Source: https://www.cpubenchmark.net/cpu_list.php
+# Single-thread scores: https://www.cpubenchmark.net/singleThread.html
+#
+# To update this file with current data, download the CSV export from
+# https://www.cpubenchmark.net/cpu_list.php and replace the rows below,
+# keeping the header line intact.
+#
+# Column meanings:
+#   cpu_name     - CPU name as reported by PassMark (used for fuzzy matching)
+#   mark_mt      - PassMark multi-thread score (CPU Mark)
+#   mark_st      - PassMark single-thread score
+CPU Name,Passmark (MT),Passmark (ST)
+Intel Core i7-9700 @ 3.00GHz,13120,2714
+Intel Core i7-9700K @ 3.60GHz,14200,2850
+Intel Core i7-9700F @ 3.00GHz,13000,2710
+Intel Core i7-1260P,17890,3237
+Intel Core i7-1265U,14500,3100
+Intel Core i7-12700K,36000,3900
+Intel Core i7-12700,33000,3800
+Intel Core i5-12400,17000,3200
+Intel Core i9-12900K,39000,4007
+Intel Core i9-12900KS,41000,4100
+Intel Core i5-12600K,23000,3600
+Intel Core i7-11700K,27000,3400
+Intel Core i9-11900K,27500,3500
+Intel Core i5-11600K,19000,3300
+Intel Core i9-10900K,23000,3200
+Intel Core i7-10700K,19000,3000
+Intel Core i5-10600K,14500,2900
+Intel Core i9-9900K,18000,2900
+Intel Core i9-9900KS,19000,3000
+Intel Core i7-8700K,15000,2800
+Intel Core i5-8600K,11000,2600
+Intel Core i7-7700K,12500,2700
+AMD Ryzen 9 7950X,67000,4200
+AMD Ryzen 9 7900X,56000,4100
+AMD Ryzen 7 7700X,36000,4000
+AMD Ryzen 5 7600X,27000,3900
+AMD Ryzen 9 5950X,40000,3700
+AMD Ryzen 9 5900X,28000,3500
+AMD Ryzen 7 5800X3D,24000,3500
+AMD Ryzen 7 5800X,22500,3400
+AMD Ryzen 5 5600X,17000,3400
+AMD Ryzen 5 5600,15000,3300
+AMD Ryzen 9 3900X,24000,2800
+AMD Ryzen 9 3900,22000,2700
+AMD Ryzen 7 3700X,17000,2700
+AMD Ryzen 5 3600X,14000,2600
+AMD Ryzen 5 3600,13000,2600
+AMD Ryzen 7 2700X,14000,2400
+AMD Ryzen 5 2600X,11000,2300
+Intel Core i9-13900K,55000,4300
+Intel Core i7-13700K,42000,4000
+Intel Core i5-13600K,29000,3900
+Intel Core i9-14900K,58000,4400
+Intel Core i7-14700K,45000,4100
+Intel Core i5-14600K,31000,3900
+Intel Xeon E5-2680 v4,18000,1700
+Intel Xeon E5-2690 v4,20000,1800
+Intel Xeon Gold 6154,24000,2000
+Intel Xeon Gold 6254,26000,2100
+Apple M1,15000,3700
+Apple M1 Pro,20000,3800
+Apple M1 Max,24000,3800
+Apple M2,17000,3900
+Apple M2 Pro,23000,4000

@@ -204,6 +204,7 @@
     - git
     - ffmpeg
     - gnupg2
+    - p7zip
   when: ansible_distribution | default('') == 'Void'
   changed_when: true
   failed_when: false

@@ -14,7 +14,9 @@ Reads ``benchmarks/results/<host>/*.json`` and produces:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -74,6 +76,78 @@ _GREEK_NAMES = [
     "Pandora", "Psyche", "Ariadne", "Phaedra", "Niobe", "Io",
     "Thetis", "Nemesis", "Tyche", "Nike",
 ]
+
+# ---------------------------------------------------------------------------
+# PassMark reference data
+# ---------------------------------------------------------------------------
+
+_PASSMARK_DATA: dict[str, tuple[int, int]] | None = None  # {normalized_name: (mt, st)}
+_PASSMARK_CSV = Path(__file__).parent / "data" / "passmark_cpu.csv"
+
+
+def _normalize_cpu_name(name: str) -> str:
+    """Normalize a CPU model string for fuzzy matching against PassMark data."""
+    name = name.upper()
+    # Remove trademark symbols and common noise
+    for token in ("(R)", "(TM)", "CPU", "PROCESSOR", "  "):
+        name = name.replace(token, " ")
+    # Collapse frequency suffixes like "@ 3.00GHz" → "3.00GHZ"
+    name = re.sub(r"\s*@\s*", " ", name)
+    # Collapse whitespace
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
+
+
+def load_passmark_data() -> dict[str, tuple[int, int]]:
+    """Load PassMark CPU scores from the bundled CSV.
+
+    Returns a dict mapping normalized CPU name → (passmark_mt, passmark_st).
+    Returns an empty dict if the CSV is missing or unreadable.
+    """
+    global _PASSMARK_DATA
+    if _PASSMARK_DATA is not None:
+        return _PASSMARK_DATA
+    _PASSMARK_DATA = {}
+    if not _PASSMARK_CSV.exists():
+        return _PASSMARK_DATA
+    with _PASSMARK_CSV.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(row for row in fh if not row.startswith("#"))
+        for row in reader:
+            raw = row.get("CPU Name", "").strip()
+            if not raw:
+                continue
+            try:
+                mt = int(row.get("Passmark (MT)", "0").replace(",", "") or 0)
+                st = int(row.get("Passmark (ST)", "0").replace(",", "") or 0)
+            except ValueError:
+                continue
+            _PASSMARK_DATA[_normalize_cpu_name(raw)] = (mt, st)
+    return _PASSMARK_DATA
+
+
+def lookup_passmark(cpu_model: str) -> tuple[int, int] | tuple[None, None]:
+    """Return (passmark_mt, passmark_st) for a CPU model, or (None, None) if unknown.
+
+    Matching strategy:
+    1. Exact normalized match.
+    2. First entry whose normalized key is a substring of the query (or vice versa).
+    """
+    data = load_passmark_data()
+    if not data:
+        return None, None
+    query = _normalize_cpu_name(cpu_model)
+    # Exact match
+    if query in data:
+        return data[query]
+    # Substring match — prefer longer keys (more specific)
+    candidates = [
+        (k, v) for k, v in data.items()
+        if k in query or query in k
+    ]
+    if candidates:
+        best_key, best_val = max(candidates, key=lambda kv: len(kv[0]))
+        return best_val
+    return None, None
 
 
 def anonymize_hosts(
@@ -280,6 +354,15 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     else:
         features["swap"] = "—"
 
+    # CPU calibration (7-zip single-thread MIPS from benchmark run)
+    cal_mips = int(metadata.get("calibration_mips", 0) or 0)
+    features["calibration_mips"] = str(cal_mips) if cal_mips > 0 else "—"
+
+    # PassMark reference scores (looked up from bundled CSV by CPU model)
+    pm_mt, pm_st = lookup_passmark(features.get("cpu_model", ""))
+    features["passmark_mt"] = str(pm_mt) if pm_mt else "—"
+    features["passmark_st"] = str(pm_st) if pm_st else "—"
+
     return features
 
 
@@ -369,7 +452,7 @@ def generate_markdown(
     summary_headers = [
         "Host", "OS", "Kernel", "CPU", "Clock", "Cores", "Opt", "March",
         "March (native)", "LTO", "Hardening", "Scheduler", "Filesystem",
-        "Swap", "GCC", "Clang",
+        "Swap", "7z MIPS", "PassMark (ST)", "PassMark (MT)", "GCC", "Clang",
     ]
     summary_rows: list[list[str]] = []
     for hostname in hostnames:
@@ -393,6 +476,9 @@ def generate_markdown(
             feat.get("scheduler", "—"),
             feat.get("filesystem", "—"),
             feat.get("swap", "—"),
+            feat.get("calibration_mips", "—"),
+            feat.get("passmark_st", "—"),
+            feat.get("passmark_mt", "—"),
             feat.get("ver_gcc", "?")[:20],
             feat.get("ver_clang", "?")[:20],
         ])
@@ -856,6 +942,9 @@ def _html_host_summary(
         <td>{feat.get('scheduler', '—')}</td>
         <td>{feat.get('filesystem', '—')}</td>
         <td>{'✓' if feat.get('swap', '—') == 'yes' else '✗' if feat.get('swap', '—') == 'no' else '—'}</td>
+        <td>{feat.get('calibration_mips', '—')}</td>
+        <td>{feat.get('passmark_st', '—')}</td>
+        <td>{feat.get('passmark_mt', '—')}</td>
         <td>{feat.get('ver_gcc', '—')}</td>
         <td>{feat.get('ver_clang', '—')}</td>
         <td>{feat.get('ver_rustc', '—')}</td>
@@ -868,6 +957,7 @@ def _html_host_summary(
           <th>Host</th><th>Kernel</th><th>CPU</th><th>Clock</th><th>Cores</th><th>Opt</th>
           <th>March</th><th>March (native)</th><th>LTO</th><th>Hardening</th>
           <th>Scheduler</th><th>Filesystem</th><th>Swap</th>
+          <th>7z MIPS</th><th>PassMark (ST)</th><th>PassMark (MT)</th>
           <th>GCC</th><th>Clang</th><th>Rust</th><th>Python</th>
         </tr>
       </thead>
