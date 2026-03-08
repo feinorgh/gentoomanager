@@ -33,7 +33,6 @@
       gcc -O2
       -o {{ run_benchmarks_work_dir }}/bench_latency
       {{ run_benchmarks_work_dir }}/bench_latency.c
-    creates: "{{ run_benchmarks_work_dir }}/bench_latency"
   changed_when: false
   failed_when: false
   when: run_benchmarks_memory_gcc_check.rc == 0

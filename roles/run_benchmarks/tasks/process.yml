@@ -28,7 +28,6 @@
       gcc -O2
       -o {{ run_benchmarks_work_dir }}/bench_fork
       {{ run_benchmarks_work_dir }}/bench_fork.c
-    creates: "{{ run_benchmarks_work_dir }}/bench_fork"
   changed_when: false
   failed_when: false
   when: run_benchmarks_process_gcc_check.rc == 0

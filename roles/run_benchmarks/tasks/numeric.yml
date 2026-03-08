@@ -38,7 +38,6 @@
       gcc -O3 -march=native -ffast-math -lm
       -o {{ run_benchmarks_work_dir }}/bench_nbody
       {{ run_benchmarks_work_dir }}/bench_nbody.c
-    creates: "{{ run_benchmarks_work_dir }}/bench_nbody"
   changed_when: false
   failed_when: false
   when: run_benchmarks_numeric_gcc_check.rc == 0
@@ -49,7 +48,6 @@
       gcc -O3 -march=native -ffast-math
       -o {{ run_benchmarks_work_dir }}/bench_mandelbrot
       {{ run_benchmarks_work_dir }}/bench_mandelbrot.c
-    creates: "{{ run_benchmarks_work_dir }}/bench_mandelbrot"
   changed_when: false
   failed_when: false
   when: run_benchmarks_numeric_gcc_check.rc == 0
@@ -60,7 +58,6 @@
       gcc -O3 -march=native -ffast-math -lm
       -o {{ run_benchmarks_work_dir }}/bench_spectral_norm
       {{ run_benchmarks_work_dir }}/bench_spectral_norm.c
-    creates: "{{ run_benchmarks_work_dir }}/bench_spectral_norm"
   changed_when: false
   failed_when: false
   when: run_benchmarks_numeric_gcc_check.rc == 0
