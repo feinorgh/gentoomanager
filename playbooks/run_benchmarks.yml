@@ -370,6 +370,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  tags: [generate_report]
 
   tasks:
     - name: Generate Markdown and HTML reports
