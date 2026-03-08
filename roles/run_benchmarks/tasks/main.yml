@@ -28,7 +28,7 @@
         run_benchmarks_categories
         if (run_benchmarks_categories | length > 0)
         else ['compression', 'crypto', 'compiler', 'python',
-              'ffmpeg', 'coreutils', 'opencv', 'startup',
+              'ffmpeg', 'imagemagick', 'coreutils', 'opencv', 'startup',
               'gentoo_build_times']
       }}
   tags: [benchmark]

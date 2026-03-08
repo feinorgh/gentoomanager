@@ -12,6 +12,7 @@ provision_benchmarks_packages:
     - dev-lang/rust-bin
     - dev-lang/go
     - media-video/ffmpeg
+    - media-gfx/imagemagick
     - dev-vcs/git
     - app-arch/gzip
     - app-arch/bzip2
@@ -39,6 +40,7 @@ provision_benchmarks_packages:
     - diffutils
     - p7zip
     - p7zip-plugins
+    - ImageMagick
   Debian:
     - gcc
     - clang
@@ -57,6 +59,7 @@ provision_benchmarks_packages:
     - dpkg-dev
     - build-essential
     - 7zip
+    - imagemagick
   Archlinux:
     - gcc
     - clang
@@ -73,6 +76,7 @@ provision_benchmarks_packages:
     - gnupg
     - diffutils
     - p7zip
+    - imagemagick
   Suse:
     - gcc
     - clang
@@ -90,6 +94,7 @@ provision_benchmarks_packages:
     - gpg2
     - diffutils
     - 7zip
+    - ImageMagick
   FreeBSD:
     - lang/gcc13
     - devel/llvm
@@ -103,6 +108,7 @@ provision_benchmarks_packages:
     - security/gnupg
     - textproc/diffutils
     - archivers/p7zip
+    - graphics/ImageMagick7
 
 # Packages available only via EPEL on RHEL/CentOS
 provision_benchmarks_epel_packages:

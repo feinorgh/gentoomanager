@@ -1,0 +1,231 @@
+---
+# ImageMagick image processing benchmarks.
+# Tests resize (filter quality/speed), convolution effects, and format
+# encode/decode speed.  Results are sensitive to SIMD extensions (AVX2,
+# AVX-512), libjpeg-turbo and libwebp builds, and OpenMP parallelism —
+# making them a strong compiler-flag and CPU_FLAGS_X86 signal.
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check ImageMagick availability
+  ansible.builtin.shell:
+    cmd: command -v magick 2>/dev/null || command -v convert 2>/dev/null
+  register: run_benchmarks_im_check
+  changed_when: false
+  failed_when: false
+
+# ── Detect binary and supported formats ──────────────────────────────────
+
+- name: Detect ImageMagick binary and format support
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      if command -v magick >/dev/null 2>&1; then BIN=magick; else BIN=convert; fi
+      echo "::bin::${BIN}"
+      FMTS=$(${BIN} -list format 2>/dev/null)
+      echo "$FMTS" | grep -qi '^ *WEBP.*W' && echo '::has_webp::1' || echo '::has_webp::0'
+      echo "$FMTS" | grep -qi '^ *AVIF.*W' && echo '::has_avif::1' || echo '::has_avif::0'
+  register: run_benchmarks_im_detect
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Parse ImageMagick capabilities
+  ansible.builtin.set_fact:
+    run_benchmarks_im_bin: >-
+      {{ (run_benchmarks_im_detect.stdout_lines
+          | select('match', '^::bin::')
+          | first
+          | regex_replace('^::bin::', '')) | trim }}
+    run_benchmarks_im_has_webp: >-
+      {{ (run_benchmarks_im_detect.stdout_lines
+          | select('match', '^::has_webp::')
+          | first
+          | regex_replace('^::has_webp::', '')) | trim == '1' }}
+    run_benchmarks_im_has_avif: >-
+      {{ (run_benchmarks_im_detect.stdout_lines
+          | select('match', '^::has_avif::')
+          | first
+          | regex_replace('^::has_avif::', '')) | trim == '1' }}
+  when:
+    - run_benchmarks_im_check.rc == 0
+    - run_benchmarks_im_detect is not skipped
+
+# ── Generate test images ──────────────────────────────────────────────────
+
+- name: Generate 4K plasma test image (PNG)
+  ansible.builtin.command:
+    cmd: >-
+      {{ run_benchmarks_im_bin }} -size 4096x4096 plasma:red-blue
+      {{ run_benchmarks_work_dir }}/im_4k.png
+    creates: "{{ run_benchmarks_work_dir }}/im_4k.png"
+  changed_when: true
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Generate 4K JPEG test image (Q90)
+  ansible.builtin.command:
+    cmd: >-
+      {{ run_benchmarks_im_bin }} {{ run_benchmarks_work_dir }}/im_4k.png
+      -quality 90 {{ run_benchmarks_work_dir }}/im_4k_q90.jpg
+    creates: "{{ run_benchmarks_work_dir }}/im_4k_q90.jpg"
+  changed_when: true
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Generate WebP test image
+  ansible.builtin.command:
+    cmd: >-
+      {{ run_benchmarks_im_bin }} {{ run_benchmarks_work_dir }}/im_4k.png
+      -quality 90 {{ run_benchmarks_work_dir }}/im_4k.webp
+    creates: "{{ run_benchmarks_work_dir }}/im_4k.webp"
+  changed_when: true
+  failed_when: false
+  when:
+    - run_benchmarks_im_check.rc == 0
+    - run_benchmarks_im_has_webp | default(false) | bool
+
+# ── Resize benchmarks ─────────────────────────────────────────────────────
+
+- name: Run ImageMagick resize benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      IM={{ run_benchmarks_im_bin }}
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json imagemagick_resize.json \
+        --command-name "lanczos-4k-1080p"  "${IM} im_4k.png -filter Lanczos  -resize 1920x1080 null:" \
+        --command-name "mitchell-4k-1080p" "${IM} im_4k.png -filter Mitchell -resize 1920x1080 null:" \
+        --command-name "box-4k-1080p"      "${IM} im_4k.png -filter Box      -resize 1920x1080 null:" \
+        --command-name "lanczos-4k-thumb"  "${IM} im_4k.png -filter Lanczos  -resize 256x256   null:" \
+        --command-name "mitchell-4k-thumb" "${IM} im_4k.png -filter Mitchell -resize 256x256   null:"
+  register: run_benchmarks_imagemagick_resize_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Warn on imagemagick_resize benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_resize benchmark exited
+      rc={{ run_benchmarks_imagemagick_resize_result.rc }}.
+      {{ run_benchmarks_imagemagick_resize_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_imagemagick_resize_result is not skipped
+    - run_benchmarks_imagemagick_resize_result.rc | default(0) != 0
+
+# ── Effects benchmarks ────────────────────────────────────────────────────
+
+- name: Run ImageMagick effects benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      IM={{ run_benchmarks_im_bin }}
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json imagemagick_effects.json \
+        --command-name "gaussian-blur-r20" "${IM} im_4k.png -blur 0x20 null:" \
+        --command-name "unsharp-mask"      "${IM} im_4k.png -unsharp 0x1+1+0.05 null:" \
+        --command-name "grayscale"         "${IM} im_4k.png -colorspace Gray null:" \
+        --command-name "emboss"            "${IM} im_4k.png -emboss 2 null:" \
+        --command-name "rotate-45"         "${IM} im_4k.png -background black -rotate 45 null:"
+  register: run_benchmarks_imagemagick_effects_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Warn on imagemagick_effects benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_effects benchmark exited
+      rc={{ run_benchmarks_imagemagick_effects_result.rc }}.
+      {{ run_benchmarks_imagemagick_effects_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_imagemagick_effects_result is not skipped
+    - run_benchmarks_imagemagick_effects_result.rc | default(0) != 0
+
+# ── Format encode benchmarks ──────────────────────────────────────────────
+
+- name: Run ImageMagick format encode benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      IM={{ run_benchmarks_im_bin }}
+
+      CMDS=""
+      CMDS="$CMDS --command-name jpeg-q90 '${IM} im_4k.png   -quality 90 JPEG:/dev/null'"
+      CMDS="$CMDS --command-name jpeg-q50 '${IM} im_4k.png   -quality 50 JPEG:/dev/null'"
+      CMDS="$CMDS --command-name png-z6   '${IM} im_4k_q90.jpg -define png:compression-level=6 PNG:/dev/null'"
+      CMDS="$CMDS --command-name png-z1   '${IM} im_4k_q90.jpg -define png:compression-level=1 PNG:/dev/null'"
+      ${IM} -list format 2>/dev/null | grep -qi '^ *WEBP.*W' && \
+        CMDS="$CMDS --command-name webp-lossy    '${IM} im_4k.png -quality 90              WEBP:/dev/null'" && \
+        CMDS="$CMDS --command-name webp-lossless '${IM} im_4k.png -define webp:lossless=true WEBP:/dev/null'"
+      ${IM} -list format 2>/dev/null | grep -qi '^ *AVIF.*W' && \
+        CMDS="$CMDS --command-name avif-q60 '${IM} im_4k.png -quality 60 AVIF:/dev/null'"
+
+      eval {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json imagemagick_encode.json \
+        "$CMDS"
+  register: run_benchmarks_imagemagick_encode_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Warn on imagemagick_encode benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_encode benchmark exited
+      rc={{ run_benchmarks_imagemagick_encode_result.rc }}.
+      {{ run_benchmarks_imagemagick_encode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_imagemagick_encode_result is not skipped
+    - run_benchmarks_imagemagick_encode_result.rc | default(0) != 0
+
+# ── Format decode benchmarks ─────────────────────────────────────────────
+
+- name: Run ImageMagick format decode benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      IM={{ run_benchmarks_im_bin }}
+
+      CMDS=""
+      CMDS="$CMDS --command-name jpeg-decode '${IM} im_4k_q90.jpg null:'"
+      CMDS="$CMDS --command-name png-decode  '${IM} im_4k.png     null:'"
+      [ -f im_4k.webp ] && \
+        CMDS="$CMDS --command-name webp-decode '${IM} im_4k.webp null:'"
+
+      eval {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json imagemagick_decode.json \
+        "$CMDS"
+  register: run_benchmarks_imagemagick_decode_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Warn on imagemagick_decode benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_decode benchmark exited
+      rc={{ run_benchmarks_imagemagick_decode_result.rc }}.
+      {{ run_benchmarks_imagemagick_decode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_imagemagick_decode_result is not skipped
+    - run_benchmarks_imagemagick_decode_result.rc | default(0) != 0

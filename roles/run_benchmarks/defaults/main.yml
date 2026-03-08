@@ -54,6 +54,7 @@ run_benchmarks_hypervisor_categories:
   - compiler
   - python
   - ffmpeg
+  - imagemagick
   - opencv
   - startup
   - gentoo_build_times
