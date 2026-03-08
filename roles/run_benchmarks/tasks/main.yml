@@ -39,11 +39,11 @@
     file: run_category.yml
   loop: "{{ run_benchmarks_active_categories }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ run_benchmarks_current_category }}"
     loop_var: run_benchmarks_current_category
   when: >-
     not run_benchmarks_is_windows or
-    item in run_benchmarks_windows_categories
+    run_benchmarks_current_category in run_benchmarks_windows_categories
   tags: [benchmark]
 
 # ── Denormalize ───────────────────────────────────────────────────────────
