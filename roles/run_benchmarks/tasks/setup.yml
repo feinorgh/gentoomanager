@@ -159,6 +159,124 @@
   changed_when: false
   failed_when: false
 
+# ---------------------------------------------------------------------------
+# libc variant and version (glibc vs musl — significant perf difference)
+# ---------------------------------------------------------------------------
+- name: Detect libc variant and version
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      # ldd prints "ldd (GNU libc) 2.38" or "musl libc (x86_64) Version 1.2.4"
+      libc_line=$(ldd --version 2>&1 | head -1 || true)
+      if echo "$libc_line" | grep -qi 'musl'; then
+        variant="musl"
+        version=$(echo "$libc_line" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+      elif echo "$libc_line" | grep -qi 'gnu\|glibc\|eglibc'; then
+        variant="glibc"
+        version=$(echo "$libc_line" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+      else
+        # FreeBSD libc or unknown — try getconf GNU_LIBC_VERSION
+        gc=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
+        if [ -n "$gc" ]; then
+          variant="glibc"
+          version=$(echo "$gc" | awk '{print $2}')
+        else
+          variant="unknown"
+          version=""
+        fi
+      fi
+      printf '%s\n%s\n' "$variant" "$version"
+  register: run_benchmarks_libc_raw
+  changed_when: false
+  failed_when: false
+
+# ---------------------------------------------------------------------------
+# GCC configured-with: hardening defaults and base architecture target
+# ---------------------------------------------------------------------------
+- name: Detect GCC configured-with fields
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      cfg=$(gcc -v 2>&1 | grep '^Configured with:' | sed 's/^Configured with: //' || true)
+      [ -z "$cfg" ] && cfg=$(gcc -v 2>&1 | grep '^COLLECT_GCC' | head -1 || true)
+      # Emit key=value lines for fields we care about
+      for field in --with-arch= --with-tune= --with-cpu=; do
+        val=$(printf '%s' "$cfg" | grep -oE "${field}[^ ]+" | head -1 | sed "s/${field}//")
+        [ -n "$val" ] && echo "${field#--with-}${val}"
+      done
+      # Boolean hardening features — emit present ones as flags
+      echo "$cfg" | grep -q 'enable-default-pie'          && echo 'default-pie=yes'     || echo 'default-pie=no'
+      echo "$cfg" | grep -q 'enable-default-ssp'          && echo 'default-ssp=yes'     || echo 'default-ssp=no'
+      echo "$cfg" | grep -q 'enable-link-mutex'           && echo 'link-mutex=yes'      || true
+      echo "$cfg" | grep -q 'enable-lto'                  && echo 'lto-support=yes'     || echo 'lto-support=no'
+      echo "$cfg" | grep -q 'with-build-config=bootstrap-lto' && echo 'bootstrap-lto=yes' || true
+  register: run_benchmarks_gcc_config_raw
+  changed_when: false
+  failed_when: false
+
+# ---------------------------------------------------------------------------
+# Extended build flags: CXXFLAGS, MAKEFLAGS, RUSTFLAGS (non-Gentoo)
+# ---------------------------------------------------------------------------
+- name: Detect extended distro build flags
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      CXXFLAGS=""
+      MAKEFLAGS=""
+      RUSTFLAGS=""
+      # RPM-based
+      if command -v rpm >/dev/null 2>&1; then
+        CXXFLAGS=$(rpm --eval '%{build_cxxflags}' 2>/dev/null | grep -v '^%' || true)
+        MAKEFLAGS=$(rpm --eval '%{_smp_mflags}' 2>/dev/null | grep -v '^%' || true)
+        RUSTFLAGS=$(rpm --eval '%{build_rustflags}' 2>/dev/null | grep -v '^%' || true)
+      fi
+      # Debian-based
+      if command -v dpkg-buildflags >/dev/null 2>&1; then
+        [ -z "$CXXFLAGS" ] && CXXFLAGS=$(dpkg-buildflags --get CXXFLAGS 2>/dev/null || true)
+        # DEB_BUILD_OPTIONS may contain parallel=N
+        dbo=${DEB_BUILD_OPTIONS:-}
+        par=$(echo "$dbo" | grep -oE 'parallel=[0-9]+' | grep -oE '[0-9]+' || true)
+        [ -n "$par" ] && MAKEFLAGS="-j${par}"
+      fi
+      # Arch-based
+      if [ -f /etc/makepkg.conf ]; then
+        [ -z "$CXXFLAGS" ] && \
+          CXXFLAGS=$(grep '^CXXFLAGS=' /etc/makepkg.conf | head -1 \
+                     | sed 's/^CXXFLAGS=//' | tr -d '"' || true)
+        [ -z "$MAKEFLAGS" ] && \
+          MAKEFLAGS=$(grep '^MAKEFLAGS=' /etc/makepkg.conf | head -1 \
+                      | sed 's/^MAKEFLAGS=//' | tr -d '"' || true)
+        [ -z "$RUSTFLAGS" ] && \
+          RUSTFLAGS=$(grep '^RUSTFLAGS=' /etc/makepkg.conf | head -1 \
+                      | sed 's/^RUSTFLAGS=//' | tr -d '"' || true)
+      fi
+      # Alpine abuild
+      if [ -f /etc/abuild.conf ]; then
+        [ -z "$CXXFLAGS" ] && \
+          CXXFLAGS=$(grep '^CXXFLAGS=' /etc/abuild.conf | head -1 \
+                     | sed 's/^CXXFLAGS=//' | tr -d '"' || true)
+        [ -z "$MAKEFLAGS" ] && \
+          MAKEFLAGS=$(grep '^MAKEFLAGS=' /etc/abuild.conf | head -1 \
+                      | sed 's/^MAKEFLAGS=//' | tr -d '"' || true)
+      fi
+      # FreeBSD /etc/make.conf
+      if [ -f /etc/make.conf ]; then
+        [ -z "$CXXFLAGS" ] && \
+          CXXFLAGS=$(grep '^CXXFLAGS' /etc/make.conf | head -1 \
+                     | sed 's/^CXXFLAGS[+:]*=[[:space:]]*//' | tr -d '"' || true)
+        [ -z "$MAKEFLAGS" ] && \
+          MAKEFLAGS=$(grep '^MAKEFLAGS\|^MAKE_JOBS_NUMBER' /etc/make.conf | head -1 \
+                      | sed 's/^[A-Z_]*=[[:space:]]*//' | tr -d '"' || true)
+      fi
+      printf '%s\n%s\n%s\n' "$CXXFLAGS" "$MAKEFLAGS" "$RUSTFLAGS"
+  register: run_benchmarks_extended_flags_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_distribution | default('') != 'Gentoo'
+
 - name: Detect Linux scheduler type
   ansible.builtin.shell:
     cmd: |
@@ -515,6 +633,30 @@
           run_benchmarks_profile_raw.stdout | default('') | trim
           if (ansible_distribution | default('') == 'Gentoo')
           else ''
+        }}
+      libc_variant: >-
+        {{ (run_benchmarks_libc_raw.stdout_lines | default([]) | first | default('')) | trim }}
+      libc_version: >-
+        {{ (run_benchmarks_libc_raw.stdout_lines | default([]))[1] | default('') | trim }}
+      gcc_config: >-
+        {{ run_benchmarks_gcc_config_raw.stdout_lines | default([]) | map('trim') | reject('equalto', '') | list }}
+      cxxflags: >-
+        {{
+          (make_conf | default({})).get('CXXFLAGS', '')
+          if (ansible_distribution | default('') == 'Gentoo')
+          else (run_benchmarks_extended_flags_raw.stdout_lines | default([]) | first | default('')) | trim
+        }}
+      makeflags: >-
+        {{
+          (make_conf | default({})).get('MAKEOPTS', '')
+          if (ansible_distribution | default('') == 'Gentoo')
+          else ((run_benchmarks_extended_flags_raw.stdout_lines | default([]))[1] | default('')) | trim
+        }}
+      rustflags: >-
+        {{
+          (make_conf | default({})).get('RUSTFLAGS', '')
+          if (ansible_distribution | default('') == 'Gentoo')
+          else ((run_benchmarks_extended_flags_raw.stdout_lines | default([]))[2] | default('')) | trim
         }}
 
 - name: Write host metadata JSON

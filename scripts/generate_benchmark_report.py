@@ -408,6 +408,49 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     else:
         features["smt"] = "—"
 
+    # libc variant (glibc vs musl) — significant for Alpine and musl-based distros
+    libc_variant = metadata.get("libc_variant", "") or ""
+    libc_version = metadata.get("libc_version", "") or ""
+    if libc_variant:
+        features["libc"] = f"{libc_variant} {libc_version}".strip()
+    else:
+        features["libc"] = "—"
+
+    # GCC configured-with: hardening and arch defaults baked into the compiler
+    # gcc_config is a list like ["default-pie=yes", "default-ssp=no", "arch=x86-64"]
+    gcc_config_lines = metadata.get("gcc_config", []) or []
+    gcc_config: dict[str, str] = {}
+    for line in gcc_config_lines:
+        if "=" in str(line):
+            k, v = str(line).split("=", 1)
+            gcc_config[k.strip()] = v.strip()
+    if gcc_config:
+        pie = gcc_config.get("default-pie", "?")
+        ssp = gcc_config.get("default-ssp", "?")
+        arch_val = gcc_config.get("arch", gcc_config.get("with-arch", ""))
+        tune_val = gcc_config.get("tune", gcc_config.get("with-tune", ""))
+        parts = [f"PIE={pie}", f"SSP={ssp}"]
+        if arch_val:
+            parts.append(f"arch={arch_val}")
+        if tune_val:
+            parts.append(f"tune={tune_val}")
+        if gcc_config.get("bootstrap-lto") == "yes":
+            parts.append("bootstrap-lto")
+        features["gcc_config"] = " ".join(parts)
+    else:
+        features["gcc_config"] = "—"
+
+    # CXXFLAGS, MAKEFLAGS / parallel job count, RUSTFLAGS
+    features["cxxflags"] = metadata.get("cxxflags", "") or "—"
+    features["makeflags"] = metadata.get("makeflags", "") or "—"
+    features["rustflags"] = metadata.get("rustflags", "") or "—"
+
+    # Derive parallel job count from makeflags for easy display
+    import re as _re
+    mf = features["makeflags"]
+    m = _re.search(r"-j\s*([0-9]+)", mf)
+    features["parallel_jobs"] = m.group(1) if m else ("auto" if "-j" in mf else "—")
+
     return features
 
 
@@ -1056,6 +1099,10 @@ def _html_host_summary(
         <td>{feat.get('ver_clang', '—')}</td>
         <td>{feat.get('ver_rustc', '—')}</td>
         <td>{feat.get('ver_python', '—')}</td>
+        <td><code>{feat.get('libc', '—')}</code></td>
+        <td>{feat.get('gcc_config', '—')}</td>
+        <td><code>{feat.get('makeflags', '—')}</code></td>
+        <td>{feat.get('parallel_jobs', '—')}</td>
       </tr>""")
 
     return f"""    <h3>Host Configuration Summary</h3>
@@ -1067,6 +1114,7 @@ def _html_host_summary(
           <th>Scheduler</th><th>Filesystem</th><th>Swap</th>
           <th>7z MIPS</th><th>PassMark (ST)</th><th>PassMark (MT)</th>
           <th>GCC</th><th>Clang</th><th>Rust</th><th>Python</th>
+          <th>libc</th><th>GCC defaults</th><th>MAKEFLAGS</th><th>Parallel jobs</th>
         </tr>
       </thead>
       <tbody>
