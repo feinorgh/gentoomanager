@@ -35,12 +35,11 @@
 
 - name: Run benchmark category
   ansible.builtin.include_tasks:
-    file: >-
-      {{ item }}{{ '_win' if (run_benchmarks_is_windows and
-         item in run_benchmarks_windows_categories) else '' }}.yml
+    file: run_category.yml
   loop: "{{ run_benchmarks_active_categories }}"
   loop_control:
     label: "{{ item }}"
+    loop_var: run_benchmarks_current_category
   when: >-
     not run_benchmarks_is_windows or
     item in run_benchmarks_windows_categories

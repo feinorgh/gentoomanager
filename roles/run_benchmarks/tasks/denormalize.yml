@@ -118,3 +118,107 @@
   become: true
   changed_when: true
   when: ansible_system | default('Linux') == 'Linux'
+
+# ── CPU boost ────────────────────────────────────────────────────────────
+- name: Restore Intel turbo boost
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      val="{{ run_benchmarks_orig_intel_turbo.content | b64decode | trim }}"
+      if echo "$val" | grep -qE '^[01]$'; then
+        echo "$val" > /sys/devices/system/cpu/intel_pstate/no_turbo
+      fi
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_intel_turbo is defined and
+    run_benchmarks_orig_intel_turbo.content is defined
+
+- name: Restore AMD/generic CPU boost
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      val="{{ run_benchmarks_orig_amd_boost.content | b64decode | trim }}"
+      if echo "$val" | grep -qE '^[01]$'; then
+        echo "$val" > /sys/devices/system/cpu/cpufreq/boost
+      fi
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_amd_boost is defined and
+    run_benchmarks_orig_amd_boost.content is defined
+
+# ── C-states ─────────────────────────────────────────────────────────────
+- name: Restore CPU C-state latency constraint
+  ansible.builtin.shell:
+    cmd: |
+      for f in /sys/devices/system/cpu/cpu*/power/pm_qos_resume_latency_us; do
+        [ -f "$f" ] && echo n/a > "$f" 2>/dev/null || true
+      done
+  become: true
+  changed_when: true
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+# ── THP ──────────────────────────────────────────────────────────────────
+- name: Restore THP setting (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      val="{{ run_benchmarks_orig_thp.content | b64decode | trim }}"
+      # Extract the active option from e.g. "always [madvise] never"
+      active=$(echo "$val" | grep -oP '\[\K[^\]]+' | head -1)
+      if echo "$active" | grep -qE '^(always|madvise|never)$'; then
+        echo "$active" > /sys/kernel/mm/transparent_hugepage/enabled
+      fi
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_thp is defined and
+    run_benchmarks_orig_thp.content is defined
+
+# ── KSM ──────────────────────────────────────────────────────────────────
+- name: Restore KSM state (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      val="{{ run_benchmarks_orig_ksm.content | b64decode | trim }}"
+      if echo "$val" | grep -qE '^[01]$'; then
+        echo "$val" > /sys/kernel/mm/ksm/run
+      fi
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_ksm is defined and
+    run_benchmarks_orig_ksm.content is defined
+
+# ── Timers & irqbalance ───────────────────────────────────────────────────
+- name: Restart stopped timers (systemd)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+  loop: "{{ run_benchmarks_active_timers.stdout_lines | default([]) }}"
+  become: true
+  failed_when: false
+  when: >-
+    ansible_service_mgr | default('systemd') == 'systemd' and
+    run_benchmarks_active_timers.stdout_lines | default([]) | length > 0
+
+- name: Restart irqbalance (systemd)
+  ansible.builtin.systemd_service:
+    name: irqbalance
+    state: started
+  become: true
+  failed_when: false
+  when: >-
+    ansible_service_mgr | default('systemd') == 'systemd' and
+    run_benchmarks_irqbalance_stopped is defined and
+    not run_benchmarks_irqbalance_stopped.failed

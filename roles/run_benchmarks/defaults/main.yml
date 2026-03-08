@@ -3,7 +3,11 @@
 run_benchmarks_runs: 5
 
 # Number of warmup runs before measurement
-run_benchmarks_warmup: 1
+run_benchmarks_warmup: 3
+
+# CPU core(s) to pin benchmark processes to via taskset (empty string = no pinning)
+# Example: "0-3" pins to cores 0-3; leave empty for no affinity constraint
+run_benchmarks_cpu_affinity: ""
 
 # Categories to run (empty list = all)
 # Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup, gentoo_build_times,

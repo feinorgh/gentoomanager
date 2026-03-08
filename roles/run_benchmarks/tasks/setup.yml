@@ -361,6 +361,26 @@
 - name: Run CPU calibration benchmark
   ansible.builtin.include_tasks: calibrate.yml
 
+# ---------------------------------------------------------------------------
+# CPU affinity support
+# ---------------------------------------------------------------------------
+- name: Check taskset availability
+  ansible.builtin.command:
+    cmd: command -v taskset
+  register: run_benchmarks_taskset_check
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_system | default('Linux') == 'Linux'
+    - run_benchmarks_cpu_affinity | length > 0
+
+- name: Compute effective hyperfine invocation
+  ansible.builtin.set_fact:
+    run_benchmarks_hyperfine_bin: >-
+      {%- if run_benchmarks_cpu_affinity | length > 0 -%}
+      taskset -c {{ run_benchmarks_cpu_affinity }} hyperfine{%- else -%}
+      hyperfine{%- endif -%}
+
 - name: Parse host metadata
   ansible.builtin.set_fact:
     run_benchmarks_metadata:

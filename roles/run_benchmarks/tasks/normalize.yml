@@ -208,7 +208,144 @@
   failed_when: false
   when: ansible_system | default('Linux') == 'Linux'
 
-# ── 8. Wait for system to settle ─────────────────────────────────────────
+# ── 8. Disable CPU turbo boost for stable frequency ─────────────────────
+- name: Save Intel turbo boost state
+  ansible.builtin.slurp:
+    src: /sys/devices/system/cpu/intel_pstate/no_turbo
+  register: run_benchmarks_orig_intel_turbo
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+- name: Disable Intel turbo boost
+  ansible.builtin.shell:
+    cmd: echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_intel_turbo is defined and
+    run_benchmarks_orig_intel_turbo.content is defined
+
+- name: Save AMD/generic CPU boost state
+  ansible.builtin.slurp:
+    src: /sys/devices/system/cpu/cpufreq/boost
+  register: run_benchmarks_orig_amd_boost
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+- name: Disable AMD/generic CPU boost
+  ansible.builtin.shell:
+    cmd: echo 0 > /sys/devices/system/cpu/cpufreq/boost
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_amd_boost is defined and
+    run_benchmarks_orig_amd_boost.content is defined
+
+# ── 9. Disable CPU C-states to prevent idle re-warm jitter ───────────────
+- name: Save CPU C-state max latency setting
+  ansible.builtin.slurp:
+    src: /sys/module/intel_idle/parameters/max_cstate
+  register: run_benchmarks_orig_cstate
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+- name: Disable deep C-states via pm_qos (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      # Request zero latency from PM QoS — keeps CPU in C0 during benchmarks
+      for f in /sys/devices/system/cpu/cpu*/power/pm_qos_resume_latency_us; do
+        [ -f "$f" ] && echo 0 > "$f" 2>/dev/null || true
+      done
+  become: true
+  changed_when: true
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+# ── 10. Set Transparent Huge Pages to madvise to stop khugepaged jitter ──
+- name: Save current THP setting (Linux)
+  ansible.builtin.slurp:
+    src: /sys/kernel/mm/transparent_hugepage/enabled
+  register: run_benchmarks_orig_thp
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+- name: Set THP to madvise (Linux)
+  ansible.builtin.shell:
+    cmd: echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_thp is defined and
+    run_benchmarks_orig_thp.content is defined
+
+# ── 11. Disable KSM to prevent page-scan stalls in VMs ───────────────────
+- name: Save KSM state (Linux)
+  ansible.builtin.slurp:
+    src: /sys/kernel/mm/ksm/run
+  register: run_benchmarks_orig_ksm
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+- name: Disable KSM (Linux)
+  ansible.builtin.shell:
+    cmd: echo 0 > /sys/kernel/mm/ksm/run
+  become: true
+  changed_when: true
+  failed_when: false
+  when: >-
+    ansible_system | default('Linux') == 'Linux' and
+    run_benchmarks_orig_ksm is defined and
+    run_benchmarks_orig_ksm.content is defined
+
+# ── 12. Stop systemd timers that could fire mid-benchmark ─────────────────
+- name: Identify active benchmark-disruptive timers (systemd)
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      for timer in \
+        apt-daily.timer apt-daily-upgrade.timer \
+        dnf-makecache.timer \
+        fstrim.timer \
+        logrotate.timer \
+        man-db.timer \
+        systemd-tmpfiles-clean.timer \
+        updatedb.timer mlocate-updatedb.timer; do
+        systemctl is-active "$timer" 2>/dev/null | grep -q '^active$' && echo "$timer"
+      done
+      true
+  register: run_benchmarks_active_timers
+  changed_when: false
+  become: true
+  failed_when: false
+  when: ansible_service_mgr | default('systemd') == 'systemd'
+
+- name: Stop systemd timers (systemd)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ run_benchmarks_active_timers.stdout_lines | default([]) }}"
+  become: true
+  failed_when: false
+  when: >-
+    ansible_service_mgr | default('systemd') == 'systemd' and
+    run_benchmarks_active_timers.stdout_lines | default([]) | length > 0
+
+- name: Stop irqbalance service (systemd)
+  ansible.builtin.systemd_service:
+    name: irqbalance
+    state: stopped
+  become: true
+  failed_when: false
+  register: run_benchmarks_irqbalance_stopped
+  when: ansible_service_mgr | default('systemd') == 'systemd'
+
+# ── 13. Wait for system to settle ─────────────────────────────────────────
 - name: Wait for load average to drop
   ansible.builtin.shell:
     cmd: |
@@ -220,3 +357,14 @@
         sleep 2
       done
   changed_when: false
+
+# ── 14. Protect benchmark session from OOM killer ─────────────────────────
+- name: Reduce OOM score for current Ansible session (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      # Set OOM score adjustment to -500 for this shell and its children.
+      # Negative values make the OOM killer less likely to target the process.
+      echo -500 > /proc/$$/oom_score_adj 2>/dev/null || true
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'

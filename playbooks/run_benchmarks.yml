@@ -26,6 +26,9 @@
   gather_facts: false
   become: false
   serial: 1
+  environment:
+    LANG: C
+    LC_ALL: C
   vars:
     run_benchmarks_scale_ram: true
     run_benchmarks_work_dir: /tmp/ansible-benchmarks
@@ -286,6 +289,9 @@
   gather_facts: false
   become: true
   serial: 1
+  environment:
+    LANG: C
+    LC_ALL: C
   vars:
     run_benchmarks_work_dir: /tmp/ansible-benchmarks
     run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"

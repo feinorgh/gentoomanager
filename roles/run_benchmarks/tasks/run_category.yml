@@ -1,0 +1,19 @@
+---
+# Per-category wrapper: drop caches then include the category task file.
+# Called from main.yml with loop_var: run_benchmarks_current_category.
+
+- name: Drop filesystem caches before benchmark category (Linux)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      sync && echo 3 > /proc/sys/vm/drop_caches
+  become: true
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('Linux') == 'Linux'
+
+- name: Include benchmark category tasks
+  ansible.builtin.include_tasks:
+    file: >-
+      {{ run_benchmarks_current_category }}{{ '_win' if (run_benchmarks_is_windows and
+         run_benchmarks_current_category in run_benchmarks_windows_categories) else '' }}.yml
