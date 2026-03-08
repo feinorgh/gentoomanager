@@ -1,0 +1,9 @@
+# Bare-metal machines to include in the Ansible inventory.
+# One hostname or IP address per line. Lines starting with # are ignored.
+# These hosts are reached directly (no hypervisor ProxyCommand).
+# Add them here to include them in benchmark runs alongside VMs.
+#
+# Example:
+#   workstation
+#   192.168.1.50
+#   my-server.local

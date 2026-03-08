@@ -312,6 +312,26 @@ def main():
                 except Exception as exc:
                     print(f"Host {host} generated an exception: {exc}", file=sys.stderr)
 
+        # Add bare-metal machines from baremetal.txt (direct SSH, no ProxyCommand)
+        baremetal_file = Path(__file__).parent / "baremetal.txt"
+        try:
+            with open(baremetal_file) as f:
+                baremetal_hosts = [
+                    line.strip() for line in f if line.strip() and not line.strip().startswith("#")
+                ]
+        except FileNotFoundError:
+            baremetal_hosts = []
+
+        if baremetal_hosts:
+            if "baremetal" not in inventory:
+                inventory["baremetal"] = {"hosts": []}
+                inventory["all"]["children"].append("baremetal")
+            for bm_host in baremetal_hosts:
+                if bm_host not in inventory["baremetal"]["hosts"]:
+                    inventory["baremetal"]["hosts"].append(bm_host)
+                if bm_host not in inventory["_meta"]["hostvars"]:
+                    inventory["_meta"]["hostvars"][bm_host] = {"ansible_host": bm_host}
+
         print(json.dumps(inventory, indent=2))
         sys.exit(0)
 

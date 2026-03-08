@@ -45,7 +45,7 @@ Host selection (mutually exclusive):
   --host HOST[,HOST...]       Run on specific host(s) by name
   --hypervisor HV[,HV...]     Run only on VMs belonging to hypervisor(s)
                               (e.g. adele, elise — matches hypervisor_<name>)
-  --group GROUP[,GROUP...]    Run on an inventory group (e.g. gentoo, ubuntu)
+  --group GROUP[,GROUP...]    Run on an inventory group (e.g. gentoo, ubuntu, baremetal)
   --limit PATTERN             Raw ansible --limit expression
 
 Benchmark control:
