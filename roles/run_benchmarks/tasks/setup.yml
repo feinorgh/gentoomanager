@@ -153,6 +153,82 @@
   changed_when: false
   failed_when: false
 
+- name: Detect Linux scheduler type
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      if [ -f /sys/kernel/debug/sched/features ] || [ -f /sys/kernel/debug/sched_features ]; then
+        feat=$(cat /sys/kernel/debug/sched/features /sys/kernel/debug/sched_features 2>/dev/null | head -1)
+        if echo "$feat" | grep -q 'EEVDF'; then
+          echo 'EEVDF'
+        else
+          echo 'CFS'
+        fi
+      elif grep -q 'CONFIG_SCHED_CLASS_EXT=y' /boot/config-$(uname -r) 2>/dev/null; then
+        echo 'sched_ext'
+      elif [ -d /sys/kernel/sched_ext ] || [ -f /sys/kernel/sched_ext/state ]; then
+        echo 'sched_ext'
+      else
+        kver=$(uname -r | grep -oP '^\d+\.\d+')
+        major=$(echo "$kver" | cut -d. -f1)
+        minor=$(echo "$kver" | cut -d. -f2)
+        if [ "$major" -gt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -ge 6 ]; }; then
+          echo 'EEVDF'
+        else
+          echo 'CFS'
+        fi
+      fi
+  register: run_benchmarks_scheduler_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect filesystem of work directory
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      df -T {{ run_benchmarks_work_dir }} 2>/dev/null | awk 'NR==2{print $2}' || echo 'unknown'
+  register: run_benchmarks_filesystem_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect filesystem of work directory (FreeBSD)
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      fstype=$(df -T {{ run_benchmarks_work_dir }} 2>/dev/null | awk 'NR==2{print $2}')
+      [ -z "$fstype" ] && fstype='unknown'
+      echo "$fstype"
+  register: run_benchmarks_filesystem_bsd_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'FreeBSD'
+
+- name: Detect swap status
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      if swapon --show --noheadings 2>/dev/null | grep -q .; then
+        echo 'enabled'
+      elif [ -f /proc/swaps ] && awk 'NR>1{found=1} END{exit !found}' /proc/swaps 2>/dev/null; then
+        echo 'enabled'
+      else
+        echo 'disabled'
+      fi
+  register: run_benchmarks_swap_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Detect swap status (FreeBSD)
+  ansible.builtin.command:
+    cmd: swapinfo -k
+  register: run_benchmarks_swap_bsd_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'FreeBSD'
+
 - name: Read Gentoo make.conf
   ansible.builtin.slurp:
     src: /etc/portage/make.conf
@@ -204,6 +280,30 @@
           else run_benchmarks_distro_ldflags
         }}
       features: "{{ (make_conf | default({})).get('FEATURES', '') }}"
+      scheduler: >-
+        {{
+          (run_benchmarks_scheduler_raw.stdout | default('') | trim)
+          if (ansible_system | default('') == 'Linux')
+          else 'ULE'
+          if (ansible_system | default('') == 'FreeBSD')
+          else 'unknown'
+        }}
+      filesystem: >-
+        {{
+          (run_benchmarks_filesystem_raw.stdout | default('') | trim)
+          if (ansible_system | default('') == 'Linux')
+          else (run_benchmarks_filesystem_bsd_raw.stdout | default('') | trim)
+          if (ansible_system | default('') == 'FreeBSD')
+          else 'unknown'
+        }}
+      swap_enabled: >-
+        {{
+          (run_benchmarks_swap_raw.stdout | default('') | trim == 'enabled')
+          if (ansible_system | default('') == 'Linux')
+          else (run_benchmarks_swap_bsd_raw.stdout_lines | default([]) | length > 1)
+          if (ansible_system | default('') == 'FreeBSD')
+          else false
+        }}
 
 - name: Write host metadata JSON
   ansible.builtin.copy:

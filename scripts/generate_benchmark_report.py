@@ -269,6 +269,17 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     # Kernel version (already in ver_kernel from uname -r)
     features["kernel"] = features.get("ver_kernel", "—")
 
+    # Scheduler, filesystem, swap
+    features["scheduler"] = metadata.get("scheduler", "") or "—"
+    features["filesystem"] = metadata.get("filesystem", "") or "—"
+    swap_val = metadata.get("swap_enabled", "")
+    if isinstance(swap_val, bool):
+        features["swap"] = "yes" if swap_val else "no"
+    elif isinstance(swap_val, str):
+        features["swap"] = "yes" if swap_val.lower() in ("true", "yes", "enabled") else "no" if swap_val else "—"
+    else:
+        features["swap"] = "—"
+
     return features
 
 
@@ -357,7 +368,8 @@ def generate_markdown(
 
     summary_headers = [
         "Host", "OS", "Kernel", "CPU", "Clock", "Cores", "Opt", "March",
-        "March (native)", "LTO", "Hardening", "GCC", "Clang",
+        "March (native)", "LTO", "Hardening", "Scheduler", "Filesystem",
+        "Swap", "GCC", "Clang",
     ]
     summary_rows: list[list[str]] = []
     for hostname in hostnames:
@@ -378,6 +390,9 @@ def generate_markdown(
             feat.get("march_native", "—"),
             feat.get("lto", "—"),
             feat.get("hardening", "—"),
+            feat.get("scheduler", "—"),
+            feat.get("filesystem", "—"),
+            feat.get("swap", "—"),
             feat.get("ver_gcc", "?")[:20],
             feat.get("ver_clang", "?")[:20],
         ])
@@ -838,6 +853,9 @@ def _html_host_summary(
         <td><code>{feat.get('march_native', '—')}</code></td>
         <td>{lto_badge}</td>
         <td>{feat.get('hardening', '—')}</td>
+        <td>{feat.get('scheduler', '—')}</td>
+        <td>{feat.get('filesystem', '—')}</td>
+        <td>{'✓' if feat.get('swap', '—') == 'yes' else '✗' if feat.get('swap', '—') == 'no' else '—'}</td>
         <td>{feat.get('ver_gcc', '—')}</td>
         <td>{feat.get('ver_clang', '—')}</td>
         <td>{feat.get('ver_rustc', '—')}</td>
@@ -849,6 +867,7 @@ def _html_host_summary(
         <tr>
           <th>Host</th><th>Kernel</th><th>CPU</th><th>Clock</th><th>Cores</th><th>Opt</th>
           <th>March</th><th>March (native)</th><th>LTO</th><th>Hardening</th>
+          <th>Scheduler</th><th>Filesystem</th><th>Swap</th>
           <th>GCC</th><th>Clang</th><th>Rust</th><th>Python</th>
         </tr>
       </thead>
