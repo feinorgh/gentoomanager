@@ -112,7 +112,7 @@ provision_benchmarks_packages:
     - archivers/liblz4
     - security/gnupg
     - textproc/diffutils
-    - archivers/p7zip
+    - archivers/7-zip
     - graphics/ImageMagick7
     - databases/sqlite3
 

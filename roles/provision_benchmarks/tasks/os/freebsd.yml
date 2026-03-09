@@ -13,48 +13,48 @@
   become: true
   failed_when: false
 
+- name: Check which ports are already installed (FreeBSD)
+  ansible.builtin.command:
+    cmd: pkg info -qO {{ item }}
+  loop: >-
+    {{ provision_benchmarks_packages['FreeBSD'] +
+       [provision_benchmarks_freebsd_hyperfine_port] +
+       ([provision_benchmarks_freebsd_ffmpeg_port] if provision_benchmarks_install_ffmpeg | bool else []) +
+       (provision_benchmarks_numpy_packages['FreeBSD'] if provision_benchmarks_install_numpy | bool else []) }}
+  register: _freebsd_pkg_check
+  failed_when: false
+  changed_when: false
+  become: true
+
 - name: Install benchmark dependencies from ports (FreeBSD)
   ansible.builtin.command:
     cmd: /usr/bin/make install BATCH=yes
-    chdir: "/usr/ports/{{ item }}"
-  loop: "{{ provision_benchmarks_packages['FreeBSD'] }}"
+    chdir: "/usr/ports/{{ item.item }}"
+  loop: "{{ _freebsd_pkg_check.results }}"
+  when: item.rc != 0
   become: true
   failed_when: false
   changed_when: true
   async: 7200
   poll: 30
 
-- name: Install hyperfine from ports (FreeBSD)
-  ansible.builtin.command:
-    cmd: /usr/bin/make install BATCH=yes
-    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_hyperfine_port }}"
+- name: Create gcc symlink (FreeBSD)
+  ansible.builtin.file:
+    src: /usr/local/bin/gcc13
+    dest: /usr/local/bin/gcc
+    state: link
+    force: true
   become: true
   failed_when: false
-  changed_when: true
-  async: 3600
-  poll: 30
 
-- name: Install ffmpeg from ports (FreeBSD)
-  ansible.builtin.command:
-    cmd: /usr/bin/make install BATCH=yes
-    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_ffmpeg_port }}"
+- name: Create python3 symlink (FreeBSD)
+  ansible.builtin.file:
+    src: /usr/local/bin/python3.11
+    dest: /usr/local/bin/python3
+    state: link
+    force: true
   become: true
-  when: provision_benchmarks_install_ffmpeg | bool
   failed_when: false
-  changed_when: true
-  async: 7200
-  poll: 30
-
-- name: Install numpy from ports (FreeBSD)
-  ansible.builtin.command:
-    cmd: /usr/bin/make install BATCH=yes
-    chdir: "/usr/ports/{{ provision_benchmarks_numpy_packages['FreeBSD'] | first }}"
-  become: true
-  when: provision_benchmarks_install_numpy | bool
-  failed_when: false
-  changed_when: true
-  async: 3600
-  poll: 30
 
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml
