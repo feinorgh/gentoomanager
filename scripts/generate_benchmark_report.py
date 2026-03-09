@@ -278,8 +278,26 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
             if json_file.name == "metadata.json":
                 continue
             category = json_file.stem
-            with open(json_file) as f:
-                data = json.load(f)
+            try:
+                with open(json_file) as f:
+                    data = json.load(f)
+            except json.JSONDecodeError:
+                # Try loading first valid JSON object (handles concatenated writes)
+                try:
+                    with open(json_file) as f:
+                        raw = f.read()
+                    data = json.JSONDecoder().raw_decode(raw)[0]
+                    print(
+                        f"  WARNING: {json_file.name} contains multiple JSON objects; "
+                        "using first",
+                        file=sys.stderr,
+                    )
+                except Exception:
+                    print(
+                        f"  WARNING: skipping malformed JSON: {json_file}",
+                        file=sys.stderr,
+                    )
+                    continue
             if "results" in data:
                 hosts[hostname]["benchmarks"][category] = data["results"]
             elif "packages" in data:
@@ -822,6 +840,24 @@ def generate_html(
 
     html_sections: list[str] = []
 
+    # Build embedded JS data structures for interactive filtering
+    host_meta_for_js: dict[str, dict] = {}
+    for hostname in hostnames:
+        meta = hosts[hostname].get("metadata", {})
+        host_meta_for_js[hostname] = {
+            "os_family": meta.get("os_family", "Unknown"),
+            "os": meta.get("os", "Unknown"),
+        }
+
+    bench_data_for_js: dict[str, dict] = {}
+    for _cat, _benchmarks in table.items():
+        bench_data_for_js[_cat] = {}
+        for _bench, _host_results in _benchmarks.items():
+            bench_data_for_js[_cat][_bench] = {
+                h: {"mean": round(r["mean"], 6), "stddev": round(r["stddev"], 6)}
+                for h, r in _host_results.items()
+            }
+
     # --- Host summary ---
     summary_html = _html_host_summary(hosts, hostnames)
 
@@ -873,7 +909,7 @@ def generate_html(
         html_sections.append(section)
 
         chart_blocks.append(f"""
-    new Chart(document.getElementById('{canvas_id}'), {{
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
       type: 'bar',
       data: {{
         labels: {labels_json},
@@ -899,7 +935,8 @@ def generate_html(
           }}
         }}
       }}
-    }});""")
+    }});
+    CHART_CATS['{canvas_id}'] = '{category}';""")
 
     # --- Navigation ---
     nav_items = []
@@ -1001,6 +1038,11 @@ def generate_html(
 
     charts_js = "\n".join(chart_blocks)
 
+    # Serialize embedded data for JS filtering
+    host_meta_js = json.dumps(host_meta_for_js)
+    bench_data_js = json.dumps(bench_data_for_js)
+    host_order_js = json.dumps(hostnames)
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1023,7 +1065,9 @@ def generate_html(
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
-      padding: 2rem;
+      display: flex;
+      align-items: flex-start;
+      min-height: 100vh;
     }}
     h1 {{
       text-align: center;
@@ -1087,13 +1131,114 @@ def generate_html(
     .fastest {{ color: #00e676; font-weight: bold; }}
     .host-summary {{ overflow-x: auto; }}
     .host-summary table {{ font-size: 0.8rem; }}
-    @media (max-width: 768px) {{
-      body {{ padding: 0.5rem; }}
+    /* Filter sidebar */
+    #filter-sidebar {{
+      width: 220px;
+      min-width: 180px;
+      flex-shrink: 0;
+      background: var(--surface);
+      padding: 1.2rem;
+      height: 100vh;
+      overflow-y: auto;
+      position: sticky;
+      top: 0;
+      border-right: 1px solid var(--border);
+    }}
+    #filter-sidebar h3 {{
+      color: var(--highlight);
+      font-size: 1rem;
+      margin-bottom: 0.8rem;
+    }}
+    #main-content {{
+      flex: 1;
+      padding: 2rem;
+      overflow-x: hidden;
+      min-width: 0;
+    }}
+    .filter-section-label {{
+      color: #4dc9f6;
+      font-size: 0.72rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 1rem 0 0.35rem;
+      display: block;
+    }}
+    .filter-group-header {{
+      color: #4dc9f6;
+      font-size: 0.78rem;
+      font-weight: bold;
+      margin: 0.7rem 0 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }}
+    .filter-host-label {{
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      padding: 0.12rem 0;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .filter-host-label:hover {{ color: #fff; }}
+    .filter-btn-row {{ display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-wrap: wrap; }}
+    .btn-sm {{
+      background: var(--accent);
+      color: #e0e0e0;
+      border: none;
+      padding: 0.22rem 0.55rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }}
+    .btn-sm:hover {{ background: #1a4a80; }}
+    .filter-divider {{ border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }}
+    .filter-toggle-label {{
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.82rem;
+      cursor: pointer;
+      margin-bottom: 0.4rem;
+    }}
+    @media (max-width: 900px) {{
+      body {{ flex-direction: column; }}
+      #filter-sidebar {{
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }}
       .chart-container {{ height: 300px; }}
     }}
   </style>
 </head>
 <body>
+  <!-- Filter sidebar -->
+  <aside id="filter-sidebar">
+    <h3>🔍 Filters</h3>
+    <div class="filter-btn-row">
+      <button class="btn-sm" onclick="selectAllHosts()">All</button>
+      <button class="btn-sm" onclick="clearAllHosts()">None</button>
+    </div>
+    <div id="host-filter-groups"><!-- filled by buildFilterPanel() --></div>
+    <hr class="filter-divider">
+    <label class="filter-toggle-label">
+      <input type="checkbox" id="normalize-toggle" onchange="applyFilters()">
+      Normalize (÷ fastest)
+    </label>
+    <label class="filter-toggle-label">
+      <input type="checkbox" id="horiz-toggle" onchange="applyFilters()">
+      Horizontal bars
+    </label>
+  </aside>
+
+  <!-- Main content -->
+  <div id="main-content">
   <h1>🖥️ Gentoo VM Benchmark Report</h1>
   <p class="timestamp">Generated: {timestamp}</p>
 
@@ -1112,7 +1257,124 @@ def generate_html(
 
   {build_times_html}
 
+  </div><!-- #main-content -->
+
   <script>
+    // All benchmark data embedded for client-side filtering
+    const HOST_META = {host_meta_js};
+    const BENCH_DATA = {bench_data_js};
+    const HOST_ORDER = {host_order_js};
+
+    // Chart registry (canvas_id → Chart instance, populated below)
+    const CHARTS = {{}};
+    const CHART_CATS = {{}};
+
+    // Build sidebar filter panel dynamically from HOST_META
+    function buildFilterPanel() {{
+      const byOS = {{}};
+      for (const [host, meta] of Object.entries(HOST_META)) {{
+        const os = meta.os_family || 'Unknown';
+        if (!byOS[os]) byOS[os] = [];
+        byOS[os].push(host);
+      }}
+      const container = document.getElementById('host-filter-groups');
+      for (const os of Object.keys(byOS).sort()) {{
+        const div = document.createElement('div');
+        let inner = `<div class="filter-group-header">${{os}}</div>`;
+        for (const host of byOS[os].sort()) {{
+          inner += `<label class="filter-host-label">
+            <input type="checkbox" data-host="${{host}}" checked onchange="applyFilters()">
+            ${{host}}
+          </label>`;
+        }}
+        div.innerHTML = inner;
+        container.appendChild(div);
+      }}
+    }}
+
+    function getSelectedHosts() {{
+      const sel = new Set();
+      document.querySelectorAll('#host-filter-groups input[data-host]:checked')
+        .forEach(cb => sel.add(cb.dataset.host));
+      return sel;
+    }}
+
+    function selectAllHosts() {{
+      document.querySelectorAll('#host-filter-groups input[data-host]')
+        .forEach(cb => {{ cb.checked = true; }});
+      applyFilters();
+    }}
+
+    function clearAllHosts() {{
+      document.querySelectorAll('#host-filter-groups input[data-host]')
+        .forEach(cb => {{ cb.checked = false; }});
+      applyFilters();
+    }}
+
+    // Re-render all charts based on current filter state
+    function applyFilters() {{
+      const selected = getSelectedHosts();
+      const normalize = document.getElementById('normalize-toggle').checked;
+      const horiz = document.getElementById('horiz-toggle').checked;
+
+      for (const [canvasId, chart] of Object.entries(CHARTS)) {{
+        const category = CHART_CATS[canvasId];
+        const catData = BENCH_DATA[category] || {{}};
+        const benchNames = chart.data.labels;
+
+        chart.data.datasets.forEach((dataset, idx) => {{
+          const hostname = HOST_ORDER[idx];
+          chart.setDatasetVisibility(idx, selected.has(hostname));
+
+          // Recompute data points from embedded BENCH_DATA
+          dataset.data = benchNames.map(bench => {{
+            const val = catData[bench]?.[hostname]?.mean;
+            if (val == null) return null;
+            if (normalize) {{
+              const allVals = Object.entries(catData[bench] || {{}})
+                .filter(([h]) => selected.has(h))
+                .map(([, r]) => r.mean)
+                .filter(v => v > 0);
+              const minVal = allVals.length ? Math.min(...allVals) : 1;
+              return minVal > 0 ? parseFloat((val / minVal).toFixed(4)) : null;
+            }}
+            return val;
+          }});
+
+          // Update tooltip suffix
+          dataset.tooltip_suffix = normalize ? 'x' : 's';
+        }});
+
+        // Toggle orientation
+        chart.options.indexAxis = horiz ? 'y' : 'x';
+
+        // Update axis labels
+        const valueLabel = normalize
+          ? 'Relative to fastest (1.0 = fastest)'
+          : 'Time (seconds)';
+        const catTitle = chart.options.plugins.title.text
+          .replace(/ \\(.*\\)$/, '')
+          + (normalize ? ' (normalized, lower is better)' : ' (seconds, lower is better)');
+        chart.options.plugins.title.text = catTitle;
+        if (horiz) {{
+          chart.options.scales.x = chart.options.scales.x || {{}};
+          chart.options.scales.x.title = {{ display: true, text: valueLabel }};
+          chart.options.scales.y = chart.options.scales.y || {{}};
+          delete chart.options.scales.y.title;
+        }} else {{
+          chart.options.scales.y = chart.options.scales.y || {{}};
+          chart.options.scales.y.title = {{ display: true, text: valueLabel }};
+          chart.options.scales.x = chart.options.scales.x || {{}};
+          delete chart.options.scales.x.title;
+        }}
+
+        chart.update();
+      }}
+    }}
+
+    document.addEventListener('DOMContentLoaded', buildFilterPanel);
+
+    // Chart.js defaults
     Chart.defaults.color = '#e0e0e0';
     Chart.defaults.borderColor = '#333';
     {charts_js}
