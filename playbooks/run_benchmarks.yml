@@ -74,6 +74,12 @@
              if (ansible_os_family | default('') == 'Windows')
              else run_benchmarks_work_dir }}
 
+    # ── Sanity check: tools, sudo, disk space ───────────────────────────
+    - name: Run pre-flight sanity check
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/sanity_check.yml"
+      when: ansible_os_family | default('') != 'Windows'
+
     # ── Hypervisor health check ─────────────────────────────────────────
     - name: Collect hypervisor status
       ansible.builtin.shell:
@@ -327,6 +333,11 @@
     - name: Set effective work directory
       ansible.builtin.set_fact:
         run_benchmarks_effective_work_dir: "{{ run_benchmarks_work_dir }}"
+
+    # ── Sanity check: tools, sudo, disk space ───────────────────────────
+    - name: Run pre-flight sanity check
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/sanity_check.yml"
 
     - name: Install hyperfine and p7zip on hypervisor
       ansible.builtin.package:

@@ -1,0 +1,114 @@
+---
+# Pre-flight sanity check: verify tools, sudo access, and disk space.
+# Always produces warnings rather than failures — the benchmark play continues.
+
+# ── 1. Probe for required and optional tools ──────────────────────────────
+- name: Probe benchmark tool availability
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      missing_req=""
+      missing_opt=""
+      for tool in hyperfine gcc python3 openssl; do
+        command -v "$tool" >/dev/null 2>&1 || missing_req="$missing_req $tool"
+      done
+      for tool in clang rustc go ffmpeg; do
+        command -v "$tool" >/dev/null 2>&1 || missing_opt="$missing_opt $tool"
+      done
+      if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
+        :
+      else
+        missing_opt="$missing_opt imagemagick"
+      fi
+      if command -v 7z >/dev/null 2>&1 || command -v 7zz >/dev/null 2>&1; then
+        :
+      else
+        missing_opt="$missing_opt 7zip"
+      fi
+      echo "missing_req=${missing_req# }"
+      echo "missing_opt=${missing_opt# }"
+    executable: /bin/sh
+  register: run_benchmarks_sanity_tools
+  changed_when: false
+  failed_when: false
+
+- name: Parse tool probe output
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_missing_req: >-
+      {{ (run_benchmarks_sanity_tools.stdout_lines
+          | select('match', '^missing_req=')
+          | first
+          | default('missing_req=')
+          | regex_replace('^missing_req=', '')
+         ).split() | select | list }}
+    run_benchmarks_sanity_missing_opt: >-
+      {{ (run_benchmarks_sanity_tools.stdout_lines
+          | select('match', '^missing_opt=')
+          | first
+          | default('missing_opt=')
+          | regex_replace('^missing_opt=', '')
+         ).split() | select | list }}
+
+# ── 2. Probe sudo / become access ────────────────────────────────────────
+- name: Probe passwordless sudo access
+  ansible.builtin.command:
+    cmd: sudo -n true
+  register: run_benchmarks_sanity_sudo
+  changed_when: false
+  failed_when: false
+
+# ── 3. Probe available disk space in /tmp ────────────────────────────────
+- name: Probe free disk space available for benchmarks
+  ansible.builtin.command:
+    cmd: df -Pk /tmp
+  register: run_benchmarks_sanity_disk
+  changed_when: false
+  failed_when: false
+
+- name: Evaluate disk space (need ≥ 512 MB free in /tmp)
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_disk_ok: >-
+      {{ (run_benchmarks_sanity_disk.stdout_lines[-1].split()[3] | default('0') | int) >= 524288 }}
+    run_benchmarks_sanity_disk_free_mb: >-
+      {{ ((run_benchmarks_sanity_disk.stdout_lines[-1].split()[3] | default('0') | int) / 1024) | round(0) | int }}
+
+# ── 4. Emit warning when issues are detected ─────────────────────────────
+- name: Warn — benchmark sanity check issues detected
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════════════════╗
+      ║  BENCHMARK PRE-FLIGHT WARNING: {{ inventory_hostname }}
+      ╚══════════════════════════════════════════════════════════════════════╝
+      {% if run_benchmarks_sanity_missing_req | length > 0 %}
+      ✗ REQUIRED tools missing — affected benchmark categories will be skipped:
+          {{ run_benchmarks_sanity_missing_req | join(', ') }}
+      {% endif %}
+      {% if run_benchmarks_sanity_missing_opt | length > 0 %}
+      ⚠ Optional tools missing — associated categories will be skipped:
+          {{ run_benchmarks_sanity_missing_opt | join(', ') }}
+      {% endif %}
+      {% if run_benchmarks_sanity_sudo.rc | default(1) != 0 %}
+      ✗ Passwordless sudo NOT available — CPU governor pinning and swap
+          disable/restore steps will be skipped or may fail.
+          Ensure the Ansible user is in the sudoers file with NOPASSWD.
+      {% endif %}
+      {% if not run_benchmarks_sanity_disk_ok %}
+      ✗ Low disk space in /tmp: {{ run_benchmarks_sanity_disk_free_mb }} MB free
+          (minimum 512 MB required for test data generation).
+      {% endif %}
+      {% if run_benchmarks_sanity_missing_req | length > 0 or run_benchmarks_sanity_missing_opt | length > 0 %}
+      ─────────────────────────────────────────────────────────────────────
+      To install missing tools, run the provisioning playbook:
+
+          ansible-playbook playbooks/provision_benchmarks.yml \
+            -i inventory_generator.py \
+            --limit {{ inventory_hostname }}
+
+      ─────────────────────────────────────────────────────────────────────
+      {% endif %}
+      The benchmark run will proceed regardless of the above warnings.
+  when: >-
+    run_benchmarks_sanity_missing_req | length > 0 or
+    run_benchmarks_sanity_missing_opt | length > 0 or
+    run_benchmarks_sanity_sudo.rc | default(1) != 0 or
+    not run_benchmarks_sanity_disk_ok
