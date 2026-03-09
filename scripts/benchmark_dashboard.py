@@ -10,6 +10,8 @@ Usage::
     pip install dash pandas
     python3 scripts/benchmark_dashboard.py benchmarks/
     python3 scripts/benchmark_dashboard.py benchmarks/ --port 8051
+    python3 scripts/benchmark_dashboard.py benchmarks/ --host 0.0.0.0
+    python3 scripts/benchmark_dashboard.py benchmarks/ --host 192.168.1.10 --port 9090
     python3 scripts/benchmark_dashboard.py benchmarks/ --anonymize
 
 Then open http://localhost:8050 in a browser.  Press Ctrl+C to stop.
@@ -639,6 +641,11 @@ def main() -> None:
     )
     parser.add_argument("--port", type=int, default=8050, help="Port to listen on")
     parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Interface address to bind (default: 127.0.0.1). Use 0.0.0.0 to listen on all interfaces.",
+    )
+    parser.add_argument(
         "--anonymize",
         action="store_true",
         help="Replace hostnames with Greek mythology names",
@@ -663,9 +670,11 @@ def main() -> None:
 
     app = make_app(df, host_os)
 
-    print(f"\nDashboard running at http://127.0.0.1:{args.port}/")
+    print(f"\nDashboard running at http://{args.host}:{args.port}/")
+    if args.host == "0.0.0.0":
+        print(f"  Listening on all interfaces — reachable at http://<your-ip>:{args.port}/")
     print("Press Ctrl+C to stop.\n")
-    app.run(debug=False, host="127.0.0.1", port=args.port)
+    app.run(debug=False, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
