@@ -1,0 +1,38 @@
+---
+# SUSE family – openSUSE Tumbleweed, Leap.
+
+- name: Install benchmark dependencies (SUSE)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages['Suse'] }}"
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install hyperfine (SUSE)
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install ffmpeg (SUSE)
+  ansible.builtin.package:
+    name: ffmpeg
+    state: present
+  become: true
+  when: provision_benchmarks_install_ffmpeg | bool
+  failed_when: false
+
+- name: Install numpy (SUSE)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages['Suse'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Install hyperfine binary (fallback)
+  ansible.builtin.include_tasks: hyperfine_fallback.yml
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

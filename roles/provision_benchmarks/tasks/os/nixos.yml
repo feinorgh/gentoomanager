@@ -1,0 +1,32 @@
+---
+# NixOS – install via nix-env.
+
+- name: Install benchmark dependencies (NixOS)
+  ansible.builtin.command:
+    cmd: "nix-env -iA nixos.{{ item }}"
+  loop:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rustc
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+    - p7zip
+    - imagemagick
+    - ffmpeg
+    - sqlite
+    - python3Packages.numpy
+  changed_when: true
+  failed_when: false
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

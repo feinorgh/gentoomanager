@@ -1,0 +1,61 @@
+---
+# FreeBSD – install from ports tree.
+
+- name: Ensure ports tree is available
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      if [ ! -d /usr/ports/Mk ]; then
+        if command -v portsnap >/dev/null 2>&1; then
+          portsnap fetch extract
+        elif command -v git >/dev/null 2>&1; then
+          git clone --depth 1 https://git.FreeBSD.org/ports.git /usr/ports
+        else
+          echo "No method to fetch ports tree" >&2
+          exit 1
+        fi
+      fi
+    creates: /usr/ports/Mk
+  become: true
+
+- name: Install benchmark dependencies from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ item }}"
+    target: install
+    params:
+      BATCH: "yes"
+  become: true
+  loop: "{{ provision_benchmarks_packages['FreeBSD'] }}"
+  failed_when: false
+
+- name: Install hyperfine from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_hyperfine_port }}"
+    target: install
+    params:
+      BATCH: "yes"
+  become: true
+  failed_when: false
+
+- name: Install ffmpeg from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_ffmpeg_port }}"
+    target: install
+    params:
+      BATCH: "yes"
+  become: true
+  when: provision_benchmarks_install_ffmpeg | bool
+  failed_when: false
+
+- name: Install numpy from ports (FreeBSD)
+  community.general.make:
+    chdir: "/usr/ports/{{ provision_benchmarks_numpy_packages['FreeBSD'] | first }}"
+    target: install
+    params:
+      BATCH: "yes"
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

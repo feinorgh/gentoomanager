@@ -1,0 +1,35 @@
+---
+# Arch Linux family – Arch, Manjaro, CachyOS.
+
+- name: Install benchmark dependencies (Arch Linux)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages['Archlinux'] }}"
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install hyperfine (Arch Linux)
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install ffmpeg (Arch Linux)
+  ansible.builtin.package:
+    name: ffmpeg
+    state: present
+  become: true
+  when: provision_benchmarks_install_ffmpeg | bool
+  failed_when: false
+
+- name: Install numpy (Arch Linux)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages['Archlinux'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

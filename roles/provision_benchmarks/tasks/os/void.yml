@@ -1,0 +1,43 @@
+---
+# Void Linux – install via xbps-install.
+
+- name: Update xbps package index (Void Linux)
+  ansible.builtin.command:
+    cmd: xbps-install -Sy
+  become: true
+  changed_when: true
+  failed_when: false
+
+- name: Install benchmark dependencies (Void Linux)
+  ansible.builtin.command:
+    cmd: "xbps-install -y {{ item }}"
+  become: true
+  loop:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg2
+    - diffutils
+    - p7zip
+    - ImageMagick
+    - ffmpeg
+    - sqlite
+    - python3-numpy
+  changed_when: true
+  failed_when: false
+
+- name: Install hyperfine binary (fallback)
+  ansible.builtin.include_tasks: hyperfine_fallback.yml
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

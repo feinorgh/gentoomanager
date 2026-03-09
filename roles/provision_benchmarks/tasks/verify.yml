@@ -1,0 +1,29 @@
+---
+# Verify that essential and optional benchmark tools are present.
+# Included at the end of every per-OS task file.
+
+- name: Verify essential tools are available
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      echo "=== Tool availability ==="
+      for tool in hyperfine gcc python3 openssl git; do
+        if command -v "$tool" >/dev/null 2>&1; then
+          printf "  %-15s OK\n" "$tool"
+        else
+          printf "  %-15s MISSING\n" "$tool"
+        fi
+      done
+      for tool in clang rustc go ffmpeg imagemagick; do
+        if command -v "$tool" >/dev/null 2>&1; then
+          printf "  %-15s OK\n" "$tool"
+        else
+          printf "  %-15s OPTIONAL (missing)\n" "$tool"
+        fi
+      done
+  register: provision_benchmarks_verify
+  changed_when: false
+
+- name: Show tool verification results
+  ansible.builtin.debug:
+    msg: "{{ provision_benchmarks_verify.stdout }}"

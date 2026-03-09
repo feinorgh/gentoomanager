@@ -1,0 +1,110 @@
+---
+# Red Hat family – Fedora, RHEL, CentOS, Oracle Linux.
+
+- name: Install EPEL release (RHEL/CentOS/OL)
+  ansible.builtin.package:
+    name: epel-release
+    state: present
+  become: true
+  when: ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+
+- name: Enable CRB/PowerTools for RHEL 8+ dependencies
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      if command -v dnf >/dev/null 2>&1; then
+        dnf config-manager --set-enabled crb 2>/dev/null || \
+        dnf config-manager --set-enabled powertools 2>/dev/null || \
+        dnf config-manager --set-enabled PowerTools 2>/dev/null || true
+      fi
+  become: true
+  changed_when: false
+  when: >-
+    ansible_distribution | default('') != 'Fedora' and
+    (ansible_distribution_major_version | default('0') | int) >= 8
+
+- name: Install benchmark dependencies (Red Hat)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages['RedHat'] }}"
+    state: present
+  become: true
+  failed_when: false
+  register: provision_benchmarks_pkg_result
+
+- name: Install packages individually on partial failure (Red Hat)
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ provision_benchmarks_packages['RedHat'] }}"
+  when: provision_benchmarks_pkg_result is failed
+  failed_when: false
+
+- name: Install EPEL packages – hyperfine (RHEL/CentOS/OL)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_epel_packages }}"
+    state: present
+  become: true
+  when: ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+
+- name: Install hyperfine via dnf (Fedora)
+  ansible.builtin.package:
+    name: hyperfine
+    state: present
+  become: true
+  when: ansible_distribution | default('') == 'Fedora'
+  failed_when: false
+
+- name: Install ffmpeg on RHEL via RPM Fusion
+  when: >-
+    provision_benchmarks_install_ffmpeg | bool and
+    ansible_distribution | default('') != 'Fedora'
+  become: true
+  block:
+    - name: Import RPM Fusion Free GPG key
+      ansible.builtin.rpm_key:
+        key: >-
+          https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-fedora-{{
+          ansible_distribution_major_version }}
+        state: present
+      failed_when: false
+
+    - name: Install RPM Fusion Free repository
+      ansible.builtin.package:
+        name: >-
+          https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{
+          ansible_distribution_major_version }}.noarch.rpm
+        state: present
+      failed_when: false
+
+    - name: Install ffmpeg from RPM Fusion
+      ansible.builtin.package:
+        name: ffmpeg
+        state: present
+      failed_when: false
+
+- name: Install ffmpeg (Fedora)
+  ansible.builtin.package:
+    name: ffmpeg
+    state: present
+  become: true
+  when: >-
+    provision_benchmarks_install_ffmpeg | bool and
+    ansible_distribution | default('') == 'Fedora'
+  failed_when: false
+
+- name: Install numpy (Red Hat)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages['RedHat'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Install hyperfine binary (fallback)
+  ansible.builtin.include_tasks: hyperfine_fallback.yml
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

@@ -1,24 +1,142 @@
 ---
 # Provision VMs with all software required for the benchmark suite.
 #
+# Strategy: play 1 gathers facts from all hosts in parallel and buckets them
+# into per-OS-family dynamic groups; subsequent plays provision each OS family
+# fully in parallel (no serial bottleneck).
+#
 # Usage:
 #   ansible-playbook playbooks/provision_benchmarks.yml
-#
-#   # Only VMs on one hypervisor:
-#   ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_hv1
-#
-#   # Including Windows hosts:
-#   ansible-playbook playbooks/provision_benchmarks.yml \
-#     -e provision_benchmarks_include_windows=true
-#
-#   # With sudo password:
+#   ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_elise
 #   ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
 
-- name: Provision benchmark VMs
-  hosts: "all:!mswindows:!win:!win11"
+# ── Play 1: gather facts in parallel, create OS-family dynamic groups ────
+- name: Gather facts and group hosts by OS family
+  hosts: "all:!win:!win11:!win10"
   gather_facts: true
   ignore_unreachable: true
   any_errors_fatal: false
+  tasks:
+    - name: Group by OS family (standard families)
+      ansible.builtin.group_by:
+        key: "provision_os_{{ ansible_os_family | lower }}"
+      when: >-
+        ansible_os_family is defined and
+        ansible_os_family in ['Gentoo', 'RedHat', 'Debian', 'Archlinux',
+                              'Suse', 'FreeBSD', 'Void', 'NixOS', 'Solus']
 
-  roles:
-    - role: provision_benchmarks
+    - name: Group by distribution (non-standard OS families)
+      ansible.builtin.group_by:
+        key: "provision_os_{{ ansible_distribution | lower }}"
+      when: >-
+        ansible_os_family is defined and
+        ansible_os_family not in ['Gentoo', 'RedHat', 'Debian', 'Archlinux',
+                                  'Suse', 'FreeBSD', 'Void', 'NixOS', 'Solus']
+
+# ── Play 2: Gentoo (16 hosts in parallel) ───────────────────────────────
+- name: Provision Gentoo hosts
+  hosts: provision_os_gentoo
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/gentoo.yml
+
+# ── Play 3: Red Hat family – Fedora, RHEL, CentOS, Oracle Linux ─────────
+- name: Provision Red Hat family hosts
+  hosts: provision_os_redhat
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/redhat.yml
+
+# ── Play 4: Debian family – Ubuntu, Debian, Mint, elementary OS ─────────
+- name: Provision Debian family hosts
+  hosts: provision_os_debian
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/debian.yml
+
+# ── Play 5: Arch Linux family – Arch, Manjaro, CachyOS ──────────────────
+- name: Provision Arch Linux family hosts
+  hosts: provision_os_archlinux
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/archlinux.yml
+
+# ── Play 6: SUSE family – openSUSE Tumbleweed, Leap ─────────────────────
+- name: Provision SUSE family hosts
+  hosts: provision_os_suse
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/suse.yml
+
+# ── Play 7: FreeBSD ──────────────────────────────────────────────────────
+- name: Provision FreeBSD hosts
+  hosts: provision_os_freebsd
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/freebsd.yml
+
+# ── Play 8: Void Linux ───────────────────────────────────────────────────
+- name: Provision Void Linux hosts
+  hosts: provision_os_void
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/void.yml
+
+# ── Play 9: NixOS ────────────────────────────────────────────────────────
+- name: Provision NixOS hosts
+  hosts: provision_os_nixos
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/nixos.yml
+
+# ── Play 10: Solus ───────────────────────────────────────────────────────
+- name: Provision Solus hosts
+  hosts: provision_os_solus
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/solus.yml

@@ -1,0 +1,47 @@
+---
+# Debian family – Ubuntu, Debian, Linux Mint, elementary OS.
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Install benchmark dependencies (Debian)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages['Debian'] }}"
+    state: present
+  become: true
+  failed_when: false
+  register: provision_benchmarks_pkg_result
+
+- name: Install packages individually on partial failure (Debian)
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ provision_benchmarks_packages['Debian'] }}"
+  when: provision_benchmarks_pkg_result is failed
+  failed_when: false
+
+- name: Install ffmpeg (Debian)
+  ansible.builtin.package:
+    name: ffmpeg
+    state: present
+  become: true
+  when: provision_benchmarks_install_ffmpeg | bool
+  failed_when: false
+
+- name: Install numpy (Debian)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages['Debian'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Install hyperfine binary (fallback)
+  ansible.builtin.include_tasks: hyperfine_fallback.yml
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

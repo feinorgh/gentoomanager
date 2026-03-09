@@ -1,0 +1,32 @@
+---
+# Download and install the hyperfine binary from GitHub releases.
+# Included by per-OS task files after native package-manager attempts.
+
+- name: Re-check hyperfine after package install
+  ansible.builtin.command:
+    cmd: hyperfine --version
+  register: provision_benchmarks_hf_recheck
+  changed_when: false
+  failed_when: false
+
+- name: Download hyperfine binary (fallback)
+  when: provision_benchmarks_hf_recheck.rc != 0
+  become: true
+  block:
+    - name: Download hyperfine release tarball
+      ansible.builtin.get_url:
+        url: "{{ provision_benchmarks_hyperfine_url }}"
+        dest: /tmp/hyperfine.tar.gz
+        mode: "0644"
+        checksum: "sha256:{{ provision_benchmarks_hyperfine_sha256 }}"
+
+    - name: Extract and install hyperfine binary
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          cd /tmp
+          tar xzf hyperfine.tar.gz
+          find /tmp -name hyperfine -type f -executable \
+            -exec install -m 0755 {} /usr/local/bin/hyperfine \;
+          rm -rf /tmp/hyperfine* || true
+      changed_when: true

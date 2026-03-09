@@ -1,0 +1,20 @@
+---
+# Gentoo – emerge benchmark dependencies via portage.
+
+- name: Install benchmark dependencies (Gentoo)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages['Gentoo'] }}"
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install numpy (Gentoo)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages['Gentoo'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

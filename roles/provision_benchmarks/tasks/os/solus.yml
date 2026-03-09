@@ -1,0 +1,43 @@
+---
+# Solus – install via eopkg.
+
+- name: Update eopkg package index (Solus)
+  ansible.builtin.command:
+    cmd: eopkg update-repo
+  become: true
+  changed_when: true
+  failed_when: false
+
+- name: Install benchmark dependencies (Solus)
+  ansible.builtin.command:
+    cmd: "eopkg install -y {{ item }}"
+  become: true
+  loop:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - golang
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+    - 7zip
+    - ImageMagick
+    - ffmpeg
+    - sqlite3
+    - python3-numpy
+  changed_when: true
+  failed_when: false
+
+- name: Install hyperfine binary (fallback)
+  ansible.builtin.include_tasks: hyperfine_fallback.yml
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml
