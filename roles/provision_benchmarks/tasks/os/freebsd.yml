@@ -1,72 +1,60 @@
 ---
-# FreeBSD – install from binary packages (pkg).
+# FreeBSD – install from ports tree using BSD make.
+# community.general.make uses GNU make which is incompatible with BSD Makefiles;
+# use ansible.builtin.command with /usr/bin/make (BSD make) instead.
 
-- name: Update pkg repository catalogue (FreeBSD)
-  community.general.pkgng:
-    name: "*"
-    state: latest
-    autoremove: false
+- name: Ensure ports tree is available and up to date
+  ansible.builtin.git: # noqa: latest[git]
+    repo: https://git.FreeBSD.org/ports.git
+    dest: /usr/ports
+    depth: 1
+    update: true
+    force: true
   become: true
   failed_when: false
 
-- name: Install benchmark dependencies (FreeBSD)
-  community.general.pkgng:
-    name: "{{ provision_benchmarks_packages['FreeBSD'] }}"
-    state: present
+- name: Install benchmark dependencies from ports (FreeBSD)
+  ansible.builtin.command:
+    cmd: /usr/bin/make install BATCH=yes
+    chdir: "/usr/ports/{{ item }}"
+  loop: "{{ provision_benchmarks_packages['FreeBSD'] }}"
   become: true
   failed_when: false
+  changed_when: true
+  async: 7200
+  poll: 30
 
-- name: Install hyperfine (FreeBSD)
-  community.general.pkgng:
-    name: hyperfine
-    state: present
+- name: Install hyperfine from ports (FreeBSD)
+  ansible.builtin.command:
+    cmd: /usr/bin/make install BATCH=yes
+    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_hyperfine_port }}"
   become: true
   failed_when: false
+  changed_when: true
+  async: 3600
+  poll: 30
 
-- name: Install ffmpeg (FreeBSD)
-  community.general.pkgng:
-    name: ffmpeg
-    state: present
+- name: Install ffmpeg from ports (FreeBSD)
+  ansible.builtin.command:
+    cmd: /usr/bin/make install BATCH=yes
+    chdir: "/usr/ports/{{ provision_benchmarks_freebsd_ffmpeg_port }}"
   become: true
   when: provision_benchmarks_install_ffmpeg | bool
   failed_when: false
+  changed_when: true
+  async: 7200
+  poll: 30
 
-- name: Install numpy (FreeBSD)
-  community.general.pkgng:
-    name: "{{ provision_benchmarks_numpy_packages['FreeBSD'] }}"
-    state: present
+- name: Install numpy from ports (FreeBSD)
+  ansible.builtin.command:
+    cmd: /usr/bin/make install BATCH=yes
+    chdir: "/usr/ports/{{ provision_benchmarks_numpy_packages['FreeBSD'] | first }}"
   become: true
   when: provision_benchmarks_install_numpy | bool
   failed_when: false
-
-- name: Create standard-name symlinks for versioned FreeBSD binaries
-  ansible.builtin.shell:
-    cmd: |
-      set -e
-      # gcc: link the highest-versioned gccNN to /usr/local/bin/gcc
-      if ! command -v gcc >/dev/null 2>&1; then
-        for f in /usr/local/bin/gcc[0-9][0-9]; do
-          [ -x "$f" ] && gcc_bin="$f"
-        done
-        [ -n "${gcc_bin:-}" ] && ln -sf "$gcc_bin" /usr/local/bin/gcc
-      fi
-      # python3: link python3.NN to /usr/local/bin/python3
-      if ! command -v python3 >/dev/null 2>&1; then
-        for f in /usr/local/bin/python3.[0-9][0-9] /usr/local/bin/python3.[0-9]; do
-          [ -x "$f" ] && py_bin="$f"
-        done
-        [ -n "${py_bin:-}" ] && ln -sf "$py_bin" /usr/local/bin/python3
-      fi
-      # clang: link clangNN to /usr/local/bin/clang
-      if ! command -v clang >/dev/null 2>&1; then
-        for f in /usr/local/bin/clang[0-9][0-9]; do
-          [ -x "$f" ] && clang_bin="$f"
-        done
-        [ -n "${clang_bin:-}" ] && ln -sf "$clang_bin" /usr/local/bin/clang
-      fi
-    executable: /bin/sh
-  become: true
-  changed_when: false
+  changed_when: true
+  async: 3600
+  poll: 30
 
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

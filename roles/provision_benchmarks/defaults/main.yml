@@ -101,20 +101,20 @@ provision_benchmarks_packages:
     - ImageMagick
     - sqlite3
   FreeBSD:
-    - gcc
-    - llvm
-    - openssl
-    - python3
-    - rust
-    - go
-    - git
-    - zstd
-    - liblz4
-    - gnupg
-    - diffutils
-    - 7-zip
-    - ImageMagick7
-    - sqlite3
+    - lang/gcc13
+    - devel/llvm
+    - security/openssl
+    - lang/python311
+    - lang/rust
+    - lang/go
+    - devel/git
+    - archivers/zstd
+    - archivers/liblz4
+    - security/gnupg
+    - textproc/diffutils
+    - archivers/p7zip
+    - graphics/ImageMagick7
+    - databases/sqlite3
 
 # Packages available only via EPEL on RHEL/CentOS
 provision_benchmarks_epel_packages:
@@ -152,4 +152,4 @@ provision_benchmarks_numpy_packages:
   Suse:
     - python3-numpy
   FreeBSD:
-    - py311-numpy
+    - math/py-numpy
