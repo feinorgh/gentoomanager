@@ -455,13 +455,13 @@ depending on installed libraries and Gentoo USE flags.
 **Audio decoders:** Each successfully encoded format is also decoded.
 
 **Test media:** [Big Buck Bunny](https://peach.blender.org/) (CC BY 3.0, Blender
-Foundation) — a 30-second FFV1 lossless 720p 30fps clip extracted from the
+Foundation) — a 30-second FFV1 lossless 1080p 30fps clip extracted from the
 9-minute film, plus a 60-second PCM audio track.  This real-world animated
 source exercises colour prediction, motion estimation, and codec
 entropy-coding in a way that a synthetic test card cannot.  The clip is
 downloaded once to the controller by `scripts/download_benchmark_fixtures.py`
 and copied to each host before the benchmarks run; if unavailable, a
-deterministic synthetic source (720p 30fps FFV1-encoded `testsrc2` pattern)
+deterministic synthetic source (1080p 30fps FFV1-encoded `testsrc2` pattern)
 is generated as a fallback.
 
 The audio source, extracted from the same BBB film, gives realistic codec
@@ -676,7 +676,7 @@ each benchmark play via `delegate_to: localhost, run_once: true`.
 |--------|----------|------|---------|
 | [Silesia](http://sun.aei.polsl.pl/~sdeor/corpus/) | Compression | 211 MiB (12 files) | Free for benchmarking |
 | [Canterbury](https://corpus.canterbury.ac.nz/) | Compression (reference) | 2.8 MiB (18 files) | Public domain |
-| [Big Buck Bunny](https://peach.blender.org/) 720p | FFmpeg video | ≈30 s FFV1 + 60 s WAV | CC BY 3.0, Blender Foundation |
+| [Big Buck Bunny](https://peach.blender.org/) 1080p | FFmpeg video | ≈30 s FFV1 + 60 s WAV | CC BY 3.0, Blender Foundation |
 | [Kodak LTCI](http://r0k.us/graphics/kodak/) | ImageMagick | 24 PNG, ≈18 MiB | Free for research |
 | Seed-42 4K PNG | ImageMagick | 48 MiB (generated) | Generated locally |
 
@@ -688,7 +688,7 @@ passed), the corresponding benchmark task falls back to a synthetic source:
 | Fixture | Fallback |
 |---------|----------|
 | `silesia_combined.bin` | 64 MiB random binary (`/dev/urandom`) |
-| `bbb_720p_30s.mkv` | `testsrc2` 720p FFV1 synthetic video |
+| `bbb_1080p_30s.mkv` | `testsrc2` 1080p FFV1 synthetic video |
 | `bbb_audio_60s.wav` | 440 Hz sine PCM audio |
 | `kodak/` | Kodak benchmark is skipped |
 
@@ -886,9 +886,10 @@ and set `ansible_python_interpreter`.
     │   ├── silesia/                        # Silesia corpus (12 files)
     │   ├── silesia_combined.bin            # All 12 files concatenated (~211 MiB)
     │   ├── cantrbry/                       # Canterbury corpus (18 files)
-    │   ├── bbb_sunflower_720p.mp4          # BBB source download (kept for re-extraction)
-    │   ├── bbb_720p_30s.mkv               # 30-second FFV1 lossless clip
-    │   ├── bbb_audio_60s.wav              # 60-second PCM audio
+    │   ├── bbb_sunflower_1080p.mp4.zip     # BBB source zip download
+    │   ├── bbb_sunflower_1080p_30fps_normal.mp4  # Extracted MP4
+    │   ├── bbb_1080p_30s.mkv               # 30-second FFV1 lossless clip
+    │   ├── bbb_audio_60s.wav               # 60-second PCM audio
     │   ├── kodak/                          # Kodak True Color Image Suite (24 PNG)
     │   ├── im_4k.png                       # Deterministic seed-42 4K noise image
     │   ├── im_4k_q90.jpg                   # JPEG Q90 derivative

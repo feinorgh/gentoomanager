@@ -46,15 +46,15 @@
 
 - name: Copy Big Buck Bunny FFV1 video source from controller to host
   ansible.builtin.copy:
-    src: "{{ run_benchmarks_fixture_dir }}/bbb_720p_30s.mkv"
+    src: "{{ run_benchmarks_fixture_dir }}/bbb_1080p_30s.mkv"
     dest: "{{ run_benchmarks_work_dir }}/test_raw.avi"
     mode: "0644"
   when:
     - run_benchmarks_ffmpeg_check.rc == 0
     - not run_benchmarks_video_src_stat.stat.exists | default(true)
-    - (run_benchmarks_fixture_dir + '/bbb_720p_30s.mkv') is file
+    - (run_benchmarks_fixture_dir + '/bbb_1080p_30s.mkv') is file
 
-- name: Generate synthetic 720p FFV1 video source (fallback when BBB is unavailable)
+- name: Generate synthetic 1080p FFV1 video source (fallback when BBB is unavailable)
   ansible.builtin.shell:
     cmd: |
       ffmpeg -y -f lavfi \

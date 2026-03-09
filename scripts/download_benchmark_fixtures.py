@@ -7,8 +7,8 @@ Downloads and prepares:
     http://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip
   - **Canterbury corpus** (2.8 MiB, 18 files) — compression benchmarks
     https://corpus.canterbury.ac.nz/resources/cantrbry.tar.gz
-  - **Big Buck Bunny 720p clip** (≈30 s, FFV1 lossless + PCM audio) — FFmpeg benchmarks
-    https://download.blender.org/demo/movies/BBB/bbb_sunflower_720p_30fps_normal.mp4
+  - **Big Buck Bunny 1080p clip** (≈30 s, FFV1 lossless + PCM audio) — FFmpeg benchmarks
+    https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip
     © Blender Foundation, CC BY 3.0 — https://peach.blender.org/
   - **Kodak Lossless True Color Image Suite** (24 PNG, ≈18 MiB) — ImageMagick benchmarks
     http://r0k.us/graphics/kodak/kodak/kodimNN.png
@@ -167,8 +167,9 @@ def download_canterbury(fixtures_dir: Path, force: bool = False) -> bool:
 
 BBB_URL = (
     "https://download.blender.org/demo/movies/BBB/"
-    "bbb_sunflower_720p_30fps_normal.mp4"
+    "bbb_sunflower_1080p_30fps_normal.mp4.zip"
 )
+BBB_MP4_NAME = "bbb_sunflower_1080p_30fps_normal.mp4"
 BBB_VIDEO_DURATION = 30   # seconds of FFV1 lossless clip
 BBB_AUDIO_DURATION = 60   # seconds of PCM audio
 
@@ -185,8 +186,8 @@ def _run_ffmpeg(args: list[str], desc: str) -> bool:
 
 
 def download_bbb(fixtures_dir: Path, force: bool = False) -> bool:
-    """Download BBB 720p, extract a 30 s FFV1 clip and 60 s PCM audio."""
-    video_clip = fixtures_dir / "bbb_720p_30s.mkv"
+    """Download BBB 1080p zip, extract the MP4, make FFV1 clip and PCM audio."""
+    video_clip = fixtures_dir / "bbb_1080p_30s.mkv"
     audio_clip = fixtures_dir / "bbb_audio_60s.wav"
 
     if video_clip.exists() and audio_clip.exists() and not force:
@@ -198,9 +199,26 @@ def download_bbb(fixtures_dir: Path, force: bool = False) -> bool:
         print("           Install FFmpeg or run with --skip-video to suppress this.")
         return False
 
-    bbb_mp4 = fixtures_dir / "bbb_sunflower_720p.mp4"
-    if not download(BBB_URL, bbb_mp4, "Big Buck Bunny 720p (CC BY 3.0)", force=force):
+    bbb_zip = fixtures_dir / "bbb_sunflower_1080p.mp4.zip"
+    if not download(BBB_URL, bbb_zip, "Big Buck Bunny 1080p (CC BY 3.0)", force=force):
         return False
+
+    bbb_mp4 = fixtures_dir / BBB_MP4_NAME
+    if not bbb_mp4.exists() or force:
+        print(f"Extracting {BBB_MP4_NAME} from zip …")
+        try:
+            with zipfile.ZipFile(bbb_zip) as zf:
+                members = [m for m in zf.namelist() if m.endswith(".mp4")]
+                if not members:
+                    print("  No MP4 found in zip.")
+                    return False
+                with zf.open(members[0]) as src, open(bbb_mp4, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            mib = bbb_mp4.stat().st_size / (1024 * 1024)
+            print(f"  {bbb_mp4.name} ({mib:.0f} MiB)")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  Extraction failed: {exc}")
+            return False
 
     ok = True
 
