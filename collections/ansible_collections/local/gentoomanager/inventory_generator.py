@@ -1,1 +1,0 @@
-/home/pk/Devel/Ansible/local.gentoomanager/inventory_generator.py
