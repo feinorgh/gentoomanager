@@ -14,13 +14,20 @@
           printf "  %-15s MISSING\n" "$tool"
         fi
       done
-      for tool in clang rustc go ffmpeg imagemagick; do
+      for tool in clang rustc go ffmpeg; do
         if command -v "$tool" >/dev/null 2>&1; then
           printf "  %-15s OK\n" "$tool"
         else
           printf "  %-15s OPTIONAL (missing)\n" "$tool"
         fi
       done
+      # ImageMagick: binary is 'magick' (v7) or 'convert' (v6)
+      if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
+        printf "  %-15s OK\n" "imagemagick"
+      else
+        printf "  %-15s OPTIONAL (missing)\n" "imagemagick"
+      fi
+    executable: /bin/bash
   register: provision_benchmarks_verify
   changed_when: false
 

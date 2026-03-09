@@ -29,4 +29,5 @@
           find /tmp -name hyperfine -type f -executable \
             -exec install -m 0755 {} /usr/local/bin/hyperfine \;
           rm -rf /tmp/hyperfine* || true
+        executable: /bin/bash
       changed_when: true
