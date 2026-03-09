@@ -53,37 +53,40 @@
 
 # ── Generate test images ──────────────────────────────────────────────────
 
-- name: Generate 4K plasma test image (PNG)
+# Run once on the Ansible controller: generate deterministic fixture images
+# from a fixed seed so every host receives identical source material.
+- name: Generate deterministic benchmark fixture images on controller
   ansible.builtin.command:
     cmd: >-
-      {{ run_benchmarks_im_bin }} -size 4096x4096 plasma:red-blue
-      {{ run_benchmarks_work_dir }}/im_4k.png
-    creates: "{{ run_benchmarks_work_dir }}/im_4k.png"
-  changed_when: true
-  failed_when: false
+      python3 {{ playbook_dir | dirname }}/scripts/generate_benchmark_images.py
+      {{ run_benchmarks_fixture_dir }}
+    creates: "{{ run_benchmarks_fixture_dir }}/im_4k.png"
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy benchmark PNG source image to host
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/im_4k.png"
+    dest: "{{ run_benchmarks_work_dir }}/im_4k.png"
+    mode: "0644"
   when: run_benchmarks_im_check.rc == 0
 
-- name: Generate 4K JPEG test image (Q90)
-  ansible.builtin.command:
-    cmd: >-
-      {{ run_benchmarks_im_bin }} {{ run_benchmarks_work_dir }}/im_4k.png
-      -quality 90 {{ run_benchmarks_work_dir }}/im_4k_q90.jpg
-    creates: "{{ run_benchmarks_work_dir }}/im_4k_q90.jpg"
-  changed_when: true
-  failed_when: false
+- name: Copy benchmark JPEG source image to host
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/im_4k_q90.jpg"
+    dest: "{{ run_benchmarks_work_dir }}/im_4k_q90.jpg"
+    mode: "0644"
   when: run_benchmarks_im_check.rc == 0
 
-- name: Generate WebP test image
-  ansible.builtin.command:
-    cmd: >-
-      {{ run_benchmarks_im_bin }} {{ run_benchmarks_work_dir }}/im_4k.png
-      -quality 90 {{ run_benchmarks_work_dir }}/im_4k.webp
-    creates: "{{ run_benchmarks_work_dir }}/im_4k.webp"
-  changed_when: true
-  failed_when: false
+- name: Copy benchmark WebP source image to host
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/im_4k.webp"
+    dest: "{{ run_benchmarks_work_dir }}/im_4k.webp"
+    mode: "0644"
   when:
     - run_benchmarks_im_check.rc == 0
     - run_benchmarks_im_has_webp | default(false) | bool
+    - (run_benchmarks_fixture_dir + '/im_4k.webp') is file
 
 # ── Resize benchmarks ─────────────────────────────────────────────────────
 

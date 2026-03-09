@@ -30,6 +30,12 @@ run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
 run_benchmarks_work_dir: /tmp/ansible-benchmarks
 run_benchmarks_work_dir_win: C:\ansible-benchmarks
 
+# Local (controller-side) directory for deterministic benchmark fixture files.
+# The ImageMagick source images are generated here once and copied to every
+# host, ensuring bit-identical input across all benchmark runs.
+# Path is relative to the collection root (one level above playbooks/).
+run_benchmarks_fixture_dir: "{{ playbook_dir | dirname }}/benchmarks/fixtures"
+
 # Test data sizes
 run_benchmarks_compress_size_mb: 64
 run_benchmarks_ffmpeg_duration_sec: 10
