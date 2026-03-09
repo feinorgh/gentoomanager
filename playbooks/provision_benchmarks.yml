@@ -33,9 +33,10 @@
         ansible_os_family not in ['Gentoo', 'RedHat', 'Debian', 'Archlinux',
                                   'Suse', 'FreeBSD', 'Void', 'NixOS', 'Solus']
 
-# ── Play 2: Gentoo (16 hosts in parallel) ───────────────────────────────
+# ── Play 2: Gentoo – serial to avoid compile-time noise on shared CPUs ──
 - name: Provision Gentoo hosts
   hosts: provision_os_gentoo
+  serial: 1
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
