@@ -42,16 +42,6 @@ from pathlib import Path
 # Download helper
 # ---------------------------------------------------------------------------
 
-def _progress(count: int, block: int, total: int) -> None:
-    if total <= 0:
-        return
-    pct = min(count * block * 100 // total, 100)
-    done = pct // 2
-    bar = "=" * done + ">" + " " * (50 - done)
-    mb = count * block / (1024 * 1024)
-    tmb = total / (1024 * 1024)
-    print(f"\r  [{bar}] {pct}%  {mb:.1f}/{tmb:.1f} MiB", end="", flush=True)
-
 
 def download(url: str, dest: Path, desc: str, force: bool = False) -> bool:
     """Download *url* to *dest*.  Return True on success."""
@@ -62,8 +52,27 @@ def download(url: str, dest: Path, desc: str, force: bool = False) -> bool:
     print(f"Downloading {desc} …")
     print(f"  {url}")
     tmp = dest.with_suffix(".part")
+    # Some CDNs (e.g. Cloudflare protecting Blender downloads) return 403 for
+    # the default Python-urllib user-agent; use a neutral browser-style string.
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
     try:
-        urllib.request.urlretrieve(url, tmp, reporthook=_progress)
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            done = 0
+            with open(tmp, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    done += len(chunk)
+                    if total > 0:
+                        pct = min(done * 100 // total, 100)
+                        mb = done / (1024 * 1024)
+                        tmb = total / (1024 * 1024)
+                        bar = "=" * (pct // 2) + ">" + " " * (50 - pct // 2)
+                        print(f"\r  [{bar}] {pct}%  {mb:.1f}/{tmb:.1f} MiB", end="", flush=True)
         print()
         tmp.rename(dest)
         mib = dest.stat().st_size / (1024 * 1024)
