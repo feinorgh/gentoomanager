@@ -23,11 +23,11 @@
     - name: Extract and install hyperfine binary
       ansible.builtin.shell:
         cmd: |
-          set -eo pipefail
+          set -e
           cd /tmp
           tar xzf hyperfine.tar.gz
           find /tmp -name hyperfine -type f -executable \
             -exec install -m 0755 {} /usr/local/bin/hyperfine \;
           rm -rf /tmp/hyperfine* || true
-        executable: /bin/bash
+        executable: /bin/sh
       changed_when: true
