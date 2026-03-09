@@ -41,7 +41,6 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup 1 \
-        --interleave \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/disk.json \
         --prepare "rm -f ${TESTFILE}" \

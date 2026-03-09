@@ -6,24 +6,24 @@
     cmd: |
       set -e
       cd {{ run_benchmarks_work_dir }}
-      CMDS=""
+      CMDS=()
       {% for tool in ['gzip', 'bzip2', 'xz', 'zstd', 'lz4'] %}
       if command -v {{ tool }} >/dev/null 2>&1; then
       {% if tool == 'gzip' %}
-        CMDS="$CMDS --command-name 'gzip-compress' 'gzip -k -f testdata.bin && rm -f testdata.bin.gz'"
-        CMDS="$CMDS --command-name 'gzip-decompress' 'gzip -k testdata.bin && gzip -d -f testdata.bin.gz'"
+        CMDS+=(--command-name "gzip-compress"    "gzip -k -f testdata.bin && rm -f testdata.bin.gz")
+        CMDS+=(--command-name "gzip-decompress"  "gzip -k testdata.bin && gzip -d -f testdata.bin.gz")
       {% elif tool == 'bzip2' %}
-        CMDS="$CMDS --command-name 'bzip2-compress' 'bzip2 -k -f testdata.bin && rm -f testdata.bin.bz2'"
-        CMDS="$CMDS --command-name 'bzip2-decompress' 'bzip2 -k testdata.bin && bzip2 -d -f testdata.bin.bz2'"
+        CMDS+=(--command-name "bzip2-compress"   "bzip2 -k -f testdata.bin && rm -f testdata.bin.bz2")
+        CMDS+=(--command-name "bzip2-decompress" "bzip2 -k testdata.bin && bzip2 -d -f testdata.bin.bz2")
       {% elif tool == 'xz' %}
-        CMDS="$CMDS --command-name 'xz-compress' 'xz -k -f testdata.bin && rm -f testdata.bin.xz'"
-        CMDS="$CMDS --command-name 'xz-decompress' 'xz -k testdata.bin && xz -d -f testdata.bin.xz'"
+        CMDS+=(--command-name "xz-compress"      "xz -k -f testdata.bin && rm -f testdata.bin.xz")
+        CMDS+=(--command-name "xz-decompress"    "xz -k testdata.bin && xz -d -f testdata.bin.xz")
       {% elif tool == 'zstd' %}
-        CMDS="$CMDS --command-name 'zstd-compress' 'zstd -f testdata.bin -o testdata.bin.zst && rm -f testdata.bin.zst'"
-        CMDS="$CMDS --command-name 'zstd-decompress' 'zstd -f testdata.bin -o testdata.bin.zst && zstd -d -f testdata.bin.zst'"
+        CMDS+=(--command-name "zstd-compress"    "zstd -f testdata.bin -o testdata.bin.zst && rm -f testdata.bin.zst")
+        CMDS+=(--command-name "zstd-decompress"  "zstd -f testdata.bin -o testdata.bin.zst && zstd -d -f testdata.bin.zst")
       {% elif tool == 'lz4' %}
-        CMDS="$CMDS --command-name 'lz4-compress' 'lz4 -f testdata.bin testdata.bin.lz4 && rm -f testdata.bin.lz4'"
-        CMDS="$CMDS --command-name 'lz4-decompress' 'lz4 -f testdata.bin testdata.bin.lz4 && lz4 -d -f testdata.bin.lz4 /dev/null'"
+        CMDS+=(--command-name "lz4-compress"     "lz4 -f testdata.bin testdata.bin.lz4 && rm -f testdata.bin.lz4")
+        CMDS+=(--command-name "lz4-decompress"   "lz4 -f testdata.bin testdata.bin.lz4 && lz4 -d -f testdata.bin.lz4 /dev/null")
       {% endif %}
       fi
       {% endfor %}
@@ -32,7 +32,7 @@
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compression.json \
-        $CMDS
+        "${CMDS[@]}"
   register: run_benchmarks_compression_result
   changed_when: false
   failed_when: false

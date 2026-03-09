@@ -75,7 +75,6 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
-        --interleave \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/linker.json \
         --command-name "ld-bfd" \

@@ -70,38 +70,36 @@
       ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ V/ {print $2}')
       has() { echo "$ENCS" | grep -qx "$1"; }
 
-      CMDS=""
-      has libx264    && CMDS="$CMDS --command-name h264-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null'"
-      has libx265    && CMDS="$CMDS --command-name h265-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null'"
-      has libvpx     && CMDS="$CMDS --command-name vp8-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline good -an -f null /dev/null'"
-      has libvpx-vp9 && CMDS="$CMDS --command-name vp9-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline good -an -f null /dev/null'"
-      has libsvtav1  && CMDS="$CMDS --command-name av1-svt-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null'"
-      has libaom-av1 && CMDS="$CMDS --command-name av1-aom-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null'"
-      has librav1e   && CMDS="$CMDS --command-name av1-rav1e-encode \
-        'ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null'"
-      has libtheora  && CMDS="$CMDS --command-name theora-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null'"
-      has libxvid    && CMDS="$CMDS --command-name xvid-encode \
-        'ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 5 -an -f null /dev/null'"
-      has mpeg2video && CMDS="$CMDS --command-name mpeg2-encode \
-        'ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 5M -an -f null /dev/null'"
-      has mjpeg      && CMDS="$CMDS --command-name mjpeg-encode \
-        'ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null'"
+      CMDS=()
+      has libx264    && CMDS+=(--command-name "h264-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null")
+      has libx265    && CMDS+=(--command-name "h265-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null")
+      has libvpx     && CMDS+=(--command-name "vp8-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline good -an -f null /dev/null")
+      has libvpx-vp9 && CMDS+=(--command-name "vp9-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline good -an -f null /dev/null")
+      has libsvtav1  && CMDS+=(--command-name "av1-svt-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null")
+      has libaom-av1 && CMDS+=(--command-name "av1-aom-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null")
+      has librav1e   && CMDS+=(--command-name "av1-rav1e-encode"
+        "ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null")
+      has libtheora  && CMDS+=(--command-name "theora-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null")
+      has libxvid    && CMDS+=(--command-name "xvid-encode"
+        "ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 5 -an -f null /dev/null")
+      has mpeg2video && CMDS+=(--command-name "mpeg2-encode"
+        "ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 5M -an -f null /dev/null")
+      has mjpeg      && CMDS+=(--command-name "mjpeg-encode"
+        "ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null")
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
+        "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   register: run_benchmarks_ffmpeg_video_encode_result
   changed_when: false
@@ -148,27 +146,25 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
 
-      CMDS=""
-      [ -f test_h264.mp4 ]       && CMDS="$CMDS --command-name h264-decode       'ffmpeg -y -i test_h264.mp4 -f null /dev/null'"
-      [ -f test_h265.mp4 ]       && CMDS="$CMDS --command-name h265-decode       'ffmpeg -y -i test_h265.mp4 -f null /dev/null'"
-      [ -f test_vp8.webm ]       && CMDS="$CMDS --command-name vp8-decode        'ffmpeg -y -i test_vp8.webm -f null /dev/null'"
-      [ -f test_vp9.webm ]       && CMDS="$CMDS --command-name vp9-decode        'ffmpeg -y -i test_vp9.webm -f null /dev/null'"
-      [ -f test_av1_svt.mp4 ]    && CMDS="$CMDS --command-name av1-svt-decode    'ffmpeg -y -i test_av1_svt.mp4 -f null /dev/null'"
-      [ -f test_av1_aom.mp4 ]    && CMDS="$CMDS --command-name av1-aom-decode    'ffmpeg -y -i test_av1_aom.mp4 -f null /dev/null'"
-      [ -f test_av1_rav1e.mp4 ]  && CMDS="$CMDS --command-name av1-rav1e-decode  'ffmpeg -y -i test_av1_rav1e.mp4 -f null /dev/null'"
-      [ -f test_theora.mkv ]     && CMDS="$CMDS --command-name theora-decode     'ffmpeg -y -i test_theora.mkv -f null /dev/null'"
-      [ -f test_xvid.avi ]       && CMDS="$CMDS --command-name xvid-decode       'ffmpeg -y -i test_xvid.avi -f null /dev/null'"
-      [ -f test_mpeg2.mpg ]      && CMDS="$CMDS --command-name mpeg2-decode      'ffmpeg -y -i test_mpeg2.mpg -f null /dev/null'"
-      [ -f test_mjpeg.avi ]      && CMDS="$CMDS --command-name mjpeg-decode      'ffmpeg -y -i test_mjpeg.avi -f null /dev/null'"
+      CMDS=()
+      [ -f test_h264.mp4 ]       && CMDS+=(--command-name "h264-decode"      "ffmpeg -y -i test_h264.mp4 -f null /dev/null")
+      [ -f test_h265.mp4 ]       && CMDS+=(--command-name "h265-decode"      "ffmpeg -y -i test_h265.mp4 -f null /dev/null")
+      [ -f test_vp8.webm ]       && CMDS+=(--command-name "vp8-decode"       "ffmpeg -y -i test_vp8.webm -f null /dev/null")
+      [ -f test_vp9.webm ]       && CMDS+=(--command-name "vp9-decode"       "ffmpeg -y -i test_vp9.webm -f null /dev/null")
+      [ -f test_av1_svt.mp4 ]    && CMDS+=(--command-name "av1-svt-decode"   "ffmpeg -y -i test_av1_svt.mp4 -f null /dev/null")
+      [ -f test_av1_aom.mp4 ]    && CMDS+=(--command-name "av1-aom-decode"   "ffmpeg -y -i test_av1_aom.mp4 -f null /dev/null")
+      [ -f test_av1_rav1e.mp4 ]  && CMDS+=(--command-name "av1-rav1e-decode" "ffmpeg -y -i test_av1_rav1e.mp4 -f null /dev/null")
+      [ -f test_theora.mkv ]     && CMDS+=(--command-name "theora-decode"    "ffmpeg -y -i test_theora.mkv -f null /dev/null")
+      [ -f test_xvid.avi ]       && CMDS+=(--command-name "xvid-decode"      "ffmpeg -y -i test_xvid.avi -f null /dev/null")
+      [ -f test_mpeg2.mpg ]      && CMDS+=(--command-name "mpeg2-decode"     "ffmpeg -y -i test_mpeg2.mpg -f null /dev/null")
+      [ -f test_mjpeg.avi ]      && CMDS+=(--command-name "mjpeg-decode"     "ffmpeg -y -i test_mjpeg.avi -f null /dev/null")
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_decode.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_decode.json \
+        "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   register: run_benchmarks_ffmpeg_video_decode_result
   changed_when: false
@@ -195,25 +191,23 @@
       ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ A/ {print $2}')
       has() { echo "$ENCS" | grep -qx "$1"; }
 
-      CMDS=""
-      has aac        && CMDS="$CMDS --command-name aac-encode     'ffmpeg -y -i test_raw.wav -c:a aac -b:a 192k -f null /dev/null'"
-      has libopus    && CMDS="$CMDS --command-name opus-encode    'ffmpeg -y -i test_raw.wav -c:a libopus -b:a 128k -f null /dev/null'"
-      has libmp3lame && CMDS="$CMDS --command-name mp3-encode     'ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k -f null /dev/null'"
-      has flac       && CMDS="$CMDS --command-name flac-encode    'ffmpeg -y -i test_raw.wav -c:a flac -f null /dev/null'"
-      has libvorbis  && CMDS="$CMDS --command-name vorbis-encode  'ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 -f null /dev/null'"
-      has ac3        && CMDS="$CMDS --command-name ac3-encode     'ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k -f null /dev/null'"
-      has eac3       && CMDS="$CMDS --command-name eac3-encode    'ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k -f null /dev/null'"
-      has wavpack    && CMDS="$CMDS --command-name wavpack-encode 'ffmpeg -y -i test_raw.wav -c:a wavpack -f null /dev/null'"
-      has alac       && CMDS="$CMDS --command-name alac-encode    'ffmpeg -y -i test_raw.wav -c:a alac -f null /dev/null'"
+      CMDS=()
+      has aac        && CMDS+=(--command-name "aac-encode"     "ffmpeg -y -i test_raw.wav -c:a aac -b:a 192k -f null /dev/null")
+      has libopus    && CMDS+=(--command-name "opus-encode"    "ffmpeg -y -i test_raw.wav -c:a libopus -b:a 128k -f null /dev/null")
+      has libmp3lame && CMDS+=(--command-name "mp3-encode"     "ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k -f null /dev/null")
+      has flac       && CMDS+=(--command-name "flac-encode"    "ffmpeg -y -i test_raw.wav -c:a flac -f null /dev/null")
+      has libvorbis  && CMDS+=(--command-name "vorbis-encode"  "ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 -f null /dev/null")
+      has ac3        && CMDS+=(--command-name "ac3-encode"     "ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k -f null /dev/null")
+      has eac3       && CMDS+=(--command-name "eac3-encode"    "ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k -f null /dev/null")
+      has wavpack    && CMDS+=(--command-name "wavpack-encode" "ffmpeg -y -i test_raw.wav -c:a wavpack -f null /dev/null")
+      has alac       && CMDS+=(--command-name "alac-encode"    "ffmpeg -y -i test_raw.wav -c:a alac -f null /dev/null")
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_encode.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_encode.json \
+        "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   register: run_benchmarks_ffmpeg_audio_encode_result
   changed_when: false
@@ -258,25 +252,23 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
 
-      CMDS=""
-      [ -f test_enc_aac.m4a ]      && CMDS="$CMDS --command-name aac-decode     'ffmpeg -y -i test_enc_aac.m4a -f null /dev/null'"
-      [ -f test_enc_opus.opus ]    && CMDS="$CMDS --command-name opus-decode    'ffmpeg -y -i test_enc_opus.opus -f null /dev/null'"
-      [ -f test_enc_mp3.mp3 ]      && CMDS="$CMDS --command-name mp3-decode     'ffmpeg -y -i test_enc_mp3.mp3 -f null /dev/null'"
-      [ -f test_enc_flac.flac ]    && CMDS="$CMDS --command-name flac-decode    'ffmpeg -y -i test_enc_flac.flac -f null /dev/null'"
-      [ -f test_enc_vorbis.ogg ]   && CMDS="$CMDS --command-name vorbis-decode  'ffmpeg -y -i test_enc_vorbis.ogg -f null /dev/null'"
-      [ -f test_enc_ac3.ac3 ]      && CMDS="$CMDS --command-name ac3-decode     'ffmpeg -y -i test_enc_ac3.ac3 -f null /dev/null'"
-      [ -f test_enc_eac3.eac3 ]    && CMDS="$CMDS --command-name eac3-decode    'ffmpeg -y -i test_enc_eac3.eac3 -f null /dev/null'"
-      [ -f test_enc_wavpack.wv ]   && CMDS="$CMDS --command-name wavpack-decode 'ffmpeg -y -i test_enc_wavpack.wv -f null /dev/null'"
-      [ -f test_enc_alac.m4a ]     && CMDS="$CMDS --command-name alac-decode    'ffmpeg -y -i test_enc_alac.m4a -f null /dev/null'"
+      CMDS=()
+      [ -f test_enc_aac.m4a ]      && CMDS+=(--command-name "aac-decode"     "ffmpeg -y -i test_enc_aac.m4a -f null /dev/null")
+      [ -f test_enc_opus.opus ]    && CMDS+=(--command-name "opus-decode"    "ffmpeg -y -i test_enc_opus.opus -f null /dev/null")
+      [ -f test_enc_mp3.mp3 ]      && CMDS+=(--command-name "mp3-decode"     "ffmpeg -y -i test_enc_mp3.mp3 -f null /dev/null")
+      [ -f test_enc_flac.flac ]    && CMDS+=(--command-name "flac-decode"    "ffmpeg -y -i test_enc_flac.flac -f null /dev/null")
+      [ -f test_enc_vorbis.ogg ]   && CMDS+=(--command-name "vorbis-decode"  "ffmpeg -y -i test_enc_vorbis.ogg -f null /dev/null")
+      [ -f test_enc_ac3.ac3 ]      && CMDS+=(--command-name "ac3-decode"     "ffmpeg -y -i test_enc_ac3.ac3 -f null /dev/null")
+      [ -f test_enc_eac3.eac3 ]    && CMDS+=(--command-name "eac3-decode"    "ffmpeg -y -i test_enc_eac3.eac3 -f null /dev/null")
+      [ -f test_enc_wavpack.wv ]   && CMDS+=(--command-name "wavpack-decode" "ffmpeg -y -i test_enc_wavpack.wv -f null /dev/null")
+      [ -f test_enc_alac.m4a ]     && CMDS+=(--command-name "alac-decode"    "ffmpeg -y -i test_enc_alac.m4a -f null /dev/null")
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_decode.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_decode.json \
+        "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   register: run_benchmarks_ffmpeg_audio_decode_result
   changed_when: false

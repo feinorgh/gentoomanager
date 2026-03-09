@@ -162,23 +162,24 @@
       cd {{ run_benchmarks_work_dir }}
       IM={{ run_benchmarks_im_bin }}
 
-      CMDS=""
-      CMDS="$CMDS --command-name jpeg-q90 '${IM} im_4k.png   -quality 90 JPEG:/dev/null'"
-      CMDS="$CMDS --command-name jpeg-q50 '${IM} im_4k.png   -quality 50 JPEG:/dev/null'"
-      CMDS="$CMDS --command-name png-z6   '${IM} im_4k_q90.jpg -define png:compression-level=6 PNG:/dev/null'"
-      CMDS="$CMDS --command-name png-z1   '${IM} im_4k_q90.jpg -define png:compression-level=1 PNG:/dev/null'"
-      ${IM} -list format 2>/dev/null | grep -qi '^ *WEBP.*W' && \
-        CMDS="$CMDS --command-name webp-lossy    '${IM} im_4k.png -quality 90              WEBP:/dev/null'" && \
-        CMDS="$CMDS --command-name webp-lossless '${IM} im_4k.png -define webp:lossless=true WEBP:/dev/null'"
+      CMDS=()
+      CMDS+=(--command-name "jpeg-q90" "${IM} im_4k.png   -quality 90 JPEG:/dev/null")
+      CMDS+=(--command-name "jpeg-q50" "${IM} im_4k.png   -quality 50 JPEG:/dev/null")
+      CMDS+=(--command-name "png-z6"   "${IM} im_4k_q90.jpg -define png:compression-level=6 PNG:/dev/null")
+      CMDS+=(--command-name "png-z1"   "${IM} im_4k_q90.jpg -define png:compression-level=1 PNG:/dev/null")
+      ${IM} -list format 2>/dev/null | grep -qi '^ *WEBP.*W' && {
+        CMDS+=(--command-name "webp-lossy"    "${IM} im_4k.png -quality 90              WEBP:/dev/null")
+        CMDS+=(--command-name "webp-lossless" "${IM} im_4k.png -define webp:lossless=true WEBP:/dev/null")
+      }
       ${IM} -list format 2>/dev/null | grep -qi '^ *AVIF.*W' && \
-        CMDS="$CMDS --command-name avif-q60 '${IM} im_4k.png -quality 60 AVIF:/dev/null'"
+        CMDS+=(--command-name "avif-q60" "${IM} im_4k.png -quality 60 AVIF:/dev/null")
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json imagemagick_encode.json \
-        "$CMDS"
+        "${CMDS[@]}"
   register: run_benchmarks_imagemagick_encode_result
   changed_when: false
   failed_when: false
@@ -203,18 +204,18 @@
       cd {{ run_benchmarks_work_dir }}
       IM={{ run_benchmarks_im_bin }}
 
-      CMDS=""
-      CMDS="$CMDS --command-name jpeg-decode '${IM} im_4k_q90.jpg null:'"
-      CMDS="$CMDS --command-name png-decode  '${IM} im_4k.png     null:'"
+      CMDS=()
+      CMDS+=(--command-name "jpeg-decode" "${IM} im_4k_q90.jpg null:")
+      CMDS+=(--command-name "png-decode"  "${IM} im_4k.png     null:")
       [ -f im_4k.webp ] && \
-        CMDS="$CMDS --command-name webp-decode '${IM} im_4k.webp null:'"
+        CMDS+=(--command-name "webp-decode" "${IM} im_4k.webp null:")
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json imagemagick_decode.json \
-        "$CMDS"
+        "${CMDS[@]}"
   register: run_benchmarks_imagemagick_decode_result
   changed_when: false
   failed_when: false

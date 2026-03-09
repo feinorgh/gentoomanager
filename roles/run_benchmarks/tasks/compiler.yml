@@ -102,7 +102,7 @@
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
-      CMDS=""
+      CMDS=()
       {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
@@ -111,20 +111,18 @@
       if [ -x "{{ cc_exe }}" ]; then
         for opt in "-O0" "-O2" "-O3" "-O3 -flto" "-Os"; do
           OPTLABEL=$(echo "$opt" | tr ' ' '_')
-          CMDS="$CMDS --command-name '{{ cc_label }}-${OPTLABEL}-compile' \
-            '{{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm'"
+          CMDS+=(--command-name "{{ cc_label }}-${OPTLABEL}-compile"
+            "{{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm")
         done
       fi
       {% endif %}
       {% endfor %}
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
-          --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
-          $CMDS
-      fi
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
+        "${CMDS[@]}"
   register: run_benchmarks_compiler_c_result
   changed_when: false
   failed_when: false
@@ -144,7 +142,7 @@
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
-      CMDS=""
+      CMDS=()
       {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
@@ -155,21 +153,19 @@
           OPTLABEL=$(echo "$opt" | tr ' ' '_')
           {{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm 2>/dev/null || true
           if [ -f bench_{{ cc_label }}_${OPTLABEL} ]; then
-            CMDS="$CMDS --command-name '{{ cc_label }}-${OPTLABEL}-run' \
-              './bench_{{ cc_label }}_${OPTLABEL}'"
+            CMDS+=(--command-name "{{ cc_label }}-${OPTLABEL}-run"
+              "./bench_{{ cc_label }}_${OPTLABEL}")
           fi
         done
       fi
       {% endif %}
       {% endfor %}
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
-          --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
-          $CMDS
-      fi
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
+        "${CMDS[@]}"
   register: run_benchmarks_compiler_c_runtime_result
   changed_when: false
   failed_when: false

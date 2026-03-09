@@ -27,45 +27,42 @@
         sleep 1
       fi
 
-      CMDS=""
+      CMDS=()
 
       {% for app in ['firefox', 'gimp', 'inkscape'] %}
       if command -v {{ app }} >/dev/null 2>&1; then
       {% if app == 'firefox' %}
         # Firefox: measure startup to first window with a timeout
-        CMDS="$CMDS --command-name 'firefox-startup' \
-          'timeout 10 firefox --headless --screenshot /dev/null about:blank 2>/dev/null || true'"
+        CMDS+=(--command-name "firefox-startup"
+          "timeout 10 firefox --headless --screenshot /dev/null about:blank 2>/dev/null || true")
       {% elif app == 'gimp' %}
         # GIMP: use batch mode for startup measurement
-        CMDS="$CMDS --command-name 'gimp-startup' \
-          'gimp -i --quit 2>/dev/null'"
+        CMDS+=(--command-name "gimp-startup" "gimp -i --quit 2>/dev/null")
       {% elif app == 'inkscape' %}
         # Inkscape: use shell mode or export for startup measurement
-        CMDS="$CMDS --command-name 'inkscape-startup' \
-          'inkscape --pipe --export-type=png < /dev/null > /dev/null 2>&1'"
+        CMDS+=(--command-name "inkscape-startup"
+          "inkscape --pipe --export-type=png < /dev/null > /dev/null 2>&1")
       {% endif %}
       fi
       {% endfor %}
 
       # Interpreter startup: measure Python, Node.js, and Perl init time
       if command -v python3 >/dev/null 2>&1; then
-        CMDS="$CMDS --command-name 'python3-startup' 'python3 -c pass'"
+        CMDS+=(--command-name "python3-startup" "python3 -c pass")
       fi
       if command -v node >/dev/null 2>&1; then
-        CMDS="$CMDS --command-name 'node-startup' 'node -e \"\"'"
+        CMDS+=(--command-name "node-startup" 'node -e ""')
       fi
       if command -v perl >/dev/null 2>&1; then
-        CMDS="$CMDS --command-name 'perl-startup' 'perl -e 1'"
+        CMDS+=(--command-name "perl-startup" "perl -e 1")
       fi
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/startup.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/startup.json \
+        "${CMDS[@]}"
 
       # Cleanup Xvfb
       if [ -n "$XVFB_PID" ]; then

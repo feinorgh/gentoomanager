@@ -39,44 +39,38 @@
 
       has_cipher() { echo "{{ run_benchmarks_crypto_info.ciphers | join(' ') }}" | grep -qw "$1"; }
 
-      CMDS=""
+      CMDS=()
 
       # AES-256-CBC — block cipher, benefits from AES-NI
       if has_cipher aes-256-cbc; then
-        CMDS="$CMDS --command-name 'aes-256-cbc' \
-          'openssl enc -aes-256-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+        CMDS+=(--command-name "aes-256-cbc"
+          "openssl enc -aes-256-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2")
       fi
-
-      # AES-256-GCM — authenticated encryption, TLS 1.3 default
-      # GCM is not available via 'openssl enc', use 'openssl speed' instead
-      # We'll benchmark it separately below
 
       # AES-128-CBC — smaller key, still AES-NI accelerated
       if has_cipher aes-128-cbc; then
-        CMDS="$CMDS --command-name 'aes-128-cbc' \
-          'openssl enc -aes-128-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+        CMDS+=(--command-name "aes-128-cbc"
+          "openssl enc -aes-128-cbc -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2")
       fi
 
       # AES-256-CTR — counter mode, parallelizable
       if has_cipher aes-256-ctr; then
-        CMDS="$CMDS --command-name 'aes-256-ctr' \
-          'openssl enc -aes-256-ctr -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+        CMDS+=(--command-name "aes-256-ctr"
+          "openssl enc -aes-256-ctr -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2")
       fi
 
       # ChaCha20-Poly1305 — no hardware accel, pure software, very compiler-sensitive
       if has_cipher chacha20; then
-        CMDS="$CMDS --command-name 'chacha20' \
-          'openssl enc -chacha20 -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2'"
+        CMDS+=(--command-name "chacha20"
+          "openssl enc -chacha20 -in testdata.bin -out /dev/null -pass pass:benchmark -pbkdf2")
       fi
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
+        "${CMDS[@]}"
   register: run_benchmarks_crypto_symmetric_result
   changed_when: false
   failed_when: false
@@ -100,46 +94,38 @@
 
       has_dgst() { echo "{{ run_benchmarks_crypto_info.digests | join(' ') }}" | grep -qw "$1"; }
 
-      CMDS=""
+      CMDS=()
 
       if has_dgst sha256; then
-        CMDS="$CMDS --command-name 'openssl-sha256' \
-          'openssl dgst -sha256 testdata.bin'"
+        CMDS+=(--command-name "openssl-sha256" "openssl dgst -sha256 testdata.bin")
       fi
 
       if has_dgst sha512; then
-        CMDS="$CMDS --command-name 'openssl-sha512' \
-          'openssl dgst -sha512 testdata.bin'"
+        CMDS+=(--command-name "openssl-sha512" "openssl dgst -sha512 testdata.bin")
       fi
 
       if has_dgst sha3-256; then
-        CMDS="$CMDS --command-name 'openssl-sha3-256' \
-          'openssl dgst -sha3-256 testdata.bin'"
+        CMDS+=(--command-name "openssl-sha3-256" "openssl dgst -sha3-256 testdata.bin")
       fi
 
       if has_dgst sha1; then
-        CMDS="$CMDS --command-name 'openssl-sha1' \
-          'openssl dgst -sha1 testdata.bin'"
+        CMDS+=(--command-name "openssl-sha1" "openssl dgst -sha1 testdata.bin")
       fi
 
       if has_dgst md5; then
-        CMDS="$CMDS --command-name 'openssl-md5' \
-          'openssl dgst -md5 testdata.bin'"
+        CMDS+=(--command-name "openssl-md5" "openssl dgst -md5 testdata.bin")
       fi
 
       if has_dgst blake2b512; then
-        CMDS="$CMDS --command-name 'openssl-blake2b512' \
-          'openssl dgst -blake2b512 testdata.bin'"
+        CMDS+=(--command-name "openssl-blake2b512" "openssl dgst -blake2b512 testdata.bin")
       fi
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
+        "${CMDS[@]}"
   register: run_benchmarks_crypto_hash_result
   changed_when: false
   failed_when: false
@@ -163,28 +149,26 @@
 
       has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
-      CMDS=""
+      CMDS=()
       if has_cmd sha256sum; then
-        CMDS="$CMDS --command-name 'sha256sum' 'sha256sum testdata.bin'"
+        CMDS+=(--command-name "sha256sum" "sha256sum testdata.bin")
       fi
       if has_cmd sha512sum; then
-        CMDS="$CMDS --command-name 'sha512sum' 'sha512sum testdata.bin'"
+        CMDS+=(--command-name "sha512sum" "sha512sum testdata.bin")
       fi
       if has_cmd md5sum; then
-        CMDS="$CMDS --command-name 'md5sum' 'md5sum testdata.bin'"
+        CMDS+=(--command-name "md5sum" "md5sum testdata.bin")
       fi
       if has_cmd b2sum; then
-        CMDS="$CMDS --command-name 'b2sum' 'b2sum testdata.bin'"
+        CMDS+=(--command-name "b2sum" "b2sum testdata.bin")
       fi
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
+        "${CMDS[@]}"
   register: run_benchmarks_crypto_hash_coreutils_result
   changed_when: false
   failed_when: false
@@ -253,48 +237,48 @@
       # Create data to sign
       dd if=/dev/urandom of=signdata.bin bs=256 count=1 2>/dev/null
 
-      CMDS=""
+      CMDS=()
 
       # RSA-2048 sign
-      CMDS="$CMDS --command-name 'rsa-2048-sign' \
-        'openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin'"
+      CMDS+=(--command-name "rsa-2048-sign"
+        "openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin")
 
       # RSA-2048 verify
       openssl rsa -in rsa2048.pem -pubout -out rsa2048pub.pem 2>/dev/null
       openssl dgst -sha256 -sign rsa2048.pem -out sig_rsa2048.bin signdata.bin
-      CMDS="$CMDS --command-name 'rsa-2048-verify' \
-        'openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin'"
+      CMDS+=(--command-name "rsa-2048-verify"
+        "openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin")
 
       # RSA-4096 sign
-      CMDS="$CMDS --command-name 'rsa-4096-sign' \
-        'openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin'"
+      CMDS+=(--command-name "rsa-4096-sign"
+        "openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin")
 
       # ECDSA P-256 sign
-      CMDS="$CMDS --command-name 'ecdsa-p256-sign' \
-        'openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin'"
+      CMDS+=(--command-name "ecdsa-p256-sign"
+        "openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin")
 
       # ECDSA P-256 verify
       openssl ec -in ec256.pem -pubout -out ec256pub.pem 2>/dev/null
       openssl dgst -sha256 -sign ec256.pem -out sig_ec256.bin signdata.bin
-      CMDS="$CMDS --command-name 'ecdsa-p256-verify' \
-        'openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin'"
+      CMDS+=(--command-name "ecdsa-p256-verify"
+        "openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin")
 
       # Ed25519 sign
-      CMDS="$CMDS --command-name 'ed25519-sign' \
-        'openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin'"
+      CMDS+=(--command-name "ed25519-sign"
+        "openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin")
 
       # Ed25519 verify
       openssl pkey -in ed25519.pem -pubout -out ed25519pub.pem 2>/dev/null
       openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig_ed25519.bin
-      CMDS="$CMDS --command-name 'ed25519-verify' \
-        'openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin'"
+      CMDS+=(--command-name "ed25519-verify"
+        "openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin")
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
-        $CMDS
+        "${CMDS[@]}"
   register: run_benchmarks_crypto_asymmetric_result
   changed_when: false
   failed_when: false
@@ -318,31 +302,26 @@
 
       has_dgst() { echo "{{ run_benchmarks_crypto_info.digests | join(' ') }}" | grep -qw "$1"; }
 
-      CMDS=""
+      CMDS=()
 
       if has_dgst sha256; then
-        CMDS="$CMDS --command-name 'hmac-sha256' \
-          'openssl dgst -sha256 -hmac benchmarkkey testdata.bin'"
+        CMDS+=(--command-name "hmac-sha256" "openssl dgst -sha256 -hmac benchmarkkey testdata.bin")
       fi
 
       if has_dgst sha512; then
-        CMDS="$CMDS --command-name 'hmac-sha512' \
-          'openssl dgst -sha512 -hmac benchmarkkey testdata.bin'"
+        CMDS+=(--command-name "hmac-sha512" "openssl dgst -sha512 -hmac benchmarkkey testdata.bin")
       fi
 
       if has_dgst sha3-256; then
-        CMDS="$CMDS --command-name 'hmac-sha3-256' \
-          'openssl dgst -sha3-256 -hmac benchmarkkey testdata.bin'"
+        CMDS+=(--command-name "hmac-sha3-256" "openssl dgst -sha3-256 -hmac benchmarkkey testdata.bin")
       fi
 
-      if [ -n "$CMDS" ]; then
-        {{ run_benchmarks_hyperfine_bin }} \
-          --runs {{ run_benchmarks_runs }} \
-          --warmup {{ run_benchmarks_warmup }} \
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-          --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
-          $CMDS
-      fi
+        --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
+        "${CMDS[@]}"
   register: run_benchmarks_crypto_hmac_result
   changed_when: false
   failed_when: false

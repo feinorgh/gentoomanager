@@ -86,7 +86,6 @@
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-        --interleave \
         --export-json {{ run_benchmarks_work_dir }}/python.json \
         --command-name 'prime-sieve' 'python3 pybench.py sieve' \
         --command-name 'json-serde' 'python3 pybench.py json_serde' \

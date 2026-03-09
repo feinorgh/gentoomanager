@@ -31,7 +31,6 @@
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-        --interleave \
         --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
         --command-name 'sort' 'sort sortdata.txt > /dev/null' \
         --command-name 'sort-unique' 'sort -u sortdata.txt > /dev/null' \
@@ -98,7 +97,6 @@
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-        --interleave \
         --export-json {{ run_benchmarks_work_dir }}/git.json \
         --command-name 'git-log' 'git log --oneline' \
         --command-name 'git-log-stat' 'git log --stat --quiet' \
@@ -139,7 +137,6 @@
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-        --interleave \
         --export-json {{ run_benchmarks_work_dir }}/diff.json \
         --command-name 'diff' 'diff diff_a.txt diff_b.txt > /dev/null || true' \
         --command-name 'comm' 'comm <(sort diff_a.txt) <(sort diff_b.txt) > /dev/null'
