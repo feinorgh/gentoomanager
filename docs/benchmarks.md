@@ -38,6 +38,9 @@ reports with charts.
   - [Markdown Report](#markdown-report)
   - [HTML Report](#html-report)
   - [Regenerating Reports](#regenerating-reports)
+- [Benchmark Fixture Files](#benchmark-fixture-files)
+  - [Fixture Corpus Details](#fixture-corpus-details)
+  - [Fallback Behaviour](#fallback-behaviour)
 - [RAM Management](#ram-management)
 - [Windows Support](#windows-support)
 - [Configuration Reference](#configuration-reference)
@@ -283,7 +286,7 @@ Pass an empty list `[]` (the default) to run all categories.
 
 ### Compression
 
-Tests compression and decompression speed on a random binary file.
+Tests compression and decompression speed on a real-world mixed-content corpus.
 
 | Benchmark        | Tool  | Description                 |
 |------------------|-------|-----------------------------|
@@ -298,7 +301,17 @@ Tests compression and decompression speed on a random binary file.
 | lz4-compress     | lz4   | Compress (default level)    |
 | lz4-decompress   | lz4   | Decompress                  |
 
-**Test data:** Random binary file, size `run_benchmarks_compress_size_mb` (default 64 MB).
+**Test data:** [Silesia corpus](http://sun.aei.polsl.pl/~sdeor/corpus/) — a
+211 MiB concatenation of 12 diverse real-world files (English text, compiled
+binary, medical image, XML, database, etc.).  This is the standard corpus
+used to publish zstd, lz4, and brotli reference benchmarks.  Downloaded once
+to the controller by `scripts/download_benchmark_fixtures.py` and copied to
+each host; if unavailable, falls back to a random binary file (which only
+tests the incompressible-data fast-path, not actual compression performance).
+
+The [Canterbury corpus](https://corpus.canterbury.ac.nz/) is also downloaded
+to `benchmarks/fixtures/cantrbry/` for ad-hoc comparison with published
+results, but is not used in the automated benchmark runs.
 
 ### Cryptography
 
@@ -441,16 +454,29 @@ depending on installed libraries and Gentoo USE flags.
 
 **Audio decoders:** Each successfully encoded format is also decoded.
 
-**Test media:** Synthetic 1920×1080 30fps video with 440 Hz sine tone,
-duration `run_benchmarks_ffmpeg_duration_sec` (default 10 s); 60 s for
-audio-only tests.
+**Test media:** [Big Buck Bunny](https://peach.blender.org/) (CC BY 3.0, Blender
+Foundation) — a 30-second FFV1 lossless 720p 30fps clip extracted from the
+9-minute film, plus a 60-second PCM audio track.  This real-world animated
+source exercises colour prediction, motion estimation, and codec
+entropy-coding in a way that a synthetic test card cannot.  The clip is
+downloaded once to the controller by `scripts/download_benchmark_fixtures.py`
+and copied to each host before the benchmarks run; if unavailable, a
+deterministic synthetic source (720p 30fps FFV1-encoded `testsrc2` pattern)
+is generated as a fallback.
+
+The audio source, extracted from the same BBB film, gives realistic codec
+complexity; the fallback is a 440 Hz sine wave.
 
 The report includes a **codec availability matrix** showing which codecs
 are present on each host — useful for comparing Gentoo USE flag configurations.
 
 ### ImageMagick
 
-Tests image manipulation operations on a generated test image.
+Tests image manipulation operations on two sets of source images:
+
+**4K noise image** — a deterministic 4096×4096 RGB PNG generated from a fixed
+random seed (42) on the controller by `scripts/generate_benchmark_images.py`.
+Identical on every host and every run.
 
 | Benchmark   | Description                       |
 |-------------|-----------------------------------|
@@ -461,6 +487,16 @@ Tests image manipulation operations on a generated test image.
 | convert-jpg | Convert PNG → JPEG (quality 85)   |
 | rotate      | Rotate 90°                        |
 | grayscale   | Convert to grayscale              |
+
+**[Kodak Lossless True Color Image Suite](http://r0k.us/graphics/kodak/)** —
+24 natural-scene photographs at 768×512 (free for research use), the standard
+reference set used in published image-codec papers.  Each image is encoded to
+JPEG Q90 and the result discarded; this measures how encoder speed varies
+across diverse photographic content.
+
+| Benchmark       | Description                              |
+|-----------------|------------------------------------------|
+| kodimNN-encode  | JPEG Q90 encode of each Kodak image      |
 
 ### Coreutils
 
@@ -611,6 +647,50 @@ python3 scripts/generate_benchmark_report.py benchmarks/ --anonymize
 
 Hostnames are replaced with names from Greek mythology.  The mapping is
 deterministic — sorted hostnames are assigned names in order.
+
+## Benchmark Fixture Files
+
+The benchmark suite uses real-world standardised fixture files as inputs
+instead of synthetic or randomly-generated data.  This ensures results are
+meaningful, reproducible, and comparable against published benchmarks for the
+same tools.
+
+All fixtures are downloaded once to the controller by
+`scripts/download_benchmark_fixtures.py` and then copied to each host before
+the benchmarks run.  They are stored in `benchmarks/fixtures/` (git-ignored).
+
+```bash
+python3 scripts/download_benchmark_fixtures.py benchmarks/fixtures/
+# Skip the ~330 MiB BBB download (FFmpeg will use a synthetic fallback):
+python3 scripts/download_benchmark_fixtures.py benchmarks/fixtures/ --skip-video
+# Force re-download of everything:
+python3 scripts/download_benchmark_fixtures.py benchmarks/fixtures/ --force
+```
+
+This step is also run automatically (with `creates:` guard) at the start of
+each benchmark play via `delegate_to: localhost, run_once: true`.
+
+### Fixture Corpus Details
+
+| Corpus | Category | Size | Licence |
+|--------|----------|------|---------|
+| [Silesia](http://sun.aei.polsl.pl/~sdeor/corpus/) | Compression | 211 MiB (12 files) | Free for benchmarking |
+| [Canterbury](https://corpus.canterbury.ac.nz/) | Compression (reference) | 2.8 MiB (18 files) | Public domain |
+| [Big Buck Bunny](https://peach.blender.org/) 720p | FFmpeg video | ≈30 s FFV1 + 60 s WAV | CC BY 3.0, Blender Foundation |
+| [Kodak LTCI](http://r0k.us/graphics/kodak/) | ImageMagick | 24 PNG, ≈18 MiB | Free for research |
+| Seed-42 4K PNG | ImageMagick | 48 MiB (generated) | Generated locally |
+
+### Fallback Behaviour
+
+If a fixture file is unavailable (download failed or `--skip-video` was
+passed), the corresponding benchmark task falls back to a synthetic source:
+
+| Fixture | Fallback |
+|---------|----------|
+| `silesia_combined.bin` | 64 MiB random binary (`/dev/urandom`) |
+| `bbb_720p_30s.mkv` | `testsrc2` 720p FFV1 synthetic video |
+| `bbb_audio_60s.wav` | 440 Hz sine PCM audio |
+| `kodak/` | Kodak benchmark is skipped |
 
 ## RAM Management
 
@@ -790,15 +870,29 @@ and set `ansible_python_interpreter`.
 │               ├── nixos.yml
 │               └── solus.yml
 ├── scripts/
-│   ├── run_benchmarks.sh                # Benchmark wrapper script
-│   └── generate_benchmark_report.py     # Report generator (MD + HTML)
+│   ├── run_benchmarks.sh                    # Benchmark wrapper script
+│   ├── generate_benchmark_report.py         # Report generator (MD + HTML)
+│   ├── generate_benchmark_images.py         # Deterministic 4K fixture image generator
+│   ├── download_benchmark_fixtures.py       # Standard corpus downloader
+│   └── benchmark_dashboard.py              # Interactive Plotly Dash dashboard
 ├── tests/unit/
-│   └── test_benchmark_report.py         # Report generator tests
-├── requirements.yml                     # Ansible collection dependencies
-├── baremetal.txt                        # Hostnames of physical (non-VM) machines
-└── benchmarks/                          # Output — git-ignored
+│   └── test_benchmark_report.py            # Report generator tests
+├── requirements.yml                        # Ansible collection dependencies
+├── baremetal.txt                           # Hostnames of physical (non-VM) machines
+└── benchmarks/                            # Output — git-ignored
     ├── report.md
     ├── report.html
+    ├── fixtures/                           # Standardised benchmark inputs (git-ignored)
+    │   ├── silesia/                        # Silesia corpus (12 files)
+    │   ├── silesia_combined.bin            # All 12 files concatenated (~211 MiB)
+    │   ├── cantrbry/                       # Canterbury corpus (18 files)
+    │   ├── bbb_sunflower_720p.mp4          # BBB source download (kept for re-extraction)
+    │   ├── bbb_720p_30s.mkv               # 30-second FFV1 lossless clip
+    │   ├── bbb_audio_60s.wav              # 60-second PCM audio
+    │   ├── kodak/                          # Kodak True Color Image Suite (24 PNG)
+    │   ├── im_4k.png                       # Deterministic seed-42 4K noise image
+    │   ├── im_4k_q90.jpg                   # JPEG Q90 derivative
+    │   └── im_4k.webp                      # WebP Q90 derivative
     └── results/
         └── <hostname>/
             ├── metadata.json
@@ -810,5 +904,6 @@ and set `ansible_python_interpreter`.
             ├── ffmpeg_audio_encode.json
             ├── ffmpeg_audio_decode.json
             ├── ffmpeg_codecs.json
+            ├── imagemagick_kodak_encode.json
             └── …
 ```

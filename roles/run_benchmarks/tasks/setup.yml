@@ -29,7 +29,32 @@
     state: directory
     mode: "0700"
 
-- name: Generate random test data for compression benchmarks
+# ── Download standardised fixture files on controller (once per collection run)
+- name: Download standard benchmark fixture files on controller
+  ansible.builtin.command:
+    cmd: >-
+      python3 {{ playbook_dir | dirname }}/scripts/download_benchmark_fixtures.py
+      {{ run_benchmarks_fixture_dir }}
+    creates: "{{ run_benchmarks_fixture_dir }}/silesia_combined.bin"
+  delegate_to: localhost
+  run_once: true
+
+# ── Populate compression test data ───────────────────────────────────────────
+- name: Check whether compression test data is already present on host
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/testdata.bin"
+  register: run_benchmarks_testdata_stat
+
+- name: Copy Silesia combined corpus to host (compression benchmark input)
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/silesia_combined.bin"
+    dest: "{{ run_benchmarks_work_dir }}/testdata.bin"
+    mode: "0644"
+  when:
+    - not run_benchmarks_testdata_stat.stat.exists
+    - (run_benchmarks_fixture_dir + '/silesia_combined.bin') is file
+
+- name: Generate random test data (fallback when Silesia corpus is unavailable)
   ansible.builtin.command:
     cmd: >-
       dd if=/dev/urandom of={{ run_benchmarks_work_dir }}/testdata.bin

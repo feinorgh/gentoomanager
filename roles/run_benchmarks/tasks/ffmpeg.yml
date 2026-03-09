@@ -36,20 +36,51 @@
     run_benchmarks_ffmpeg_check.rc == 0 and
     run_benchmarks_ffmpeg_codecs_raw is not skipped
 
-# ── Test media generation ─────────────────────────────────────────────────
+# ── Test media (controller-generated BBB fixtures with synthetic fallback) ────
 
-- name: Generate test video with FFmpeg
+- name: Check whether BBB video fixture is already present on host
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/test_raw.avi"
+  register: run_benchmarks_video_src_stat
+  when: run_benchmarks_ffmpeg_check.rc == 0
+
+- name: Copy Big Buck Bunny FFV1 video source from controller to host
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/bbb_720p_30s.mkv"
+    dest: "{{ run_benchmarks_work_dir }}/test_raw.avi"
+    mode: "0644"
+  when:
+    - run_benchmarks_ffmpeg_check.rc == 0
+    - not run_benchmarks_video_src_stat.stat.exists | default(true)
+    - (run_benchmarks_fixture_dir + '/bbb_720p_30s.mkv') is file
+
+- name: Generate synthetic 720p FFV1 video source (fallback when BBB is unavailable)
   ansible.builtin.shell:
     cmd: |
       ffmpeg -y -f lavfi \
-        -i "testsrc2=duration={{ run_benchmarks_ffmpeg_duration_sec }}:size=1920x1080:rate=30" \
-        -f lavfi -i "sine=frequency=440:duration={{ run_benchmarks_ffmpeg_duration_sec }}" \
-        -c:v rawvideo -c:a pcm_s16le \
+        -i "testsrc2=duration={{ run_benchmarks_ffmpeg_duration_sec }}:size=1280x720:rate=30" \
+        -c:v ffv1 -level 3 -threads 0 -an \
         {{ run_benchmarks_work_dir }}/test_raw.avi
     creates: "{{ run_benchmarks_work_dir }}/test_raw.avi"
   when: run_benchmarks_ffmpeg_check.rc == 0
 
-- name: Generate test audio with FFmpeg
+- name: Check whether BBB audio fixture is already present on host
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/test_raw.wav"
+  register: run_benchmarks_audio_src_stat
+  when: run_benchmarks_ffmpeg_check.rc == 0
+
+- name: Copy Big Buck Bunny PCM audio source from controller to host
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/bbb_audio_60s.wav"
+    dest: "{{ run_benchmarks_work_dir }}/test_raw.wav"
+    mode: "0644"
+  when:
+    - run_benchmarks_ffmpeg_check.rc == 0
+    - not run_benchmarks_audio_src_stat.stat.exists | default(true)
+    - (run_benchmarks_fixture_dir + '/bbb_audio_60s.wav') is file
+
+- name: Generate synthetic PCM audio source (fallback when BBB is unavailable)
   ansible.builtin.shell:
     cmd: |
       ffmpeg -y -f lavfi \

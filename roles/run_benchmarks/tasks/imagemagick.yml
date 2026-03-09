@@ -88,6 +88,64 @@
     - run_benchmarks_im_has_webp | default(false) | bool
     - (run_benchmarks_fixture_dir + '/im_4k.webp') is file
 
+# ── Kodak Lossless True Color Image Suite ────────────────────────────────
+# 24 natural-scene photographs, 768×512 each — the standard reference set
+# for published image-codec research.  Copied from controller fixtures.
+
+- name: Check whether Kodak reference images are present on host
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/kodak/kodim01.png"
+  register: run_benchmarks_kodak_stat
+  when: run_benchmarks_im_check.rc == 0
+
+- name: Copy Kodak Lossless True Color Image Suite to host
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/kodak/"
+    dest: "{{ run_benchmarks_work_dir }}/kodak/"
+    mode: "0644"
+  when:
+    - run_benchmarks_im_check.rc == 0
+    - not run_benchmarks_kodak_stat.stat.exists | default(true)
+    - (run_benchmarks_fixture_dir + '/kodak') is directory
+
+- name: Run ImageMagick Kodak JPEG-Q90 encoding benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      IM={{ run_benchmarks_im_bin }}
+
+      CMDS=()
+      for img in kodak/kodim*.png; do
+        [ -f "$img" ] || continue
+        name=$(basename "$img" .png)
+        CMDS+=(--command-name "$name" "${IM} ${img} -quality 90 JPEG:/dev/null")
+      done
+      [ ${#CMDS[@]} -eq 0 ] && exit 0
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/imagemagick_kodak_encode.json \
+        "${CMDS[@]}"
+  register: run_benchmarks_kodak_encode_result
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_im_check.rc == 0
+    - run_benchmarks_kodak_stat.stat.exists | default(false)
+
+- name: Warn on imagemagick_kodak_encode benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_kodak_encode benchmark exited
+      rc={{ run_benchmarks_kodak_encode_result.rc }}.
+      {{ run_benchmarks_kodak_encode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_kodak_encode_result is not skipped
+    - run_benchmarks_kodak_encode_result.rc | default(0) != 0
+
 # ── Resize benchmarks ─────────────────────────────────────────────────────
 
 - name: Run ImageMagick resize benchmarks
