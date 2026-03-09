@@ -123,6 +123,8 @@
               # Build kernel timeline
               kernel_timeline = []
               for line in kernel_file.read_text().strip().split("\n"):
+                  if "<<<" in line:
+                      continue  # uninstall — skip
                   if ">>>" not in line:
                       continue
                   parts = line.split(">>>")
@@ -147,6 +149,8 @@
               # Parse qlop build entries
               builds = {}
               for line in qlop_file.read_text().strip().split("\n"):
+                  if "<<<" in line:
+                      continue  # uninstall — skip
                   if ">>>" not in line:
                       continue
                   parts = line.split(">>>")
