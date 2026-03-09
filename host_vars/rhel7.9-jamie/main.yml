@@ -1,0 +1,4 @@
+---
+# RHEL 7.9 ships Python 3.6 which is too old for Ansible 2.17+.
+# rh-python38 from Software Collections provides a compatible interpreter.
+ansible_python_interpreter: /opt/rh/rh-python38/root/usr/bin/python3.8

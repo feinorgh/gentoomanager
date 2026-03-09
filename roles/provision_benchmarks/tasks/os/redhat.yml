@@ -1,23 +1,46 @@
 ---
 # Red Hat family – Fedora, RHEL, CentOS, Oracle Linux.
+#
+# Uses the detected package manager binary directly so older hosts
+# (RHEL 7/8 with SCL Python) don't require Python dnf/yum bindings.
 
-- name: Install EPEL release (RHEL/CentOS/OL)
-  ansible.builtin.package:
-    name: epel-release
-    state: present
+- name: Detect package manager (dnf preferred over yum)
+  ansible.builtin.shell:
+    cmd: command -v dnf 2>/dev/null || command -v yum 2>/dev/null
+  register: provision_benchmarks_rhel_pkgmgr
+  changed_when: false
+  failed_when: provision_benchmarks_rhel_pkgmgr.rc != 0
+
+- name: Install EPEL release package (RHEL/CentOS/OL)
+  ansible.builtin.command:
+    cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y epel-release"
   become: true
   when: ansible_distribution | default('') != 'Fedora'
   failed_when: false
+  changed_when: true
+  register: provision_benchmarks_epel_pkg
+
+- name: Install EPEL release via direct RPM URL (fallback when simple name fails)
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{
+      ansible_distribution_major_version }}.noarch.rpm
+  become: true
+  when: >-
+    ansible_distribution | default('') != 'Fedora' and
+    ('No package epel-release' in (provision_benchmarks_epel_pkg.stdout | default('')) or
+     'Error' in (provision_benchmarks_epel_pkg.stdout | default('')))
+  failed_when: false
+  changed_when: true
 
 - name: Enable CRB/PowerTools for RHEL 8+ dependencies
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      if command -v dnf >/dev/null 2>&1; then
-        dnf config-manager --set-enabled crb 2>/dev/null || \
-        dnf config-manager --set-enabled powertools 2>/dev/null || \
-        dnf config-manager --set-enabled PowerTools 2>/dev/null || true
-      fi
+      dnf config-manager --set-enabled crb 2>/dev/null || \
+      dnf config-manager --set-enabled powertools 2>/dev/null || \
+      dnf config-manager --set-enabled PowerTools 2>/dev/null || true
   become: true
   changed_when: false
   when: >-
@@ -25,82 +48,90 @@
     (ansible_distribution_major_version | default('0') | int) >= 8
 
 - name: Install benchmark dependencies (Red Hat)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_packages['RedHat'] }}"
-    state: present
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      {{ provision_benchmarks_packages['RedHat'] | join(' ') }}
   become: true
-  failed_when: false
-  register: provision_benchmarks_pkg_result
-
-- name: Install packages individually on partial failure (Red Hat)
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
-  become: true
-  loop: "{{ provision_benchmarks_packages['RedHat'] }}"
-  when: provision_benchmarks_pkg_result is failed
+  changed_when: true
   failed_when: false
 
 - name: Install EPEL packages – hyperfine (RHEL/CentOS/OL)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_epel_packages }}"
-    state: present
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      {{ provision_benchmarks_epel_packages | join(' ') }}
   become: true
   when: ansible_distribution | default('') != 'Fedora'
+  changed_when: true
   failed_when: false
 
 - name: Install hyperfine via dnf (Fedora)
-  ansible.builtin.package:
-    name: hyperfine
-    state: present
+  ansible.builtin.command:
+    cmd: dnf install -y hyperfine
   become: true
   when: ansible_distribution | default('') == 'Fedora'
+  changed_when: true
   failed_when: false
 
-- name: Install ffmpeg on RHEL via RPM Fusion
+- name: Install ffmpeg via RPM Fusion (Fedora)
+  when: >-
+    provision_benchmarks_install_ffmpeg | bool and
+    ansible_distribution | default('') == 'Fedora'
+  become: true
+  block:
+    - name: Install RPM Fusion Free repository (Fedora)
+      ansible.builtin.command:
+        cmd: >-
+          dnf install -y
+          https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{
+          ansible_distribution_major_version }}.noarch.rpm
+      changed_when: true
+      failed_when: false
+
+    - name: Install ffmpeg (Fedora)
+      ansible.builtin.command:
+        cmd: dnf install -y ffmpeg
+      changed_when: true
+      failed_when: false
+
+- name: Install ffmpeg via RPM Fusion (RHEL/CentOS/OL)
   when: >-
     provision_benchmarks_install_ffmpeg | bool and
     ansible_distribution | default('') != 'Fedora'
   become: true
   block:
-    - name: Import RPM Fusion Free GPG key
+    - name: Import RPM Fusion Free GPG key (EL)
       ansible.builtin.rpm_key:
         key: >-
-          https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-fedora-{{
+          https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-el-{{
           ansible_distribution_major_version }}
         state: present
       failed_when: false
 
-    - name: Install RPM Fusion Free repository
-      ansible.builtin.package:
-        name: >-
-          https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{
+    - name: Install RPM Fusion Free repository (EL)
+      ansible.builtin.command:
+        cmd: >-
+          {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+          https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{
           ansible_distribution_major_version }}.noarch.rpm
-        state: present
+      changed_when: true
       failed_when: false
 
-    - name: Install ffmpeg from RPM Fusion
-      ansible.builtin.package:
-        name: ffmpeg
-        state: present
+    - name: Install ffmpeg (EL)
+      ansible.builtin.command:
+        cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y ffmpeg"
+      changed_when: true
       failed_when: false
-
-- name: Install ffmpeg (Fedora)
-  ansible.builtin.package:
-    name: ffmpeg
-    state: present
-  become: true
-  when: >-
-    provision_benchmarks_install_ffmpeg | bool and
-    ansible_distribution | default('') == 'Fedora'
-  failed_when: false
 
 - name: Install numpy (Red Hat)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_numpy_packages['RedHat'] }}"
-    state: present
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      {{ provision_benchmarks_numpy_packages['RedHat'] | join(' ') }}
   become: true
   when: provision_benchmarks_install_numpy | bool
+  changed_when: true
   failed_when: false
 
 - name: Install hyperfine binary (fallback)
