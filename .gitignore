@@ -174,16 +174,9 @@ cython_debug/
 benchmarks/
 inventory_generator_rs/target/
 hypervisors.txt
-host_vars/*
+baremetal.txt
+host_vars/
 group_vars/
-
-# Non-generated host-specific connection/interpreter config
-!host_vars/rhel7.9-jamie/
-!host_vars/rhel7.9-jamie/**
-!host_vars/rhel8.10-nicole/
-!host_vars/rhel8.10-nicole/**
-!host_vars/oraclelinux-olivia/
-!host_vars/oraclelinux-olivia/**
 
 # Ansible collection dependencies – install with:
 #   ansible-galaxy collection install -r requirements.yml

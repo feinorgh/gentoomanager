@@ -7,7 +7,7 @@
 #
 # Usage:
 #   ansible-playbook playbooks/provision_benchmarks.yml
-#   ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_elise
+#   ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_hv2
 #   ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
 
 # ── Play 1: gather facts in parallel, create OS-family dynamic groups ────

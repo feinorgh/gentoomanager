@@ -7,7 +7,7 @@
 # Examples:
 #   ./scripts/run_benchmarks.sh
 #   ./scripts/run_benchmarks.sh --host gentoo-alice
-#   ./scripts/run_benchmarks.sh --hypervisor adele
+#   ./scripts/run_benchmarks.sh --hypervisor hv1
 #   ./scripts/run_benchmarks.sh --category compression,crypto
 #   ./scripts/run_benchmarks.sh --runs 10 --warmup 5
 #   ./scripts/run_benchmarks.sh --no-report --verbose --dry-run
@@ -44,7 +44,7 @@ Usage: $(basename "$0") [OPTIONS] [-- EXTRA_ANSIBLE_ARGS...]
 Host selection (mutually exclusive):
   --host HOST[,HOST...]       Run on specific host(s) by name
   --hypervisor HV[,HV...]     Run only on VMs belonging to hypervisor(s)
-                              (e.g. adele, elise — matches hypervisor_<name>)
+                              (e.g. hv1, hv2 — matches hypervisor_<name>)
   --group GROUP[,GROUP...]    Run on an inventory group (e.g. gentoo, ubuntu, baremetal)
   --limit PATTERN             Raw ansible --limit expression
 
@@ -78,8 +78,8 @@ Examples:
   # Single host, verbose
   $(basename "$0") --host gentoo-alice --verbose
 
-  # All VMs on hypervisor adele only
-  $(basename "$0") --hypervisor adele
+  # All VMs on hypervisor hv1 only
+  $(basename "$0") --hypervisor hv1
 
   # Only compression and crypto, more runs
   $(basename "$0") --category compression,crypto --runs 10 --warmup 5

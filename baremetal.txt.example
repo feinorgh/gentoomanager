@@ -3,6 +3,9 @@
 # These hosts are reached directly (no hypervisor ProxyCommand).
 # Add them here to include them in benchmark runs alongside VMs.
 #
+# Copy this file to baremetal.txt and add your machine hostnames:
+#   cp baremetal.txt.example baremetal.txt
+#
 # Example:
 #   workstation
 #   192.168.1.50

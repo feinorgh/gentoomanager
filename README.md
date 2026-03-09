@@ -43,7 +43,11 @@ git clone <repo-url> && cd local.gentoomanager
 # 2. Install collection dependencies
 ansible-galaxy collection install -r requirements.yml
 
-# 3. Verify connectivity
+# 3. Configure your hypervisors and bare-metal hosts
+cp hypervisors.txt.example hypervisors.txt   # then add your hypervisor hostnames
+cp baremetal.txt.example baremetal.txt       # then add bare-metal hostnames (optional)
+
+# 4. Verify connectivity
 ansible all -m ping
 ```
 
@@ -60,7 +64,7 @@ It reads host configuration files and produces groups including:
 |-------|---------|
 | `gentoo` | All Gentoo Linux VMs |
 | `fedora`, `rhel`, `ubuntu`, `debian`, … | Per-distro groups |
-| `hypervisor_adele`, `hypervisor_elise` | VMs on each KVM hypervisor |
+| `hypervisor_hv1`, `hypervisor_hv2` | VMs on each KVM hypervisor |
 | `baremetal` | Physical machines (hostnames in `baremetal.txt`) |
 | `win`, `win10`, `win11` | Windows VMs |
 
@@ -138,7 +142,7 @@ noise bleeding into benchmark results.
 ansible-playbook playbooks/provision_benchmarks.yml
 
 # Provision only one hypervisor's VMs
-ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_adele
+ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_hv1
 
 # Provision with sudo password prompt
 ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
@@ -182,10 +186,10 @@ Flags:
 ./scripts/run_benchmarks.sh
 
 # Single host, verbose
-./scripts/run_benchmarks.sh --host gentoo-alma --verbose
+./scripts/run_benchmarks.sh --host gentoo-vm1 --verbose
 
-# Only compression and crypto on hypervisor adele
-./scripts/run_benchmarks.sh --hypervisor adele --category compression,crypto
+# Only compression and crypto on hypervisor hv1
+./scripts/run_benchmarks.sh --hypervisor hv1 --category compression,crypto
 
 # All hosts, 10 runs, no report
 ./scripts/run_benchmarks.sh --runs 10 --no-report

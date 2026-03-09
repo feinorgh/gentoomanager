@@ -1,0 +1,11 @@
+# KVM/QEMU hypervisors to enumerate VMs from.
+# One hostname per line. Lines starting with # are ignored.
+# The inventory generator connects to each hypervisor via SSH and
+# lists all libvirt domains to build the dynamic inventory.
+#
+# Copy this file to hypervisors.txt and add your hypervisor hostnames:
+#   cp hypervisors.txt.example hypervisors.txt
+#
+# Example:
+#   hypervisor1
+#   hypervisor2.example.local

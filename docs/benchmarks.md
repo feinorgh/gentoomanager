@@ -161,7 +161,7 @@ is downloaded from the [GitHub release](https://github.com/sharkdp/hyperfine/rel
 
 ```bash
 # Provision only one hypervisor's VMs
-ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_adele
+ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_hv1
 
 # Skip FFmpeg (saves time on hosts where it is slow to install)
 ansible-playbook playbooks/provision_benchmarks.yml \
@@ -214,10 +214,10 @@ Flags:
 ./scripts/run_benchmarks.sh
 
 # Single host, verbose
-./scripts/run_benchmarks.sh --host gentoo-alma -v
+./scripts/run_benchmarks.sh --host gentoo-vm1 -v
 
-# Only compression and crypto on hypervisor adele's VMs
-./scripts/run_benchmarks.sh --hypervisor adele --category compression,crypto
+# Only compression and crypto on hypervisor hv1's VMs
+./scripts/run_benchmarks.sh --hypervisor hv1 --category compression,crypto
 
 # All baremetal hosts, 10 runs, no report generation
 ./scripts/run_benchmarks.sh --group baremetal --runs 10 --no-report
@@ -245,10 +245,10 @@ Pass an empty list `[]` (the default) to run all categories.
 
 ```bash
 # Only VMs on one hypervisor
-./scripts/run_benchmarks.sh --hypervisor adele
+./scripts/run_benchmarks.sh --hypervisor hv1
 
 # Single VM
-./scripts/run_benchmarks.sh --host gentoo-alma
+./scripts/run_benchmarks.sh --host gentoo-vm1
 
 # Inventory group
 ./scripts/run_benchmarks.sh --group gentoo
@@ -257,7 +257,7 @@ Pass an empty list `[]` (the default) to run all categories.
 ./scripts/run_benchmarks.sh --group baremetal
 
 # Raw Ansible limit expression
-./scripts/run_benchmarks.sh --limit 'gentoo-alma,gentoo-diana'
+./scripts/run_benchmarks.sh --limit 'gentoo-vm1,gentoo-vm2'
 ```
 
 > **Note:** The controller node (localhost) is automatically detected
@@ -731,7 +731,7 @@ preset.  Run FFmpeg separately on a subset of hosts if needed:
 ./scripts/run_benchmarks.sh --category compression,crypto,compiler,python,coreutils
 
 # FFmpeg only on one host
-./scripts/run_benchmarks.sh --host gentoo-alma --category ffmpeg
+./scripts/run_benchmarks.sh --host gentoo-vm1 --category ffmpeg
 ```
 
 ### RHEL / OL hosts fail with "SyntaxError: future feature annotations"
