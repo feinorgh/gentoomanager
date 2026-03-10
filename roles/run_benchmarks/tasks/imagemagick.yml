@@ -116,12 +116,14 @@
       IM={{ run_benchmarks_im_bin }}
 
       CMDS=()
+      count=0
       for img in kodak/kodim*.png; do
         [ -f "$img" ] || continue
         name=$(basename "$img" .png)
         CMDS+=(--command-name "$name" "${IM} ${img} -quality 90 JPEG:/dev/null")
+        count=$((count + 1))
       done
-      [ ${#CMDS[@]} -eq 0 ] && exit 0
+      [ "$count" -eq 0 ] && exit 0
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
