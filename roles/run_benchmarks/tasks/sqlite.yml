@@ -35,6 +35,21 @@
   failed_when: false
   when: run_benchmarks_sqlite_check.rc == 0
 
+- name: Stat SQLite template database
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/sqlite_template.db"
+  register: run_benchmarks_sqlite_template_stat
+  when: run_benchmarks_sqlite_check.rc == 0
+
+- name: Remove invalid (empty) SQLite template database
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/sqlite_template.db"
+    state: absent
+  when:
+    - run_benchmarks_sqlite_check.rc == 0
+    - run_benchmarks_sqlite_template_stat.stat.exists | default(false)
+    - run_benchmarks_sqlite_template_stat.stat.size | default(1) == 0
+
 - name: Create SQLite template database
   ansible.builtin.shell:
     cmd: sqlite3 "{{ run_benchmarks_work_dir }}/sqlite_template.db" < "{{ run_benchmarks_work_dir }}/sqlite_setup.sql"
