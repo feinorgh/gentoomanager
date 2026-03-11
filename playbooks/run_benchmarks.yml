@@ -41,6 +41,8 @@
     run_benchmarks_min_disk_mb: 2048
     run_benchmarks_min_ram_mb: 4096
     run_benchmarks_skip_complete: false
+    run_benchmarks_ffmpeg_cmd_timeout_sec: 120
+    run_benchmarks_ffmpeg_task_timeout_sec: 14400
     # hypervisor_host is injected by inventory_generator.py for each VM.
     # Set to empty string as a safe default; health check is skipped when unset.
     hypervisor_host: "{{ hostvars[inventory_hostname].hypervisor_host | default('') }}"

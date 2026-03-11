@@ -55,6 +55,16 @@ run_benchmarks_min_ram_mb: 4096
 run_benchmarks_compress_size_mb: 64
 run_benchmarks_ffmpeg_duration_sec: 10
 
+# Per-command time limit passed to hyperfine (--time-limit, seconds).
+# Prevents slow AV1/HEVC encoders from blocking the entire suite for hours.
+# Set to 0 to disable the limit.
+run_benchmarks_ffmpeg_cmd_timeout_sec: 120
+
+# Ansible task timeout for the full FFmpeg video encode hyperfine run (seconds).
+# Must be larger than runs * warmup * ffmpeg_cmd_timeout_sec.  Default covers
+# 10 codecs × 8 runs × 120 s = 9600 s with a safety margin.
+run_benchmarks_ffmpeg_task_timeout_sec: 14400
+
 # Hyperfine binary name
 run_benchmarks_hyperfine_bin: hyperfine
 
