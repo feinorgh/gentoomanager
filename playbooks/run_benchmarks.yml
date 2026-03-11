@@ -37,6 +37,10 @@
     run_benchmarks_work_dir: /tmp/ansible-benchmarks
     run_benchmarks_work_dir_win: C:\ansible-benchmarks
     run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
+    run_benchmarks_categories: []
+    run_benchmarks_min_disk_mb: 2048
+    run_benchmarks_min_ram_mb: 4096
+    run_benchmarks_skip_complete: false
     # hypervisor_host is injected by inventory_generator.py for each VM.
     # Set to empty string as a safe default; health check is skipped when unset.
     hypervisor_host: "{{ hostvars[inventory_hostname].hypervisor_host | default('') }}"
@@ -91,8 +95,8 @@
       ansible.builtin.set_fact:
         _skip_check_categories: >-
           {{
-            (run_benchmarks_categories | length > 0)
-            | ternary(run_benchmarks_categories,
+            (run_benchmarks_categories | default([]) | length > 0)
+            | ternary(run_benchmarks_categories | default([]),
                       ['compression', 'crypto', 'compiler', 'python', 'numeric',
                        'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
                        'process', 'disk', 'linker', 'opencv', 'startup',
