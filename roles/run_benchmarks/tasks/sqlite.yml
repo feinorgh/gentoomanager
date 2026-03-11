@@ -18,7 +18,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - <<'PYEOF'
+      python3 - > "{{ run_benchmarks_work_dir }}/sqlite_setup.sql" <<'PYEOF'
       import random, sys
       random.seed(42)
       out = sys.stdout
@@ -67,7 +67,10 @@
 
 - name: Warn if SQLite write benchmarks failed
   ansible.builtin.debug:
-    msg: "[WARN] sqlite_write benchmark failed or timed out"
+    msg: >-
+      [WARN] {{ inventory_hostname }}: sqlite_write benchmark failed
+      (rc={{ run_benchmarks_sqlite_write_result.rc }}).
+      {{ run_benchmarks_sqlite_write_result.stderr | default('') | truncate(400) | trim }}
   when:
     - run_benchmarks_sqlite_check.rc == 0
     - run_benchmarks_sqlite_write_result.rc != 0
@@ -96,7 +99,10 @@
 
 - name: Warn if SQLite read benchmarks failed
   ansible.builtin.debug:
-    msg: "[WARN] sqlite_read benchmark failed or timed out"
+    msg: >-
+      [WARN] {{ inventory_hostname }}: sqlite_read benchmark failed
+      (rc={{ run_benchmarks_sqlite_read_result.rc }}).
+      {{ run_benchmarks_sqlite_read_result.stderr | default('') | truncate(400) | trim }}
   when:
     - run_benchmarks_sqlite_check.rc == 0
     - run_benchmarks_sqlite_read_result.rc != 0

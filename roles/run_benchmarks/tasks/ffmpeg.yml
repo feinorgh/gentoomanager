@@ -101,40 +101,38 @@
       ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ V/ {print $2}')
       has() { echo "$ENCS" | grep -qx "$1"; }
 
+      # Per-command timeout wrapper (0 = no limit)
+      T={{ run_benchmarks_ffmpeg_cmd_timeout_sec | int }}
+      wrap() { [ "$T" -gt 0 ] && echo "timeout ${T}s $*" || echo "$*"; }
+
       CMDS=()
       has libx264    && CMDS+=(--command-name "h264-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null)")
       has libx265    && CMDS+=(--command-name "h265-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null)")
       has libvpx     && CMDS+=(--command-name "vp8-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline good -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline good -an -f null /dev/null)")
       has libvpx-vp9 && CMDS+=(--command-name "vp9-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline good -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline good -an -f null /dev/null)")
       has libsvtav1  && CMDS+=(--command-name "av1-svt-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null)")
       has libaom-av1 && CMDS+=(--command-name "av1-aom-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null)")
       has librav1e   && CMDS+=(--command-name "av1-rav1e-encode"
-        "ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null)")
       has libtheora  && CMDS+=(--command-name "theora-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null)")
       has libxvid    && CMDS+=(--command-name "xvid-encode"
-        "ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 5 -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 5 -an -f null /dev/null)")
       has mpeg2video && CMDS+=(--command-name "mpeg2-encode"
-        "ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 5M -an -f null /dev/null")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 5M -an -f null /dev/null)")
       has mjpeg      && CMDS+=(--command-name "mjpeg-encode"
-        "ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null")
-
-      TIME_LIMIT_ARG=""
-      {% if run_benchmarks_ffmpeg_cmd_timeout_sec | int > 0 %}
-      TIME_LIMIT_ARG="--time-limit {{ run_benchmarks_ffmpeg_cmd_timeout_sec }}s"
-      {% endif %}
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null)")
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-        ${TIME_LIMIT_ARG} \
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
         "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
