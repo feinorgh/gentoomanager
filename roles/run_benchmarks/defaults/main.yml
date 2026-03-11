@@ -36,6 +36,13 @@ run_benchmarks_work_dir_win: C:\ansible-benchmarks
 # Path is relative to the collection root (one level above playbooks/).
 run_benchmarks_fixture_dir: "{{ playbook_dir | dirname }}/benchmarks/fixtures"
 
+# Minimum free disk space required on the work_dir partition (MB).
+# A full benchmark run copies ~1.2 GB of fixture files (Silesia corpus,
+# BBB 1080p FFV1 clip, ImageMagick images) and generates ~500 MB of
+# intermediate encode files — 2048 MB is a safe floor for all categories.
+# Reduce this value when running only a small subset of categories.
+run_benchmarks_min_disk_mb: 2048
+
 # Test data sizes
 run_benchmarks_compress_size_mb: 64
 run_benchmarks_ffmpeg_duration_sec: 10

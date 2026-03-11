@@ -57,20 +57,31 @@
   changed_when: false
   failed_when: false
 
-# ── 3. Probe available disk space in /tmp ────────────────────────────────
-- name: Probe free disk space available for benchmarks
-  ansible.builtin.command:
-    cmd: df -Pk /tmp
+# ── 3. Probe available disk space on the work_dir partition ──────────────
+- name: Probe free disk space on the work_dir partition
+  ansible.builtin.shell:
+    cmd: |
+      # Walk up from work_dir to find the first existing ancestor so df works
+      # even before the directory has been created.
+      wdir="{{ run_benchmarks_work_dir }}"
+      while [ ! -e "$wdir" ] && [ "$wdir" != "/" ]; do
+        wdir=$(dirname "$wdir")
+      done
+      df -Pk "$wdir"
+    executable: /bin/sh
   register: run_benchmarks_sanity_disk
   changed_when: false
   failed_when: false
 
-- name: Evaluate disk space (need ≥ 512 MB free in /tmp)
+- name: Evaluate disk space on work_dir partition
   ansible.builtin.set_fact:
-    run_benchmarks_sanity_disk_ok: >-
-      {{ (run_benchmarks_sanity_disk.stdout_lines[-1].split()[3] | default('0') | int) >= 524288 }}
     run_benchmarks_sanity_disk_free_mb: >-
       {{ ((run_benchmarks_sanity_disk.stdout_lines[-1].split()[3] | default('0') | int) / 1024) | round(0) | int }}
+    run_benchmarks_sanity_disk_mount: >-
+      {{ run_benchmarks_sanity_disk.stdout_lines[-1].split()[-1] | default('unknown') }}
+    run_benchmarks_sanity_disk_ok: >-
+      {{ ((run_benchmarks_sanity_disk.stdout_lines[-1].split()[3] | default('0') | int) / 1024) | int
+         >= run_benchmarks_min_disk_mb }}
 
 # ── 4. Emit warning when issues are detected ─────────────────────────────
 - name: Warn — benchmark sanity check issues detected
@@ -93,8 +104,12 @@
           Ensure the Ansible user is in the sudoers file with NOPASSWD.
       {% endif %}
       {% if not run_benchmarks_sanity_disk_ok %}
-      ✗ Low disk space in /tmp: {{ run_benchmarks_sanity_disk_free_mb }} MB free
-          (minimum 512 MB required for test data generation).
+      ✗ Low disk space on partition '{{ run_benchmarks_sanity_disk_mount }}'
+          (used by {{ run_benchmarks_work_dir }}):
+          {{ run_benchmarks_sanity_disk_free_mb }} MB free,
+          {{ run_benchmarks_min_disk_mb }} MB required.
+          Free up space or set run_benchmarks_min_disk_mb to a lower value
+          if running only a subset of benchmark categories.
       {% endif %}
       {% if run_benchmarks_sanity_missing_req | length > 0 or run_benchmarks_sanity_missing_opt | length > 0 %}
       ─────────────────────────────────────────────────────────────────────

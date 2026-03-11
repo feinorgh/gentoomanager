@@ -738,8 +738,9 @@ or in inventory.
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
 | `run_benchmarks_work_dir_win` | `C:\ansible-benchmarks` | Remote working directory (Windows) |
-| `run_benchmarks_compress_size_mb` | `64` | Test data size for compression (MB) |
-| `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg (s) |
+| `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
+| `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
+| `run_benchmarks_min_disk_mb` | `2048` | Minimum free disk space on work_dir partition (MB) |
 | `run_benchmarks_cpu_affinity` | `""` | CPU affinity range (e.g. `0-3`); empty = no pinning |
 | `run_benchmarks_hyperfine_bin` | `hyperfine` | Path or name of the hyperfine binary |
 | `run_benchmarks_include_windows` | `false` | Include Windows hosts |
