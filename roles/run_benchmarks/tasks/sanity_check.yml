@@ -83,7 +83,45 @@
       {{ ((run_benchmarks_sanity_disk.stdout_lines[-1].split()[3] | default('0') | int) / 1024) | int
          >= run_benchmarks_min_disk_mb }}
 
-# ── 4. Emit warning when issues are detected ─────────────────────────────
+# ── 4. Check RAM when work_dir is on tmpfs ───────────────────────────────
+# tmpfs "disk space" is backed by RAM, so the VM needs enough total RAM to
+# hold all fixture files (~1.7 GB) plus OS and process overhead.
+# This check runs before virsh RAM scaling (normalize.yml), so it reads
+# MemTotal — the RAM currently allocated to the VM.  For KVM VMs the RAM
+# is scaled to max before benchmarks start; this warning is informational.
+- name: Detect whether work_dir partition is backed by tmpfs
+  ansible.builtin.shell:
+    cmd: |
+      wdir="{{ run_benchmarks_work_dir }}"
+      while [ ! -e "$wdir" ] && [ "$wdir" != "/" ]; do
+        wdir=$(dirname "$wdir")
+      done
+      fstype=$(stat -f -c '%T' "$wdir" 2>/dev/null || echo unknown)
+      echo "fstype=$fstype"
+    executable: /bin/sh
+  register: run_benchmarks_sanity_fstype_raw
+  changed_when: false
+  failed_when: false
+
+- name: Probe total RAM (MemTotal from /proc/meminfo)
+  ansible.builtin.shell:
+    cmd: awk '/^MemTotal:/{print $2}' /proc/meminfo
+    executable: /bin/sh
+  register: run_benchmarks_sanity_memtotal_raw
+  changed_when: false
+  failed_when: false
+
+- name: Evaluate RAM vs tmpfs requirement
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_is_tmpfs: >-
+      {{ (run_benchmarks_sanity_fstype_raw.stdout | default('')).find('tmpfs') != -1 }}
+    run_benchmarks_sanity_ram_total_mb: >-
+      {{ ((run_benchmarks_sanity_memtotal_raw.stdout | default('0') | int) / 1024) | round(0) | int }}
+    run_benchmarks_sanity_ram_ok: >-
+      {{ ((run_benchmarks_sanity_memtotal_raw.stdout | default('0') | int) / 1024) | int
+         >= run_benchmarks_min_ram_mb }}
+
+# ── 5. Emit warning when issues are detected ─────────────────────────────
 - name: Warn — benchmark sanity check issues detected
   ansible.builtin.debug:
     msg: |
@@ -111,6 +149,17 @@
           Free up space or set run_benchmarks_min_disk_mb to a lower value
           if running only a subset of benchmark categories.
       {% endif %}
+      {% if run_benchmarks_sanity_is_tmpfs and not run_benchmarks_sanity_ram_ok %}
+      ⚠ Work directory is on tmpfs (RAM-backed) but total RAM is only
+          {{ run_benchmarks_sanity_ram_total_mb }} MB — below the recommended
+          {{ run_benchmarks_min_ram_mb }} MB for a full benchmark run.
+          Fixture files (~1.7 GB) and encode intermediates (~500 MB) reside
+          in RAM when using tmpfs; insufficient RAM causes swap thrashing
+          and distorts compression/coreutils results.
+          For KVM VMs the RAM is scaled to max before benchmarks run
+          (check max_memory in host_vars and virsh dumpxml).
+          To override: set run_benchmarks_min_ram_mb to a lower value.
+      {% endif %}
       {% if run_benchmarks_sanity_missing_req | length > 0 or run_benchmarks_sanity_missing_opt | length > 0 %}
       ─────────────────────────────────────────────────────────────────────
       To install missing tools, run the provisioning playbook:
@@ -126,4 +175,5 @@
     run_benchmarks_sanity_missing_req | length > 0 or
     run_benchmarks_sanity_missing_opt | length > 0 or
     run_benchmarks_sanity_sudo.rc | default(1) != 0 or
-    not run_benchmarks_sanity_disk_ok
+    not run_benchmarks_sanity_disk_ok or
+    (run_benchmarks_sanity_is_tmpfs and not run_benchmarks_sanity_ram_ok)

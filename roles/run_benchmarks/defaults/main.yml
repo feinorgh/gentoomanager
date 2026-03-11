@@ -43,6 +43,14 @@ run_benchmarks_fixture_dir: "{{ playbook_dir | dirname }}/benchmarks/fixtures"
 # Reduce this value when running only a small subset of categories.
 run_benchmarks_min_disk_mb: 2048
 
+# Minimum total RAM required when the work_dir partition is backed by
+# tmpfs (the default /tmp on most Linux systems).  tmpfs space is RAM,
+# so the VM needs enough memory to hold fixture files (~1.7 GB) plus
+# OS overhead and benchmark process memory.  4096 MB (4 GB) gives
+# comfortable headroom.  For KVM VMs the RAM is scaled to max before
+# benchmarks run — check max_memory in host_vars if this warning fires.
+run_benchmarks_min_ram_mb: 4096
+
 # Test data sizes
 run_benchmarks_compress_size_mb: 64
 run_benchmarks_ffmpeg_duration_sec: 10

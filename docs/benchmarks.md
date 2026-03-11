@@ -741,6 +741,7 @@ or in inventory.
 | `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
 | `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
 | `run_benchmarks_min_disk_mb` | `2048` | Minimum free disk space on work_dir partition (MB) |
+| `run_benchmarks_min_ram_mb` | `4096` | Minimum total RAM when work_dir is on tmpfs (MB) |
 | `run_benchmarks_cpu_affinity` | `""` | CPU affinity range (e.g. `0-3`); empty = no pinning |
 | `run_benchmarks_hyperfine_bin` | `hyperfine` | Path or name of the hyperfine binary |
 | `run_benchmarks_include_windows` | `false` | Include Windows hosts |
