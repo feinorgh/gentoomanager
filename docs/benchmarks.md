@@ -282,6 +282,29 @@ Pass an empty list `[]` (the default) to run all categories.
 ./scripts/run_benchmarks.sh --ffmpeg-duration 30
 ```
 
+### Skipping Already-Benchmarked Hosts
+
+When resuming an interrupted run, pass `--skip-complete` to skip hosts that
+already have a full set of result files in `benchmarks/results/<hostname>/`.
+A host is considered complete if every active category's primary result JSON
+file is present on the controller.
+
+```bash
+# Only run benchmarks on hosts that don't yet have results
+./scripts/run_benchmarks.sh --skip-complete
+
+# Combine with category filter to skip hosts that already have those results
+./scripts/run_benchmarks.sh --skip-complete \
+  -e '{"run_benchmarks_categories": ["compression", "ffmpeg"]}'
+```
+
+Alternatively, pass the variable directly to `ansible-playbook`:
+
+```bash
+ansible-playbook playbooks/run_benchmarks.yml \
+  -e run_benchmarks_skip_complete=true
+```
+
 ## Benchmark Categories
 
 ### Compression
@@ -745,6 +768,7 @@ or in inventory.
 | `run_benchmarks_cpu_affinity` | `""` | CPU affinity range (e.g. `0-3`); empty = no pinning |
 | `run_benchmarks_hyperfine_bin` | `hyperfine` | Path or name of the hyperfine binary |
 | `run_benchmarks_include_windows` | `false` | Include Windows hosts |
+| `run_benchmarks_skip_complete` | `false` | Skip hosts that already have a full result set |
 | `run_benchmarks_is_hypervisor` | `false` | Set to `true` for hypervisor hosts |
 | `run_benchmarks_gentoo_min_build_secs` | `300` | Minimum build time to include (s) |
 | `run_benchmarks_gentoo_max_builds` | `3` | Recent builds to collect per package |

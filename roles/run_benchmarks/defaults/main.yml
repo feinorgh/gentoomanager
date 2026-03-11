@@ -61,6 +61,12 @@ run_benchmarks_hyperfine_bin: hyperfine
 # Include Windows hosts in benchmark runs (opt-in)
 run_benchmarks_include_windows: false
 
+# Skip hosts whose result directory already contains a complete set of
+# JSON result files (one per active category).  Useful when resuming a
+# partial run across many hosts without re-benchmarking those already done.
+# Enable with: -e run_benchmarks_skip_complete=true
+run_benchmarks_skip_complete: false
+
 # Gentoo build time analysis: minimum build duration to include (seconds)
 run_benchmarks_gentoo_min_build_secs: 300
 

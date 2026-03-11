@@ -19,6 +19,9 @@
 #   # Only VMs on one hypervisor:
 #   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
 #     --limit 'hypervisor_hv1,localhost'
+#   # Skip hosts that already have a complete set of results:
+#   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py \
+#     -e run_benchmarks_skip_complete=true
 
 # ── Play 1: Run benchmarks one VM at a time ──────────────────────────────
 - name: Run benchmarks on VMs (serial)
@@ -73,6 +76,81 @@
           {{ run_benchmarks_work_dir_win
              if (ansible_os_family | default('') == 'Windows')
              else run_benchmarks_work_dir }}
+
+    # ── Skip host if results are already complete (optional) ────────────
+    - name: Check existing result files for this host on controller
+      ansible.builtin.find:
+        paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
+        patterns: "*.json"
+      delegate_to: localhost
+      become: false
+      register: _existing_results
+      when: run_benchmarks_skip_complete | default(false) | bool
+
+    - name: Resolve active categories for completeness check
+      ansible.builtin.set_fact:
+        _skip_check_categories: >-
+          {{
+            (run_benchmarks_categories | length > 0)
+            | ternary(run_benchmarks_categories,
+                      ['compression', 'crypto', 'compiler', 'python', 'numeric',
+                       'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
+                       'process', 'disk', 'linker', 'opencv', 'startup',
+                       'gentoo_build_times'])
+          }}
+      when: run_benchmarks_skip_complete | default(false) | bool
+
+    - name: Determine if host has a complete set of results
+      ansible.builtin.set_fact:
+        _results_complete: >-
+          {%- set existing = _existing_results.files
+                             | default([])
+                             | map(attribute='path')
+                             | map('basename')
+                             | list -%}
+          {%- set primary = {
+            'compression':        'compression.json',
+            'crypto':             'crypto_symmetric.json',
+            'compiler':           'compiler_c_compile.json',
+            'python':             'python.json',
+            'numeric':            'numeric_compiled.json',
+            'sqlite':             'sqlite_write.json',
+            'ffmpeg':             'ffmpeg_video_encode.json',
+            'imagemagick':        'imagemagick_resize.json',
+            'coreutils':          'coreutils.json',
+            'memory':             'memory_bandwidth.json',
+            'process':            'process.json',
+            'disk':               'disk.json',
+            'linker':             'linker.json',
+            'opencv':             'opencv.json',
+            'startup':            'startup.json',
+            'gentoo_build_times': 'gentoo_build_times.json'
+          } -%}
+          {%- set missing = [] -%}
+          {%- for cat in _skip_check_categories -%}
+            {%- set f = primary.get(cat, '') -%}
+            {%- if f and f not in existing -%}
+              {%- set _ = missing.append(cat) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ missing | length == 0 }}
+      when: run_benchmarks_skip_complete | default(false) | bool
+
+    - name: Skip host — results already complete
+      ansible.builtin.debug:
+        msg: >-
+          Skipping {{ inventory_hostname }}: complete result set already
+          present in {{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}/.
+          Re-run without run_benchmarks_skip_complete=true to force re-benchmark.
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - _results_complete | default(false) | bool
+
+    - name: End play for this host — results already complete
+      ansible.builtin.meta: end_host
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - _results_complete | default(false) | bool
 
     # ── Sanity check: tools, sudo, disk space ───────────────────────────
     - name: Run pre-flight sanity check

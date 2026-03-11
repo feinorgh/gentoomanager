@@ -63,6 +63,7 @@ Benchmark control:
 Flags:
   --include-windows           Also run benchmarks on Windows VMs
   --no-ram-scale              Skip temporary RAM scaling on VMs
+  --skip-complete             Skip hosts that already have a full set of results
   --no-report                 Skip report generation after benchmarks
   --verbose, -v               Pass -v to ansible-playbook (repeat for more: -vvv)
   --dry-run, -C               Pass --check to ansible-playbook (no changes)
@@ -152,6 +153,8 @@ while [[ $# -gt 0 ]]; do
             INCLUDE_WINDOWS=1; shift ;;
         --no-ram-scale)
             NO_RAM_SCALE=1; shift ;;
+        --skip-complete)
+            SKIP_COMPLETE=1; shift ;;
         --no-report)
             NO_REPORT=1; shift ;;
         --verbose|-v)
@@ -221,6 +224,7 @@ fi
 [[ -n "${FFMPEG_DURATION}" ]] && EVARS[run_benchmarks_ffmpeg_duration_sec]="${FFMPEG_DURATION}"
 [[ "${INCLUDE_WINDOWS}" -eq 1 ]] && EVARS[run_benchmarks_include_windows]="true"
 [[ "${NO_RAM_SCALE}" -eq 1 ]]    && EVARS[run_benchmarks_scale_ram]="false"
+[[ "${SKIP_COMPLETE}" -eq 1 ]]   && EVARS[run_benchmarks_skip_complete]="true"
 
 # Build -e JSON string from EVARS
 if [[ "${#EVARS[@]}" -gt 0 ]]; then
