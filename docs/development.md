@@ -32,10 +32,25 @@ run the test suite, and use the project tooling.
 | Ansible Core | 2.15 | Installed as a dev dependency |
 | Git | any | For cloning and committing |
 
-Install `uv` (one-line installer):
+Install `uv` using whichever method suits your environment:
 
 ```bash
+# One-line installer (installs to ~/.local/bin, no root required)
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Distribution packages (no pip or venv needed)
+emerge dev-python/uv            # Gentoo
+pacman -S uv                    # Arch Linux
+apt install uv                  # Debian 13+ / Ubuntu 25.04+
+dnf install uv                  # Fedora 40+
+pkg install uv                  # FreeBSD ports
+brew install uv                 # macOS (Homebrew)
+
+# PyPI — install into an existing virtual environment
+pip install uv
+
+# pipx — install as an isolated tool (no active venv needed)
+pipx install uv
 ```
 
 Official installation docs: <https://docs.astral.sh/uv/getting-started/installation/>
