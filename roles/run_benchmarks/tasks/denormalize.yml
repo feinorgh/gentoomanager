@@ -157,7 +157,7 @@
   ansible.builtin.shell:
     cmd: |
       for f in /sys/devices/system/cpu/cpu*/power/pm_qos_resume_latency_us; do
-        [ -f "$f" ] && echo n/a > "$f" 2>/dev/null || true
+        if [ -f "$f" ]; then echo n/a > "$f" 2>/dev/null; fi
       done
   become: true
   changed_when: true

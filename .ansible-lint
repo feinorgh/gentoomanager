@@ -12,10 +12,9 @@ exclude_paths:
   - scripts/
 
 # Rules that are intentionally disabled for this collection.
-# Each entry must include a comment explaining the reason.
-skip_list:
-  # Task-level suppressions are handled inline with '# noqa:' comments;
-  # no collection-wide rule skips are needed at this time.
+# Task-level suppressions are handled inline with '# noqa:' comments;
+# no collection-wide rule skips are needed at this time.
+skip_list: []
 
 # Rules that produce warnings rather than errors.
 warn_list:
