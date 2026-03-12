@@ -9,7 +9,6 @@ provision_benchmarks_packages:
     - llvm-core/clang
     - dev-libs/openssl
     - dev-lang/python
-    - dev-lang/rust-bin
     - dev-lang/go
     - media-video/ffmpeg
     - media-gfx/imagemagick

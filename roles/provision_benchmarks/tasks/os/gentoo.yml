@@ -8,6 +8,23 @@
   become: true
   failed_when: false
 
+- name: Install Rust from source (Gentoo, preferred)
+  ansible.builtin.package:
+    name: dev-lang/rust
+    state: present
+  become: true
+  register: provision_benchmarks_rust_source
+  failed_when: false
+
+- name: Install Rust binary fallback (Gentoo, if source build unavailable)
+  ansible.builtin.package:
+    name: dev-lang/rust-bin
+    state: present
+  become: true
+  when: provision_benchmarks_rust_source is failed or
+        provision_benchmarks_rust_source.rc | default(0) != 0
+  failed_when: false
+
 - name: Select latest Rust version (Gentoo)
   ansible.builtin.command: eselect rust update
   become: true
