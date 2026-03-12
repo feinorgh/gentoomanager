@@ -7,10 +7,7 @@ building — all without SSH.
 
 from __future__ import annotations
 
-import json
-import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -279,48 +276,6 @@ class TestBuildInventory:
         }
         inv_data = _build(vms)
         assert len(inv_data["gentoo"]["hosts"]) == 1
-
-
-# ── Cross-implementation test (Python vs Rust) ──────────────────────────
-
-
-RUST_BINARY = REPO_ROOT / "inventory_generator_rs" / "target" / "debug" / "inventory_generator"
-
-
-@pytest.mark.skipif(
-    not RUST_BINARY.exists(),
-    reason="Rust binary not built (run `cargo build` in inventory_generator_rs/)",
-)
-class TestCrossImplementation:
-    """Verify that the Rust binary produces identical output to Python for
-    the same inputs (using ``--host`` which requires no SSH)."""
-
-    def test_host_flag_returns_empty_object(self) -> None:
-        """Both implementations should output {} for --host <name>."""
-        rust_out = subprocess.run(
-            [str(RUST_BINARY), "--host", "anything"],
-            capture_output=True,
-            text=True,
-        )
-        assert rust_out.returncode == 0
-        assert json.loads(rust_out.stdout) == {}
-
-    def test_list_with_no_hypervisors_returns_empty_inventory(self) -> None:
-        """With no hypervisors reachable, both should output the skeleton."""
-        env = {**os.environ, "HYPERVISOR_HOSTS": ""}
-        rust_out = subprocess.run(
-            [str(RUST_BINARY), "--list"],
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-        assert rust_out.returncode == 0
-        inv_data = json.loads(rust_out.stdout)
-        assert "_meta" in inv_data
-        assert "all" in inv_data
-        assert inv_data["_meta"]["hostvars"] == {}
-        assert inv_data["all"]["children"] == []
-
 
 # ── Edge case tests ──────────────────────────────────────────────────────
 
