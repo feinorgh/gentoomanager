@@ -40,6 +40,7 @@ jobs:
           pip install pyyaml --quiet
           python scripts/shellcheck_yaml_blocks.py
 
+  integration:
     uses: ansible/ansible-content-actions/.github/workflows/integration.yaml@main
   all_green:
     if: ${{ always() }}
