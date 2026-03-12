@@ -110,16 +110,17 @@
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null)")
       has libx265    && CMDS+=(--command-name "h265-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null)")
+      # VP8: deadline=realtime for consistent throughput measurement (good/best is 10x slower)
       has libvpx     && CMDS+=(--command-name "vp8-encode"
-        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline good -an -f null /dev/null)")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline realtime -an -f null /dev/null)")
+      # VP9: cpu-used=8 (fastest) keeps runtime proportional to SVT-AV1
       has libvpx-vp9 && CMDS+=(--command-name "vp9-encode"
-        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline good -an -f null /dev/null)")
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -cpu-used 8 -an -f null /dev/null)")
       has libsvtav1  && CMDS+=(--command-name "av1-svt-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null)")
       has libaom-av1 && CMDS+=(--command-name "av1-aom-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null)")
-      has librav1e   && CMDS+=(--command-name "av1-rav1e-encode"
-        "$(wrap ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null)")
+      # rav1e omitted: research-only encoder; 10x slower than SVT-AV1 at equivalent quality
       has libtheora  && CMDS+=(--command-name "theora-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null)")
       has libxvid    && CMDS+=(--command-name "xvid-encode"
@@ -130,8 +131,8 @@
         "$(wrap ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null)")
 
       {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_ffmpeg_video_runs }} \
+        --warmup {{ run_benchmarks_ffmpeg_video_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
         "${CMDS[@]}"

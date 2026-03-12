@@ -204,15 +204,15 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_openssl_speed.json \
         --command-name 'speed-aes-256-gcm' \
-          'openssl speed -seconds 3 -bytes 16384 -evp aes-256-gcm' \
+          'openssl speed -seconds 1 -bytes 16384 -evp aes-256-gcm' \
         --command-name 'speed-aes-256-cbc' \
-          'openssl speed -seconds 3 -bytes 16384 aes-256-cbc' \
+          'openssl speed -seconds 1 -bytes 16384 aes-256-cbc' \
         --command-name 'speed-chacha20-poly1305' \
-          'openssl speed -seconds 3 -bytes 16384 -evp chacha20-poly1305' \
+          'openssl speed -seconds 1 -bytes 16384 -evp chacha20-poly1305' \
         --command-name 'speed-sha256' \
-          'openssl speed -seconds 3 -bytes 16384 sha256' \
+          'openssl speed -seconds 1 -bytes 16384 sha256' \
         --command-name 'speed-sha512' \
-          'openssl speed -seconds 3 -bytes 16384 sha512'
+          'openssl speed -seconds 1 -bytes 16384 sha512'
   register: run_benchmarks_crypto_speed_result
   changed_when: false
   failed_when: false

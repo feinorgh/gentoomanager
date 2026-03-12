@@ -197,7 +197,7 @@
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json imagemagick_effects.json \
-        --command-name "gaussian-blur-r20" "${IM} im_4k.png -blur 0x20 null:" \
+        --command-name "gaussian-blur-r8"  "${IM} im_4k.png -blur 0x8 null:" \
         --command-name "unsharp-mask"      "${IM} im_4k.png -unsharp 0x1+1+0.05 null:" \
         --command-name "grayscale"         "${IM} im_4k.png -colorspace Gray null:" \
         --command-name "emboss"            "${IM} im_4k.png -emboss 2 null:" \

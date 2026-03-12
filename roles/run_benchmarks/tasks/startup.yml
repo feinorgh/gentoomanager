@@ -58,8 +58,8 @@
       fi
 
       {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_startup_runs }} \
+        --warmup {{ run_benchmarks_startup_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/startup.json \
         "${CMDS[@]}"

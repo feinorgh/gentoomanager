@@ -59,20 +59,29 @@ run_benchmarks_min_ram_mb: 4096
 
 # Test data sizes
 # Fallback random testdata.bin size (MiB) when the Silesia corpus is absent.
-# 256 MiB keeps lz4 above 100 ms on modern hardware and gives MD5/SHA a
-# meaningful runtime.  xz uses -T0 in the compression task to remain fast.
-run_benchmarks_compress_size_mb: 256
+# 64 MiB clearly differentiates fast (lz4/zstd) from slow (xz/bzip2) codecs
+# while keeping wall-clock time proportional for CI runs.  xz uses -T0.
+run_benchmarks_compress_size_mb: 64
 run_benchmarks_ffmpeg_duration_sec: 10
 
 # Per-command time limit passed to hyperfine (--time-limit, seconds).
-# Prevents slow AV1/HEVC encoders from blocking the entire suite for hours.
+# Prevents slow HEVC/AV1 encoders from blocking the suite on slow hosts.
 # Set to 0 to disable the limit.
 run_benchmarks_ffmpeg_cmd_timeout_sec: 120
 
+# Per-category runs/warmup overrides for slow categories.
+# FFmpeg video encode: 3 runs suffice — encoding variance is low.
+run_benchmarks_ffmpeg_video_runs: 3
+run_benchmarks_ffmpeg_video_warmup: 2
+# Application startup: 3 runs are enough — variance comes from page-cache
+# state, not measurement noise; extra runs don't reduce uncertainty further.
+run_benchmarks_startup_runs: 3
+run_benchmarks_startup_warmup: 2
+
 # Ansible task timeout for the full FFmpeg video encode hyperfine run (seconds).
 # Must be larger than runs * warmup * ffmpeg_cmd_timeout_sec.  Default covers
-# 10 codecs × 8 runs × 120 s = 9600 s with a safety margin.
-run_benchmarks_ffmpeg_task_timeout_sec: 14400
+# 9 codecs × 5 (runs+warmup) × 120 s = 5400 s with a safety margin.
+run_benchmarks_ffmpeg_task_timeout_sec: 7200
 
 # Hyperfine binary name
 run_benchmarks_hyperfine_bin: hyperfine
