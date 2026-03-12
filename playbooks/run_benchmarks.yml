@@ -101,7 +101,8 @@
             | ternary(run_benchmarks_categories | default([]),
                       ['compression', 'crypto', 'compiler', 'python', 'numeric',
                        'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
-                       'process', 'disk', 'linker', 'opencv', 'startup',
+                       'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
+                       'startup',
                        'gentoo_build_times'])
           }}
       when: run_benchmarks_skip_complete | default(false) | bool
@@ -129,6 +130,8 @@
             'disk':               'disk.json',
             'linker':             'linker.json',
             'opencv':             'opencv.json',
+            'gimp':               'gimp.json',
+            'inkscape':           'inkscape.json',
             'startup':            'startup.json',
             'gentoo_build_times': 'gentoo_build_times.json'
           } -%}

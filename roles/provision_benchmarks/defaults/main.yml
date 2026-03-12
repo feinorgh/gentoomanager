@@ -136,6 +136,12 @@ provision_benchmarks_freebsd_ffmpeg_port: multimedia/ffmpeg
 # Optional: install OpenCV Python bindings
 provision_benchmarks_install_opencv: false
 
+# Optional: install GIMP for batch-mode image processing benchmarks
+provision_benchmarks_install_gimp: false
+
+# Optional: install Inkscape for SVG rendering benchmarks (requires 1.x)
+provision_benchmarks_install_inkscape: false
+
 # Optional: install numpy for numeric benchmarks
 provision_benchmarks_install_numpy: true
 

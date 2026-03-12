@@ -31,5 +31,22 @@
   when: provision_benchmarks_install_numpy | bool
   failed_when: false
 
+
+- name: Install GIMP (Arch Linux)
+  ansible.builtin.package:
+    name: gimp
+    state: present
+  become: true
+  when: provision_benchmarks_install_gimp | bool
+  failed_when: false
+
+- name: Install Inkscape (Arch Linux)
+  ansible.builtin.package:
+    name: inkscape
+    state: present
+  become: true
+  when: provision_benchmarks_install_inkscape | bool
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

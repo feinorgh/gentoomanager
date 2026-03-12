@@ -16,5 +16,22 @@
   when: provision_benchmarks_install_numpy | bool
   failed_when: false
 
+
+- name: Install GIMP (Gentoo)
+  ansible.builtin.package:
+    name: media-gfx/gimp
+    state: present
+  become: true
+  when: provision_benchmarks_install_gimp | bool
+  failed_when: false
+
+- name: Install Inkscape (Gentoo)
+  ansible.builtin.package:
+    name: media-gfx/inkscape
+    state: present
+  become: true
+  when: provision_benchmarks_install_inkscape | bool
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

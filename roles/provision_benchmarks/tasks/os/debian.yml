@@ -43,5 +43,22 @@
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml
 
+
+- name: Install GIMP (Debian)
+  ansible.builtin.package:
+    name: gimp
+    state: present
+  become: true
+  when: provision_benchmarks_install_gimp | bool
+  failed_when: false
+
+- name: Install Inkscape (Debian)
+  ansible.builtin.package:
+    name: inkscape
+    state: present
+  become: true
+  when: provision_benchmarks_install_inkscape | bool
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

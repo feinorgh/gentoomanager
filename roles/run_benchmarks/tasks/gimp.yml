@@ -1,0 +1,154 @@
+---
+# GIMP benchmarks — batch-mode image processing on the Kodak natural-scene corpus.
+# Uses Script-Fu batch mode (gimp -i) with --no-data --no-fonts to minimise
+# startup overhead that is unrelated to image-processing performance.
+# All 24 Kodak photographs (768×512 PNG) are processed per benchmark run so
+# the operation time is meaningful relative to GIMP startup.
+
+- name: Check GIMP availability
+  ansible.builtin.command:
+    cmd: gimp --version
+  register: run_benchmarks_gimp_check
+  changed_when: false
+  failed_when: false
+
+- name: Warn if GIMP is not available
+  ansible.builtin.debug:
+    msg: >-
+      [SKIP] {{ inventory_hostname }}: GIMP not found —
+      gimp benchmark will be skipped.
+      Install via the provisioning playbook:
+      ansible-playbook playbooks/provision_benchmarks.yml
+      -i inventory_generator.py --limit {{ inventory_hostname }}
+  when: run_benchmarks_gimp_check.rc != 0
+
+- name: Check whether Kodak reference images are present on host
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/kodak/kodim01.png"
+  register: run_benchmarks_gimp_kodak_stat
+  when: run_benchmarks_gimp_check.rc == 0
+
+- name: Copy Kodak reference images to host for GIMP benchmarks
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/kodak/"
+    dest: "{{ run_benchmarks_work_dir }}/kodak/"
+    mode: "0644"
+  when:
+    - run_benchmarks_gimp_check.rc == 0
+    - not (run_benchmarks_gimp_kodak_stat.stat.exists | default(false))
+    - (run_benchmarks_fixture_dir + '/kodak') is directory
+
+- name: Create GIMP Script-Fu benchmark library
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/gimp_bench.scm"
+    mode: "0644"
+    content: |
+      ; GIMP Script-Fu benchmark functions for the Kodak natural-scene corpus.
+      ; Loaded by gimp_bench_run.sh via: gimp -i -n --no-data --no-fonts
+      ;   -b '(load "PATH/gimp_bench.scm")'
+      ;   -b '(bench-OPERATION "KODAK_DIR")'
+      ;   -b '(gimp-quit 0)'
+
+      (define KODAK-COUNT 24)
+
+      (define (kodak-path dir n)
+        (string-append dir "/kodim"
+                       (if (< n 10) "0" "")
+                       (number->string n) ".png"))
+
+      ; Apply PROC to each (image, drawable) pair for all 24 Kodak images.
+      (define (for-each-kodak dir proc)
+        (let loop ((n 1))
+          (when (<= n KODAK-COUNT)
+            (let* ((f (kodak-path dir n))
+                   (image (car (gimp-file-load RUN-NONINTERACTIVE f f)))
+                   (drawable (car (gimp-image-get-active-drawable image))))
+              (proc image drawable)
+              (gimp-image-delete image))
+            (loop (+ n 1)))))
+
+      ; Load all 24 PNGs and release — measures PNG decode overhead in GIMP
+      (define (bench-load dir)
+        (for-each-kodak dir (lambda (i d) #t)))
+
+      ; Gaussian blur kernel 21×21 on all 24 images
+      (define (bench-blur dir)
+        (for-each-kodak dir
+          (lambda (i d)
+            (plug-in-gauss RUN-NONINTERACTIVE i d 21 21 0))))
+
+      ; Unsharp mask (radius 3, strength 0.5, threshold 0) on all 24 images
+      (define (bench-unsharp dir)
+        (for-each-kodak dir
+          (lambda (i d)
+            (plug-in-unsharp-mask RUN-NONINTERACTIVE i d 3.0 0.5 0))))
+
+      ; Combined pipeline: brightness-contrast + blur + 2× cubic scale
+      (define (bench-pipeline dir)
+        (for-each-kodak dir
+          (lambda (i d)
+            (gimp-brightness-contrast d 5 20)
+            (plug-in-gauss RUN-NONINTERACTIVE i d 5 5 0)
+            (gimp-image-scale-full i
+              (* 2 (car (gimp-image-width i)))
+              (* 2 (car (gimp-image-height i)))
+              INTERPOLATION-CUBIC))))
+  when: run_benchmarks_gimp_check.rc == 0
+
+- name: Create GIMP benchmark runner script
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/gimp_bench_run.sh"
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Usage: gimp_bench_run.sh <work_dir> <operation>
+      # Operations: load  blur  unsharp  pipeline
+      WORK_DIR="$1"
+      OP="$2"
+      exec gimp -i -n --no-data --no-fonts \
+          -b "(load \"${WORK_DIR}/gimp_bench.scm\")" \
+          -b "(bench-${OP} \"${WORK_DIR}/kodak\")" \
+          -b '(gimp-quit 0)'
+  when: run_benchmarks_gimp_check.rc == 0
+
+- name: Run GIMP Kodak corpus benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      WORK={{ run_benchmarks_work_dir }}
+      RUN=${WORK}/gimp_bench_run.sh
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json ${WORK}/gimp.json \
+        --command-name 'gimp-load-24'     "${RUN} ${WORK} load" \
+        --command-name 'gimp-blur-24'     "${RUN} ${WORK} blur" \
+        --command-name 'gimp-unsharp-24'  "${RUN} ${WORK} unsharp" \
+        --command-name 'gimp-pipeline-24' "${RUN} ${WORK} pipeline"
+  when:
+    - run_benchmarks_gimp_check.rc == 0
+    - run_benchmarks_gimp_kodak_stat.stat.exists | default(false)
+  register: run_benchmarks_gimp_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn when Kodak images are absent (gimp benchmark skipped)
+  ansible.builtin.debug:
+    msg: >-
+      [SKIP] {{ inventory_hostname }}: Kodak reference images not found in
+      {{ run_benchmarks_work_dir }}/kodak/ — gimp benchmark skipped.
+      Run scripts/download_benchmark_fixtures.py on the controller first.
+  when:
+    - run_benchmarks_gimp_check.rc == 0
+    - not (run_benchmarks_gimp_kodak_stat.stat.exists | default(false))
+
+- name: Warn on gimp benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: gimp benchmark exited
+      rc={{ run_benchmarks_gimp_result.rc }}.
+      {{ run_benchmarks_gimp_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_gimp_result is not skipped
+    - run_benchmarks_gimp_result.rc | default(0) != 0

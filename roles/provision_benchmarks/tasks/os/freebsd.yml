@@ -56,5 +56,22 @@
   become: true
   failed_when: false
 
+
+- name: Install GIMP (FreeBSD)
+  ansible.builtin.package:
+    name: graphics/gimp
+    state: present
+  become: true
+  when: provision_benchmarks_install_gimp | bool
+  failed_when: false
+
+- name: Install Inkscape (FreeBSD)
+  ansible.builtin.package:
+    name: graphics/inkscape
+    state: present
+  become: true
+  when: provision_benchmarks_install_inkscape | bool
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

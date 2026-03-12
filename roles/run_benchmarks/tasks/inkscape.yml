@@ -1,0 +1,183 @@
+---
+# Inkscape benchmarks — SVG rendering and export performance.
+# A complex synthetic SVG fixture is generated on the host (300 bezier paths
+# with gradients and filter effects, 80 grouped rects, 60 text elements).
+# Rendering this at different DPIs and exporting as PDF covers the main
+# CPU-bound paths in Inkscape's rendering engine.
+# Requires Inkscape 1.x (--export-type / --export-dpi / --export-filename CLI).
+
+- name: Check Inkscape availability
+  ansible.builtin.command:
+    cmd: inkscape --version
+  register: run_benchmarks_inkscape_check
+  changed_when: false
+  failed_when: false
+
+- name: Warn if Inkscape is not available
+  ansible.builtin.debug:
+    msg: >-
+      [SKIP] {{ inventory_hostname }}: Inkscape not found —
+      inkscape benchmark will be skipped.
+      Install via the provisioning playbook:
+      ansible-playbook playbooks/provision_benchmarks.yml
+      -i inventory_generator.py --limit {{ inventory_hostname }}
+  when: run_benchmarks_inkscape_check.rc != 0
+
+# Generate a complex SVG: 300 star/polygon paths (gradients + filter effects),
+# 80 transformed groups of 4 rectangles, 60 text labels — ~500 KB total.
+# The fixture is stable (random.seed(42)) so results are reproducible.
+- name: Generate Inkscape benchmark SVG fixture
+  ansible.builtin.shell:
+    cmd: |
+      python3 - << 'PYEOF'
+      import math, random, sys, os
+      random.seed(42)
+      W, H = 1200, 900
+      out = "{{ run_benchmarks_work_dir }}/inkscape_bench.svg"
+
+      defs = []
+      elements = []
+
+      # 30 linear gradients
+      for i in range(30):
+          r1 = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+          r2 = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+          ang = random.uniform(0, 360)
+          defs.append(
+              '<linearGradient id="g%d" gradientTransform="rotate(%.1f,600,450)">'
+              '<stop offset="0" stop-color="rgb(%d,%d,%d)"/>'
+              '<stop offset="1" stop-color="rgb(%d,%d,%d)"/>'
+              '</linearGradient>' % (
+                  i, ang,
+                  r1[0], r1[1], r1[2],
+                  r2[0], r2[1], r2[2],
+              )
+          )
+
+      # 2 filter effects (Gaussian blur + drop shadow)
+      defs.append('<filter id="fblur"><feGaussianBlur stdDeviation="3"/></filter>')
+      defs.append(
+          '<filter id="fshadow">'
+          '<feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.4"/>'
+          '</filter>'
+      )
+
+      # 300 star/polygon paths, each with gradient fill and optional filter
+      filter_choices = ['', '', '', '', 'fblur', 'fshadow']
+      for i in range(300):
+          cx = random.randint(60, W - 60)
+          cy = random.randint(60, H - 60)
+          r = random.randint(20, 80)
+          np_ = random.randint(5, 12)
+          pts = []
+          for j in range(np_ * 2):
+              ang = (j * math.pi / np_) - math.pi / 2
+              rad = r if j % 2 == 0 else r * random.uniform(0.3, 0.6)
+              pts.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
+          d = 'M %.2f %.2f' % pts[0]
+          for k in range(1, len(pts)):
+              if random.random() < 0.4:
+                  cpx = (pts[k - 1][0] + pts[k][0]) / 2 + random.uniform(-20, 20)
+                  cpy = (pts[k - 1][1] + pts[k][1]) / 2 + random.uniform(-20, 20)
+                  d += ' Q %.2f %.2f %.2f %.2f' % (cpx, cpy, pts[k][0], pts[k][1])
+              else:
+                  d += ' L %.2f %.2f' % pts[k]
+          d += ' Z'
+          filt = random.choice(filter_choices)
+          fa = ('filter="url(#%s)" ' % filt) if filt else ''
+          sr, sg, sb = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+          elements.append(
+              '<path d="%s" fill="url(#g%d)" '
+              'stroke="rgba(%d,%d,%d,0.6)" stroke-width="%.1f" '
+              'opacity="%.2f" %s/>' % (
+                  d, i % 30,
+                  sr, sg, sb, random.uniform(0.3, 2.0),
+                  random.uniform(0.4, 1.0), fa,
+              )
+          )
+
+      # 80 groups: each contains 4 rectangles with a transform
+      for i in range(80):
+          tx, ty = random.randint(0, W), random.randint(0, H)
+          rot = random.uniform(0, 360)
+          sc = random.uniform(0.4, 1.8)
+          inner = ''
+          for _ in range(4):
+              x, y = random.randint(-40, 10), random.randint(-40, 10)
+              w, h = random.randint(15, 60), random.randint(15, 60)
+              inner += (
+                  '<rect x="%d" y="%d" width="%d" height="%d" rx="4" '
+                  'fill="url(#g%d)" opacity="%.2f"/>' % (
+                      x, y, w, h,
+                      random.randint(0, 29), random.uniform(0.5, 1.0),
+                  )
+              )
+          elements.append(
+              '<g transform="translate(%d,%d) rotate(%.1f) scale(%.2f)">%s</g>'
+              % (tx, ty, rot, sc, inner)
+          )
+
+      # 60 text labels with gradient fills
+      for i in range(60):
+          x = random.randint(10, W - 160)
+          y = random.randint(20, H - 10)
+          sz = random.randint(9, 36)
+          family = random.choice(['serif', 'sans-serif', 'monospace'])
+          elements.append(
+              '<text x="%d" y="%d" font-family="%s" font-size="%d" '
+              'fill="url(#g%d)" opacity="0.85">Bench-%04d</text>' % (
+                  x, y, family, sz, random.randint(0, 29), i,
+              )
+          )
+
+      svg = (
+          '<?xml version="1.0" encoding="UTF-8"?>\n'
+          '<svg xmlns="http://www.w3.org/2000/svg" '
+          'width="%d" height="%d" viewBox="0 0 %d %d">\n'
+          '  <defs>%s</defs>\n'
+          '  <rect width="100%%" height="100%%" fill="#f8f4ed"/>\n'
+          '  %s\n'
+          '</svg>\n' % (W, H, W, H, '\n  '.join(defs), '\n  '.join(elements))
+      )
+      with open(out, 'w') as f:
+          f.write(svg)
+      print('Generated %s (%d KB, %d elements)' % (out, len(svg) // 1024, 300 + 80 + 60))
+      PYEOF
+    creates: "{{ run_benchmarks_work_dir }}/inkscape_bench.svg"
+  when: run_benchmarks_inkscape_check.rc == 0
+  changed_when: false
+
+- name: Run Inkscape benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      WORK={{ run_benchmarks_work_dir }}
+      SVG=${WORK}/inkscape_bench.svg
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json ${WORK}/inkscape.json \
+        --command-name 'render-96dpi' \
+          "inkscape --export-type=png --export-dpi=96 \
+            --export-filename=${WORK}/inkscape_out.png ${SVG}" \
+        --command-name 'render-300dpi' \
+          "inkscape --export-type=png --export-dpi=300 \
+            --export-filename=${WORK}/inkscape_out_300.png ${SVG}" \
+        --command-name 'export-pdf' \
+          "inkscape --export-type=pdf \
+            --export-filename=${WORK}/inkscape_out.pdf ${SVG}"
+  when: run_benchmarks_inkscape_check.rc == 0
+  register: run_benchmarks_inkscape_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on inkscape benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: inkscape benchmark exited
+      rc={{ run_benchmarks_inkscape_result.rc }}.
+      {{ run_benchmarks_inkscape_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_inkscape_result is not skipped
+    - run_benchmarks_inkscape_result.rc | default(0) != 0
