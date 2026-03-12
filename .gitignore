@@ -181,3 +181,4 @@ group_vars/
 # Ansible collection dependencies – install with:
 #   ansible-galaxy collection install -r requirements.yml
 collections/
+changelogs/.plugin-cache.yaml

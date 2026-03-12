@@ -1,0 +1,99 @@
+ancestor: null
+releases:
+  1.0.0:
+    changes:
+      bugfixes:
+      - Eliminated all Ansible deprecation and lint warnings from the molecule integration
+        test run.
+      - Fixed CI workflow ``tests.yml`` which was missing a ``push:`` trigger and
+        referenced branch ``master`` instead of ``main``.
+      - Fixed OpenSSL speed ``-evp`` flag requirement for AEAD ciphers (AES-GCM, ChaCha20-Poly1305).
+      - Fixed ``.ansible-lint`` invalid ``include_paths`` key that caused ansible-lint
+        26.3 to crash with exit code 3 before linting any files.
+      - "Fixed ``doc-default-does-not-match-spec`` in ``probe_command_output`` \u2014
+        the ``pattern`` argument default was inconsistent between ``argument_spec``
+        and DOCUMENTATION."
+      - "Fixed ``probe_command_output`` module \u2014 added missing GPLv3 licence
+        header, ``author:`` field in DOCUMENTATION, and moved imports after the DOCUMENTATION
+        string to satisfy ``validate-modules``."
+      - "Fixed hard-coded hyperfine version ``0.1.4`` in provisioning \u2014 updated
+        to ``1.20.0``."
+      - Fixed shellcheck SC2002 (useless ``cat``) in ``normalize.yml``.
+      - Fixed shellcheck SC2015 (``A && B || C`` anti-pattern) in ``ffmpeg.yml`` and
+        ``normalize.yml`` by converting to ``if/then/fi`` blocks.
+      major_changes:
+      - Added ``probe_command_output`` Ansible module to run structured shell probes
+        and return their output as a dict, replacing fragile inline Python tasks.
+      - Added a GitHub Actions CI pipeline covering shellcheck, ansible-lint, ansible-test
+        sanity, pytest unit tests, and molecule integration tests.
+      - Added a USE flag and ``make.conf`` collection system that writes per-host
+        results into ``host_vars`` and shared settings into ``group_vars/all``.
+      - Added a benchmark report generator (``scripts/generate_benchmark_report.py``)
+        producing a Markdown table report and an interactive HTML5 report with Chart.js
+        charts from collected JSON results.
+      - "Added a hyperfine-based benchmark suite covering ten categories \u2014 compression
+        (gzip, bzip2, xz, zstd, lz4), crypto (OpenSSL, GPG), compiler efficiency (gcc,
+        clang, rustc, go), Python performance, FFmpeg encode/decode, coreutils and
+        dev tools, OpenCV (Kodak corpus), ImageMagick, GIMP, and Inkscape."
+      minor_changes:
+      - Added 14 additional host environment characteristics to benchmark result JSON
+        (scheduler, filesystem, swap, CPU flags, compiler versions, CFLAGS, etc.).
+      - Added CPU performance normalisation using 7-zip calibration scores and PassMark
+        lookups so results are comparable across heterogeneous hosts.
+      - "Added Rust provisioning strategy for Gentoo \u2014 ``dev-lang/rust`` (source
+        build) is attempted first; ``dev-lang/rust-bin`` is used as a fallback. ``eselect
+        rust update`` activates the latest slot after either install."
+      - Added SSH setup guide (``docs/setup-access.md``) covering passwordless SSH,
+        ssh-agent management under systemd, OpenRC, runit, s6, launchd, and FreeBSD,
+        storing passphrases in ansible-vault, and choosing the remote user.
+      - "Added VM RAM scaling around Gentoo provisioning \u2014 memory is raised to
+        the maximum before building packages from source and restored afterwards using
+        ``virsh setmem --live`` delegated to the hypervisor."
+      - Added ``sqlite3`` and ``numpy`` to the provisioned package list for all supported
+        operating systems.
+      - Added comprehensive pytest unit tests covering the report generator, USE flag
+        collapse script, benchmark image generator, fixture downloader, inventory
+        generator, and shellcheck wrapper.
+      - Added development guide (``docs/development.md``) covering uv/pip tooling
+        and running tests locally.
+      - Added hypervisor benchmark play to collect bare-metal reference measurements
+        when benchmark tools are present on the hypervisor host.
+      - Added molecule integration test scenario ``integration_probe_command_output``
+        for local verification of the module without a VM.
+      - Added per-version ``tests/sanity/ignore-2.1X.txt`` files so standalone scripts
+        and test files are exempt from collection-module shebang and style rules.
+      - Expanded OpenSSL crypto benchmarks to cover AES-GCM, ChaCha20-Poly1305, SHA-256/512,
+        RSA-2048/4096, and ECDSA; ``-evp`` flag used for AEAD ciphers.
+      - Reduced benchmark suite run time by approximately 54 percent across slow categories
+        by tuning ``--runs`` and ``--warmup`` counts and using ``--shell=none`` where
+        possible.
+      - Renamed ``probe_command_output`` module option ``key`` to ``result_key`` to
+        avoid the ansible-lint ``no-log-needed`` false positive.
+      - Switched FreeBSD provisioning from binary ``pkg`` packages to building from
+        ports for more accurate performance comparisons.
+      release_summary: 'Initial release of the Local Gentoomanager Collection, providing
+        Gentoo
+
+        configuration management, a comprehensive hyperfine-based benchmark suite,
+
+        USE flag collection, and full CI/CD pipeline support.
+
+        '
+      removed_features:
+      - "Removed ``ansible.utils`` collection dependency \u2014 it was unused."
+      - Removed ``host_vars`` and ``group_vars`` from version control; generated files
+        are now gitignored.
+      - Removed stale ``roles/run_benchmarks/library/probe_command_output.py`` duplicate;
+        the canonical module now lives in ``plugins/modules/``.
+      security_fixes:
+      - "Resolved 15 findings from an Ansible security audit \u2014 added ``no_log``
+        where needed, replaced ``shell`` with ``command`` where possible, and tightened
+        privilege-escalation scoping."
+    fragments:
+    - 1.0.0-bugfixes.yaml
+    - 1.0.0-major-changes.yaml
+    - 1.0.0-minor-changes.yaml
+    - 1.0.0-release-summary.yaml
+    - 1.0.0-removed.yaml
+    - 1.0.0-security.yaml
+    release_date: '2026-03-12'
