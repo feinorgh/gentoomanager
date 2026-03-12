@@ -24,12 +24,13 @@
     mode: "0755"
     content: |
       #!/usr/bin/env python3
-      """OpenCV benchmarks using representative image processing tasks."""
+      """OpenCV benchmarks: synthetic 4K image + Kodak corpus operations."""
       import sys
       import numpy as np
 
+      # ── Synthetic 4K benchmarks ──────────────────────────────────────────
+
       def get_test_image():
-          """Generate a synthetic 4K test image."""
           np.random.seed(42)
           return np.random.randint(0, 256, (2160, 3840, 3), dtype=np.uint8)
 
@@ -82,7 +83,71 @@
                   cv2.THRESH_BINARY, 11, 2
               )
 
-      benchmarks = {
+      # ── Kodak corpus benchmarks (24 natural-scene photos, 768×512) ───────
+      # Each function accepts the path to the kodak/ directory and processes
+      # all 24 images, giving workloads with real photographic content.
+
+      def _load_kodak(kodak_dir):
+          import cv2, glob
+          paths = sorted(glob.glob("%s/kodim*.png" % kodak_dir))
+          if not paths:
+              raise RuntimeError("No Kodak images found in %s" % kodak_dir)
+          return [cv2.imread(p) for p in paths]
+
+      def bench_kodak_load(kodak_dir):
+          """Decode all 24 Kodak PNGs — measures PNG decode throughput."""
+          import cv2, glob
+          for p in sorted(glob.glob("%s/kodim*.png" % kodak_dir)):
+              cv2.imread(p)
+
+      def bench_kodak_blur(kodak_dir):
+          """Gaussian + bilateral blur on all 24 Kodak images."""
+          import cv2
+          for img in _load_kodak(kodak_dir):
+              cv2.GaussianBlur(img, (15, 15), 0)
+              cv2.bilateralFilter(img, 9, 75, 75)
+
+      def bench_kodak_edges(kodak_dir):
+          """Canny + Sobel edge detection on all 24 Kodak images."""
+          import cv2
+          for img in _load_kodak(kodak_dir):
+              gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+              cv2.Canny(gray, 100, 200)
+              cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+
+      def bench_kodak_color(kodak_dir):
+          """Color-space conversion (BGR→HSV, BGR→Lab) on all 24 images."""
+          import cv2
+          for img in _load_kodak(kodak_dir):
+              cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+              cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+
+      def bench_kodak_orb(kodak_dir):
+          """ORB keypoint detection + description on all 24 Kodak images."""
+          import cv2
+          orb = cv2.ORB_create(nfeatures=500)
+          for img in _load_kodak(kodak_dir):
+              gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+              orb.detectAndCompute(gray, None)
+
+      def bench_kodak_clahe(kodak_dir):
+          """CLAHE histogram equalisation on all 24 Kodak images."""
+          import cv2
+          clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+          for img in _load_kodak(kodak_dir):
+              gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+              clahe.apply(gray)
+
+      def bench_kodak_encode_jpeg(kodak_dir):
+          """In-memory JPEG re-encode at Q90 for all 24 Kodak images."""
+          import cv2
+          params = [cv2.IMWRITE_JPEG_QUALITY, 90]
+          for img in _load_kodak(kodak_dir):
+              cv2.imencode(".jpg", img, params)
+
+      # ── Dispatch ─────────────────────────────────────────────────────────
+
+      synthetic_benchmarks = {
           "resize": bench_resize,
           "blur": bench_blur,
           "edge_detection": bench_edge_detection,
@@ -91,13 +156,34 @@
           "adaptive_threshold": bench_adaptive_threshold,
       }
 
+      kodak_benchmarks = {
+          "kodak_load": bench_kodak_load,
+          "kodak_blur": bench_kodak_blur,
+          "kodak_edges": bench_kodak_edges,
+          "kodak_color": bench_kodak_color,
+          "kodak_orb": bench_kodak_orb,
+          "kodak_clahe": bench_kodak_clahe,
+          "kodak_encode_jpeg": bench_kodak_encode_jpeg,
+      }
+
       if __name__ == "__main__":
           name = sys.argv[1] if len(sys.argv) > 1 else "all"
+          kodak_dir = sys.argv[2] if len(sys.argv) > 2 else None
+
           if name == "all":
-              for fn in benchmarks.values():
+              for fn in synthetic_benchmarks.values():
                   fn()
+          elif name in synthetic_benchmarks:
+              synthetic_benchmarks[name]()
+          elif name in kodak_benchmarks:
+              if not kodak_dir:
+                  print("Usage: opencv_bench.py %s <kodak_dir>" % name,
+                        file=sys.stderr)
+                  sys.exit(1)
+              kodak_benchmarks[name](kodak_dir)
           else:
-              benchmarks[name]()
+              print("Unknown benchmark: %s" % name, file=sys.stderr)
+              sys.exit(1)
   when: run_benchmarks_opencv_check.rc == 0
 
 - name: Run OpenCV benchmarks
@@ -131,3 +217,76 @@
   when:
     - run_benchmarks_opencv_result is not skipped
     - run_benchmarks_opencv_result.rc | default(0) != 0
+
+# ── OpenCV Kodak corpus benchmarks ───────────────────────────────────────────
+# Process all 24 natural-scene Kodak photographs (768×512 PNG) with various
+# OpenCV operations.  The Kodak images are normally already on the host from
+# the ImageMagick benchmark; we copy them here independently so these
+# benchmarks work even when ImageMagick is absent.
+
+- name: Check whether Kodak reference images are present on host
+  ansible.builtin.stat:
+    path: "{{ run_benchmarks_work_dir }}/kodak/kodim01.png"
+  register: run_benchmarks_opencv_kodak_stat
+  when: run_benchmarks_opencv_check.rc == 0
+
+- name: Copy Kodak reference images to host for OpenCV benchmarks
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/kodak/"
+    dest: "{{ run_benchmarks_work_dir }}/kodak/"
+    mode: "0644"
+  when:
+    - run_benchmarks_opencv_check.rc == 0
+    - not (run_benchmarks_opencv_kodak_stat.stat.exists | default(false))
+    - (run_benchmarks_fixture_dir + '/kodak') is directory
+
+- name: Run OpenCV Kodak corpus benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ run_benchmarks_work_dir }}
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/opencv_kodak.json \
+        --command-name 'kodak-load' \
+          'python3 opencv_bench.py kodak_load ./kodak' \
+        --command-name 'kodak-blur' \
+          'python3 opencv_bench.py kodak_blur ./kodak' \
+        --command-name 'kodak-edges' \
+          'python3 opencv_bench.py kodak_edges ./kodak' \
+        --command-name 'kodak-color' \
+          'python3 opencv_bench.py kodak_color ./kodak' \
+        --command-name 'kodak-orb' \
+          'python3 opencv_bench.py kodak_orb ./kodak' \
+        --command-name 'kodak-clahe' \
+          'python3 opencv_bench.py kodak_clahe ./kodak' \
+        --command-name 'kodak-encode-jpeg' \
+          'python3 opencv_bench.py kodak_encode_jpeg ./kodak'
+  when:
+    - run_benchmarks_opencv_check.rc == 0
+    - run_benchmarks_opencv_kodak_stat.stat.exists | default(false)
+  register: run_benchmarks_opencv_kodak_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn when Kodak images are absent (opencv_kodak skipped)
+  ansible.builtin.debug:
+    msg: >-
+      [SKIP] {{ inventory_hostname }}: Kodak reference images not found in
+      {{ run_benchmarks_work_dir }}/kodak/ — opencv_kodak benchmark skipped.
+      Run scripts/download_benchmark_fixtures.py on the controller first.
+  when:
+    - run_benchmarks_opencv_check.rc == 0
+    - not (run_benchmarks_opencv_kodak_stat.stat.exists | default(false))
+
+- name: Warn on opencv_kodak benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: opencv_kodak benchmark exited
+      rc={{ run_benchmarks_opencv_kodak_result.rc }}.
+      {{ run_benchmarks_opencv_kodak_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_opencv_kodak_result is not skipped
+    - run_benchmarks_opencv_kodak_result.rc | default(0) != 0
