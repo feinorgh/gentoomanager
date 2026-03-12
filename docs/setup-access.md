@@ -155,6 +155,177 @@ ssh-keygen -t ed25519 -C "ansible@controller" -f ~/.ssh/ansible_ed25519
 > - `systemd.service(5)` man page — <https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html>
 > - `systemctl(1)` man page — <https://www.freedesktop.org/software/systemd/man/latest/systemctl.html>
 > - ArchWiki: SSH keys — <https://wiki.archlinux.org/title/SSH_keys#Start_ssh-agent_with_systemd_user>
+>
+> ---
+>
+> **OpenRC (Gentoo, Alpine Linux)**
+>
+> OpenRC does not have a first-class per-user session supervisor.  The
+> recommended approach is to start the agent from your shell login file
+> and remove the socket explicitly on logout:
+>
+> ```bash
+> # ~/.bash_profile (or ~/.zprofile) — run once at login
+> if [ -z "$SSH_AUTH_SOCK" ]; then
+>     eval "$(ssh-agent -s)"
+>     ssh-add ~/.ssh/ansible_ed25519
+> fi
+> ```
+>
+> ```bash
+> # ~/.bash_logout — kill the agent when the login shell exits
+> if [ -n "$SSH_AGENT_PID" ]; then
+>     ssh-agent -k
+> fi
+> ```
+>
+> The guard `[ -z "$SSH_AUTH_SOCK" ]` prevents a second agent being
+> started when you open a nested shell or a new terminal tab.
+>
+> If your Gentoo desktop runs GNOME or KDE, GNOME Keyring or KWallet
+> already provides an agent — check `$SSH_AUTH_SOCK` first and skip
+> the above if it is set.
+>
+> - `openrc(8)` man page — <https://github.com/OpenRC/openrc/blob/master/man/openrc.8.md>
+> - Gentoo Wiki: SSH — <https://wiki.gentoo.org/wiki/SSH>
+>
+> ---
+>
+> **runit (Void Linux)**
+>
+> runit supports per-user service trees.  Create a supervised service
+> directory for the agent:
+>
+> ```bash
+> mkdir -p ~/.local/service/ssh-agent
+> ```
+>
+> **`~/.local/service/ssh-agent/run`** (make executable: `chmod +x`)
+> ```sh
+> #!/bin/sh
+> exec ssh-agent -D -a "${XDG_RUNTIME_DIR:-/tmp/user-$UID}/ssh-agent.socket" 2>&1
+> ```
+>
+> Start the user service supervisor (typically done once in your
+> `.xinitrc` or login session):
+>
+> ```bash
+> runsvdir ~/.local/service &
+> ```
+>
+> Then point your shells at the socket in `~/.profile`:
+>
+> ```bash
+> export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR:-/tmp/user-$UID}/ssh-agent.socket"
+> ```
+>
+> runit restarts the service automatically if it crashes, and stops it
+> when `runsvdir` terminates at logout.
+>
+> - `runit(8)` man page — <http://smarden.org/runit/runit.8.html>
+> - `runsvdir(8)` man page — <http://smarden.org/runit/runsvdir.8.html>
+> - Void Linux Handbook: runit — <https://docs.voidlinux.org/config/services/index.html>
+>
+> ---
+>
+> **s6 / s6-rc (Artix, Obarun, and others)**
+>
+> s6 is a process supervision suite commonly used as an OpenRC or
+> standalone supervisor.  A minimal per-user service definition consists
+> of a `run` script and a `type` file:
+>
+> ```bash
+> mkdir -p ~/.config/s6/ssh-agent
+> echo "longrun" > ~/.config/s6/ssh-agent/type
+> ```
+>
+> **`~/.config/s6/ssh-agent/run`** (make executable: `chmod +x`)
+> ```sh
+> #!/bin/execlineb -P
+> ssh-agent -D -a $XDG_RUNTIME_DIR/ssh-agent.socket
+> ```
+>
+> Wire the service into your s6 user scan directory and point shells at
+> the socket via `$SSH_AUTH_SOCK` as with runit above.  Consult your
+> distribution's s6 integration documentation for the exact scan-dir
+> location.
+>
+> - s6 overview — <https://skarnet.org/software/s6/>
+> - `s6-svscan(8)` — <https://skarnet.org/software/s6/s6-svscan.html>
+>
+> ---
+>
+> **launchd (macOS)**
+>
+> On macOS, `ssh-agent` is started automatically by launchd at first use
+> and `$SSH_AUTH_SOCK` is exported into every terminal session — no
+> manual configuration is needed.  The system agent is integrated with
+> the macOS Keychain so passphrases can be stored there:
+>
+> ```bash
+> # Load a key into the system agent and save the passphrase to Keychain
+> ssh-add --apple-use-keychain ~/.ssh/ansible_ed25519
+> ```
+>
+> If you prefer an explicit LaunchAgent (e.g. to use a custom socket
+> path), create `~/Library/LaunchAgents/com.user.ssh-agent.plist`:
+>
+> ```xml
+> <?xml version="1.0" encoding="UTF-8"?>
+> <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+>   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+> <plist version="1.0">
+> <dict>
+>     <key>Label</key>             <string>com.user.ssh-agent</string>
+>     <key>ProgramArguments</key>
+>     <array>
+>         <string>/usr/bin/ssh-agent</string>
+>         <string>-D</string>
+>         <string>-a</string>
+>         <string>/tmp/ssh-agent-$USER.socket</string>
+>     </array>
+>     <key>RunAtLoad</key>         <true/>
+>     <key>KeepAlive</key>         <true/>
+> </dict>
+> </plist>
+> ```
+>
+> ```bash
+> launchctl load ~/Library/LaunchAgents/com.user.ssh-agent.plist
+> # Add to ~/.zprofile:
+> export SSH_AUTH_SOCK=/tmp/ssh-agent-$USER.socket
+> ```
+>
+> - `launchd(8)` man page — <https://ss64.com/osx/launchd.html>
+> - `launchctl(1)` man page — <https://ss64.com/osx/launchctl.html>
+> - Apple Developer: Login Items and Agents — <https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html>
+>
+> ---
+>
+> **FreeBSD (rc(8) / login classes)**
+>
+> FreeBSD's init system is not designed for per-user services.  The
+> standard approach is shell-profile-based, identical to the OpenRC
+> pattern above (`~/.profile` + `~/.bash_logout`).
+>
+> If running a desktop session under SDDM, GDM, or XDM, GNOME Keyring
+> or SSH_AUTH_SOCK may already be set by the session manager — check
+> before starting a second agent.
+>
+> Users who need a persistent agent across multiple remote login sessions
+> (e.g. a headless server) can use `tmux` or `screen` to keep the
+> subshell alive:
+>
+> ```bash
+> # Start a persistent tmux session that owns the agent
+> tmux new-session -s ansible -d "ssh-agent bash"
+> tmux send-keys -t ansible "ssh-add ~/.ssh/ansible_ed25519" Enter
+> # Attach to run playbooks; agent lives as long as the tmux session
+> tmux attach -t ansible
+> ```
+>
+> - FreeBSD Handbook: SSH — <https://docs.freebsd.org/en/books/handbook/security/#security-ssh>
+> - `rc(8)` man page — <https://man.freebsd.org/cgi/man.cgi?rc(8)>
 
 **References:**
 - `man ssh-keygen` — <https://man.openbsd.org/ssh-keygen>
