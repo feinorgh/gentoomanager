@@ -37,6 +37,7 @@ description:
     return value.
 author:
   - Contributors (@feinorgh)
+  - GitHub Copilot (@Copilot)
 options:
   probes:
     description:
