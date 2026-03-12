@@ -89,6 +89,72 @@ ssh-keygen -t ed25519 -C "ansible@controller" -f ~/.ssh/ansible_ed25519
 > echo "$SSH_AUTH_SOCK"
 > ssh-add ~/.ssh/ansible_ed25519   # load your key into the existing agent
 > ```
+>
+> **Persistent agent via systemd user units (Linux with systemd ≥ 236):**
+> A socket-activated user service starts `ssh-agent` on demand whenever
+> something connects to the socket, and the unit's lifecycle is tied to
+> your login session — no orphan processes, no manual `eval`.
+>
+> Some distributions ship the unit files ready to enable (e.g. Arch Linux
+> provides `ssh-agent.socket` via `extra/openssh`).  Check first:
+>
+> ```bash
+> systemctl --user list-unit-files | grep ssh-agent
+> ```
+>
+> If the units are already present, just enable them:
+>
+> ```bash
+> systemctl --user enable --now ssh-agent.socket
+> # Point every shell at the socket (add to ~/.bashrc / ~/.zshrc / ~/.profile)
+> export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
+> ```
+>
+> If your distribution does not ship the units, create them under
+> `~/.config/systemd/user/`:
+>
+> **`~/.config/systemd/user/ssh-agent.socket`**
+> ```ini
+> [Unit]
+> Description=SSH agent socket
+>
+> [Socket]
+> ListenStream=%t/ssh-agent.socket
+> SocketMode=0600
+>
+> [Install]
+> WantedBy=sockets.target
+> ```
+>
+> **`~/.config/systemd/user/ssh-agent.service`**
+> ```ini
+> [Unit]
+> Description=SSH agent
+> Requires=ssh-agent.socket
+>
+> [Service]
+> Type=simple
+> ExecStart=/usr/bin/ssh-agent -D -a %t/ssh-agent.socket
+> ```
+>
+> Then enable and point your shells at the socket:
+>
+> ```bash
+> systemctl --user daemon-reload
+> systemctl --user enable --now ssh-agent.socket
+> # Add to ~/.bashrc / ~/.zshrc / ~/.profile:
+> export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
+> ```
+>
+> On next login `$SSH_AUTH_SOCK` is set automatically; run `ssh-add` once
+> to load the key.  The agent is shut down when you log out of your user
+> session (controlled by `systemd --user`).
+>
+> **References for the systemd approach:**
+> - `systemd.socket(5)` man page — <https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html>
+> - `systemd.service(5)` man page — <https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html>
+> - `systemctl(1)` man page — <https://www.freedesktop.org/software/systemd/man/latest/systemctl.html>
+> - ArchWiki: SSH keys — <https://wiki.archlinux.org/title/SSH_keys#Start_ssh-agent_with_systemd_user>
 
 **References:**
 - `man ssh-keygen` — <https://man.openbsd.org/ssh-keygen>
