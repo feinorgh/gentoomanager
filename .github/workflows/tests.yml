@@ -26,7 +26,20 @@ jobs:
     uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@main
   unit-source:
     uses: ansible-network/github_actions/.github/workflows/unit_source.yml@main
-  integration:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck — standalone .sh files
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: "./scripts"
+          severity: warning
+      - name: shellcheck — inline YAML shell blocks
+        run: |
+          pip install pyyaml --quiet
+          python scripts/shellcheck_yaml_blocks.py
+
     uses: ansible/ansible-content-actions/.github/workflows/integration.yaml@main
   all_green:
     if: ${{ always() }}
@@ -38,6 +51,7 @@ jobs:
       - unit-source
       - ansible-lint
       - integration
+      - shellcheck
     runs-on: ubuntu-latest
     steps:
       - run: >-
@@ -48,5 +62,6 @@ jobs:
           '${{ needs.unit-galaxy.result }}',
           '${{ needs.ansible-lint.result }}',
           '${{ needs.unit-source.result }}',
-          '${{ needs.integration.result }}'
+          '${{ needs.integration.result }}',
+          '${{ needs.shellcheck.result }}'
           ])"

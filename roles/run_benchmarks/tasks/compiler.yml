@@ -62,7 +62,8 @@
     cmd: |
       set +e
       set -o pipefail
-      {: versioned patterns gcc-N, clang-N, gccN, clangN
+      {
+        # versioned patterns gcc-N, clang-N, gccN, clangN
         IFS=:
         for d in $PATH; do
           [ -d "$d" ] || continue
@@ -153,8 +154,9 @@
       if [ -x "{{ cc_exe }}" ]; then
         for opt in "-O2" "-O3" "-O3 -flto"; do
           OPTLABEL=$(echo "$opt" | tr ' ' '_')
-          {{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm 2>/dev/null || true
-          if [ -f bench_{{ cc_label }}_${OPTLABEL} ]; then
+          # shellcheck disable=SC2086  # $opt is intentionally word-split (flag list)
+          {{ cc_exe }} $opt -o "bench_{{ cc_label }}_${OPTLABEL}" bench.c -lm 2>/dev/null || true
+          if [ -f "bench_{{ cc_label }}_${OPTLABEL}" ]; then
             CMDS+=(--command-name "{{ cc_label }}-${OPTLABEL}-run"
               "./bench_{{ cc_label }}_${OPTLABEL}")
           fi

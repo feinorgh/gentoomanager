@@ -350,7 +350,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      for i in $(seq 1 30); do
+      for _ in $(seq 1 30); do
         LOAD=$(awk '{printf "%.0f", $1 * 100}' /proc/loadavg 2>/dev/null \
                || sysctl -n vm.loadavg 2>/dev/null | awk '{printf "%.0f", $2 * 100}')
         [ "$LOAD" -lt 50 ] && exit 0

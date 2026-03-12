@@ -348,7 +348,7 @@
         else
           echo 'CFS'
         fi
-      elif grep -q 'CONFIG_SCHED_CLASS_EXT=y' /boot/config-$(uname -r) 2>/dev/null; then
+      elif grep -q 'CONFIG_SCHED_CLASS_EXT=y' "/boot/config-$(uname -r)" 2>/dev/null; then
         echo 'sched_ext'
       elif [ -d /sys/kernel/sched_ext ] || [ -f /sys/kernel/sched_ext/state ]; then
         echo 'sched_ext'

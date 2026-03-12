@@ -19,7 +19,7 @@ ANSIBLELINT := $(VENV)/bin/ansible-lint
 # Detect uv; if absent fall back to pip
 UV          := $(shell command -v uv 2>/dev/null)
 
-.PHONY: setup test lint clean help
+.PHONY: setup test lint shellcheck clean help
 
 ## setup: create virtual environment and install all dev dependencies
 setup: $(PYTHON)
@@ -59,7 +59,16 @@ else
 	$(RUFF) format scripts/ tests/
 endif
 
-## clean: remove the virtual environment
+## shellcheck: lint standalone .sh files and inline YAML shell blocks
+shellcheck:
+ifdef UV
+	uv run python scripts/shellcheck_yaml_blocks.py
+else
+	$(PYTHON) scripts/shellcheck_yaml_blocks.py
+endif
+	shellcheck scripts/*.sh
+
+
 clean:
 	rm -rf $(VENV)
 

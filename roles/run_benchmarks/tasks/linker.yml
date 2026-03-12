@@ -92,17 +92,24 @@
       set -eo pipefail
       DIR="{{ run_benchmarks_work_dir }}/linker_src"
       OBJS=$(find "$DIR" -name '*.o' | sort | tr '\n' ' ')
+      CMDS=(
+        --command-name "ld-bfd"
+          "gcc -fuse-ld=bfd -o /dev/null $OBJS -lm 2>/dev/null"
+      )
+      command -v ld.lld >/dev/null 2>&1 && CMDS+=(
+        --command-name "ld-lld"
+          "gcc -fuse-ld=lld -o /dev/null $OBJS -lm 2>/dev/null"
+      )
+      command -v ld.gold >/dev/null 2>&1 && CMDS+=(
+        --command-name "ld-gold"
+          "gcc -fuse-ld=gold -o /dev/null $OBJS -lm 2>/dev/null"
+      )
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/linker.json \
-        --command-name "ld-bfd" \
-          "gcc -fuse-ld=bfd -o /dev/null $OBJS -lm 2>/dev/null" \
-        $(command -v ld.lld >/dev/null 2>&1 && \
-          echo "--command-name 'ld-lld' 'gcc -fuse-ld=lld -o /dev/null $OBJS -lm 2>/dev/null'") \
-        $(command -v ld.gold >/dev/null 2>&1 && \
-          echo "--command-name 'ld-gold' 'gcc -fuse-ld=gold -o /dev/null $OBJS -lm 2>/dev/null'")
+        "${CMDS[@]}"
   register: run_benchmarks_linker_result
   changed_when: false
   failed_when: false

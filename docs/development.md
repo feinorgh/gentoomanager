@@ -266,11 +266,36 @@ Runs on every pull request and on `workflow_dispatch`:
 | `unit-galaxy` | `ansible-content-actions/unit.yaml` | Installs collection from Galaxy and runs pytest unit tests |
 | `unit-source` | `ansible-network/github_actions/unit_source.yml` | Runs pytest unit tests directly from source |
 | `integration` | `ansible-content-actions/integration.yaml` | Runs Molecule integration tests across a Python/Ansible version matrix |
+| `shellcheck` | *(inline)* | Lints standalone `.sh` files and inline YAML `shell:` blocks (see below) |
 | `all_green` | *(inline)* | Aggregates all job results; branch protection can require this single job |
 
 All reusable workflows are sourced from
 `ansible/ansible-content-actions@main` and
 `ansible-network/github_actions@main`.
+
+#### shellcheck job
+
+The `shellcheck` job has two steps:
+
+1. **`ludeeus/action-shellcheck`** — scans all `*.sh` files under `scripts/`
+   using shellcheck at `warning` severity or above.
+
+2. **`scripts/shellcheck_yaml_blocks.py`** — a custom Python script that
+   extracts every `shell:` and `ansible.builtin.shell:` block from all YAML
+   task files under `roles/` and `playbooks/`, strips Jinja2 expressions,
+   and runs shellcheck on each block as a temporary `#!/bin/bash` script.
+   SC2154 is suppressed globally (variables assigned by Ansible are
+   unknown to shellcheck).
+
+   The script also handles block scalars that start `{` (Bash group commands),
+   inline Jinja2 variable placeholders (`{{ var }}`), and `{% if %}` /
+   `{% for %}` control blocks.  Exit code 1 if any block produces findings.
+
+Run locally:
+
+```bash
+make shellcheck
+```
 
 ### Release (`release.yml`)
 
@@ -299,6 +324,9 @@ make test
 
 # Lint (same as ansible-lint job)
 make lint
+
+# shellcheck (same as shellcheck job)
+make shellcheck
 
 # Integration tests (same as integration job — requires Molecule)
 uv run molecule test -s integration_probe_command_output
