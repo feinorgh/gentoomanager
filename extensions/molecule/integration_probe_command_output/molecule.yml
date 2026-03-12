@@ -15,7 +15,9 @@ provisioner:
     ANSIBLE_CONFIG: "${MOLECULE_PROJECT_DIRECTORY}/ansible.cfg"
 scenario:
   test_sequence:
+    - destroy
     - prepare
     - converge
+    - destroy
   destroy_sequence:
     - destroy

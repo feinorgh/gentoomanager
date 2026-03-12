@@ -1,0 +1,25 @@
+---
+# Minimal default scenario used only to satisfy molecule's shared-state
+# discovery (suppresses "CRITICAL molecule/default/molecule.yml glob failed").
+# Actual integration tests live in integration_probe_command_output/.
+
+platforms:
+  - name: na
+
+provisioner:
+  name: ansible
+  playbooks:
+    converge: ../utils/playbooks/noop.yml
+    prepare: ../utils/playbooks/noop.yml
+    cleanup: ../utils/playbooks/noop.yml
+    destroy: ../utils/playbooks/noop.yml
+  env:
+    ANSIBLE_CONFIG: "${MOLECULE_PROJECT_DIRECTORY}/ansible.cfg"
+
+scenario:
+  name: default
+  test_sequence:
+    - prepare
+    - converge
+  destroy_sequence:
+    - destroy
