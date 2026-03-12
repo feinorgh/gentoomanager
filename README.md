@@ -54,7 +54,6 @@ ansible all -m ping
 
 Dependencies (`requirements.yml`):
 - `community.general` — Portage module, make module for FreeBSD ports
-- `ansible.utils` — Declared as a collection dependency in `galaxy.yml`
 
 ## Inventory
 

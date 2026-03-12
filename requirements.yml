@@ -4,6 +4,3 @@
 collections:
   # Required by site.yml (community.general.portage module)
   - name: community.general
-
-  # Required by galaxy.yml dependency declaration
-  - name: ansible.utils

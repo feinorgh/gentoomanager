@@ -15,11 +15,8 @@ description: >-
   cross-platform performance benchmarks across VMs and physical hosts.
 license_file: LICENSE
 
-# TO-DO: update the tags based on your content type
 tags: ["linux", "gentoo", "benchmark", "portage", "performance"]
-# Pinned to avoid breaking changes from ansible.utils 6.x
-dependencies:
-  "ansible.utils": ">=2.0.0,<7.0.0"
+dependencies: {}
 
 repository: https://github.com/feinorgh/gentoomanager
 documentation: https://github.com/feinorgh/gentoomanager/blob/master/README.md
