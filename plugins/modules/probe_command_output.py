@@ -36,7 +36,7 @@ description:
   - Results are collected under caller-supplied keys in the C(data)
     return value.
 author:
-  - local.gentoomanager contributors
+  - Contributors (@feinorgh)
 options:
   probes:
     description:
@@ -45,7 +45,7 @@ options:
     elements: dict
     required: true
     suboptions:
-      result_key:
+      output_name:
         description: Key name for this probe's result in C(data).
         type: str
         required: true
@@ -97,16 +97,16 @@ EXAMPLES = r"""
 - name: Discover available FFmpeg codecs
   local.gentoomanager.probe_command_output:
     probes:
-      - result_key: video_encoders
+      - output_name: video_encoders
         command: [ffmpeg, -encoders]
         pattern: '^\s*V[\.\w]{5}\s+(\S+)'
-      - result_key: audio_encoders
+      - output_name: audio_encoders
         command: [ffmpeg, -encoders]
         pattern: '^\s*A[\.\w]{5}\s+(\S+)'
-      - result_key: video_decoders
+      - output_name: video_decoders
         command: [ffmpeg, -decoders]
         pattern: '^\s*V[\.\w]{5}\s+(\S+)'
-      - result_key: audio_decoders
+      - output_name: audio_decoders
         command: [ffmpeg, -decoders]
         pattern: '^\s*A[\.\w]{5}\s+(\S+)'
   register: ffmpeg_codecs
@@ -114,15 +114,15 @@ EXAMPLES = r"""
 - name: Detect available OpenSSL algorithms
   local.gentoomanager.probe_command_output:
     probes:
-      - result_key: ciphers
+      - output_name: ciphers
         command: [openssl, enc, -list]
         pattern: '-(\S+)'
         combine_stderr: true
-      - result_key: digests
+      - output_name: digests
         command: [openssl, dgst, -list]
         pattern: '-(\S+)'
         combine_stderr: true
-      - result_key: speed_help
+      - output_name: speed_help
         command: [openssl, speed, -help]
         combine_stderr: true
         raw: true
@@ -133,7 +133,7 @@ EXAMPLES = r"""
 RETURN = r"""
 data:
   description: >
-    Dict mapping each probe's C(result_key) to either a list of regex
+    Dict mapping each probe's C(output_name) to either a list of regex
     matches or a raw string (when C(raw) is true).
   type: dict
   returned: always
@@ -213,7 +213,7 @@ def main() -> None:
                 elements="dict",
                 required=True,
                 options=dict(
-                result_key=dict(type="str", required=True),
+                output_name=dict(type="str", required=True),
                     command=dict(type="list", elements="str", required=True),
                     pattern=dict(type="str", default=""),
                     group=dict(type="int", default=1),
@@ -237,9 +237,9 @@ def main() -> None:
 
     for probe in probes:
         result, err = run_probe(probe, timeout)
-        data[probe["result_key"]] = result
+        data[probe["output_name"]] = result
         if err:
-            errors.append(f"{probe['result_key']}: {err}")
+            errors.append(f"{probe['output_name']}: {err}")
 
     if errors:
         module.exit_json(

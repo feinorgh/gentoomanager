@@ -10,15 +10,15 @@
   local.gentoomanager.probe_command_output:
     timeout: 15
     probes:
-      - result_key: ciphers
+      - output_name: ciphers
         command: [openssl, enc, -list]
         pattern: '-(\S+)'
         combine_stderr: true
-      - result_key: digests
+      - output_name: digests
         command: [openssl, dgst, -list]
         pattern: '-(\S+)'
         combine_stderr: true
-      - result_key: speed_help
+      - output_name: speed_help
         command: [openssl, speed, -help]
         combine_stderr: true
         raw: true

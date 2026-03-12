@@ -11,16 +11,16 @@
 - name: Discover available FFmpeg codecs
   local.gentoomanager.probe_command_output:
     probes:
-      - result_key: video_encoders
+      - output_name: video_encoders
         command: [ffmpeg, -encoders]
         pattern: '^\s*V[\.\w]{5}\s+(\S+)'
-      - result_key: audio_encoders
+      - output_name: audio_encoders
         command: [ffmpeg, -encoders]
         pattern: '^\s*A[\.\w]{5}\s+(\S+)'
-      - result_key: video_decoders
+      - output_name: video_decoders
         command: [ffmpeg, -decoders]
         pattern: '^\s*V[\.\w]{5}\s+(\S+)'
-      - result_key: audio_decoders
+      - output_name: audio_decoders
         command: [ffmpeg, -decoders]
         pattern: '^\s*A[\.\w]{5}\s+(\S+)'
   register: run_benchmarks_ffmpeg_codecs_raw

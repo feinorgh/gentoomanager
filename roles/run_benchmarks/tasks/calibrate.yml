@@ -20,7 +20,7 @@
   local.gentoomanager.probe_command_output:
     timeout: 120
     probes:
-      - result_key: mips
+      - output_name: mips
         command:
           - "{{ run_benchmarks_7z_bin_raw.stdout | trim }}"
           - b
