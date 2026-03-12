@@ -7,7 +7,7 @@
 
 # ── 1. Detect available OpenSSL algorithms ────────────────────────────────
 - name: Detect available OpenSSL ciphers and algorithms
-  probe_command_output:
+  local.gentoomanager.probe_command_output:
     timeout: 15
     probes:
       - key: ciphers

@@ -9,9 +9,10 @@ provisioner:
     converge: ../utils/playbooks/converge.yml
     destroy: ../utils/playbooks/noop.yml
     prepare: ../utils/playbooks/noop.yml
-  config_options:
-    defaults:
-      collections_path: ${ANSIBLE_COLLECTIONS_PATH}
+  env:
+    # MOLECULE_PROJECT_DIRECTORY is the repo root; point ansible at the
+    # repo's ansible.cfg so collections_path resolves local.gentoomanager.
+    ANSIBLE_CONFIG: "${MOLECULE_PROJECT_DIRECTORY}/ansible.cfg"
 scenario:
   test_sequence:
     - prepare

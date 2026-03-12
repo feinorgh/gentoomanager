@@ -9,7 +9,7 @@
   failed_when: false
 
 - name: Discover available FFmpeg codecs
-  probe_command_output:
+  local.gentoomanager.probe_command_output:
     probes:
       - key: video_encoders
         command: [ffmpeg, -encoders]

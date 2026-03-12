@@ -17,7 +17,7 @@
   failed_when: false
 
 - name: Run 7-zip single-thread calibration benchmark
-  probe_command_output:
+  local.gentoomanager.probe_command_output:
     timeout: 120
     probes:
       - key: mips
