@@ -21,7 +21,19 @@ jobs:
   build-import:
     uses: ansible/ansible-content-actions/.github/workflows/build_import.yaml@main
   ansible-lint:
-    uses: ansible/ansible-content-actions/.github/workflows/ansible_lint.yaml@main
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+      - name: Install collection dependencies
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: Run ansible-lint
+        run: ansible-lint
   sanity:
     uses: ansible/ansible-content-actions/.github/workflows/sanity.yaml@main
   unit-galaxy:
