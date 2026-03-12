@@ -1,3 +1,35 @@
+[project]
+name = "local-gentoomanager"
+version = "1.0.0"
+description = "Ansible collection for managing Gentoo KVM virtual machines"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-ansible",
+  "pytest-xdist",
+  "molecule",
+  "ansible-core>=2.15",
+]
+dev = [
+  "local-gentoomanager[test]",
+  "ruff",
+  "ansible-lint",
+]
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=7.0",
+  "pytest-ansible",
+  "pytest-xdist",
+  "molecule",
+  "ansible-core>=2.15",
+  "ruff",
+  "ansible-lint",
+]
+
 [tool.black]
 line-length = 100
 

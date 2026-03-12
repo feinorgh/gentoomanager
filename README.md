@@ -212,6 +212,36 @@ python3 scripts/generate_benchmark_report.py benchmarks/ --anonymize
 Post-processes collected USE flags and splits them into per-host and
 common (all-hosts) entries.
 
+## Development and testing
+
+### Quick start
+
+```bash
+# With uv (recommended — fast, reproducible)
+uv sync --all-extras   # create .venv and install all dev deps from uv.lock
+make test              # run the unit test suite
+
+# Without uv (standard pip fallback)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r test-requirements.txt
+pytest tests/unit/
+```
+
+### Makefile targets
+
+| Target | Description |
+|--------|-------------|
+| `make setup` | Create `.venv` and install all dev dependencies |
+| `make test` | Run the unit test suite |
+| `make lint` | Run `ruff` linter and `ansible-lint` |
+| `make fmt` | Auto-format Python sources with `ruff format` |
+| `make clean` | Remove the `.venv` directory |
+
+`uv` is used automatically when it is on `PATH`; otherwise the targets
+fall back to `python3 -m venv` + `pip`.  Install `uv` from
+<https://docs.astral.sh/uv/getting-started/installation/>.
+
 ## Benchmark documentation
 
 See **[docs/benchmarks.md](docs/benchmarks.md)** for the full benchmark
