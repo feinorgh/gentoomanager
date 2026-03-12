@@ -1,0 +1,35 @@
+# ansible-lint configuration
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+profile: basic
+
+# Paths to lint (relative to repo root).
+include_paths:
+  - roles/
+  - playbooks/
+  - galaxy.yml
+
+# Paths to exclude from linting.
+exclude_paths:
+  - .venv/
+  - .tox/
+  - collections/
+  - benchmarks/
+  - scripts/
+
+# Rules that are intentionally disabled for this collection.
+# Each entry must include a comment explaining the reason.
+skip_list:
+  # Task-level suppressions are handled inline with '# noqa:' comments;
+  # no collection-wide rule skips are needed at this time.
+
+# Rules that produce warnings rather than errors.
+warn_list:
+  - experimental         # opt-in rules may have false positives
+  - galaxy               # galaxy metadata warnings are advisory
+
+# Offline mode: do not make network requests to validate galaxy dependencies.
+offline: true
+
+# Use colour output when running interactively.
+use_default_rules: true
