@@ -8,6 +8,12 @@
   become: true
   failed_when: false
 
+- name: Select latest Rust version (Gentoo)
+  ansible.builtin.command: eselect rust update
+  become: true
+  changed_when: false
+  failed_when: false
+
 - name: Install numpy (Gentoo)
   ansible.builtin.package:
     name: "{{ provision_benchmarks_numpy_packages['Gentoo'] }}"
