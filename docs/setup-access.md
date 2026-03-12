@@ -15,6 +15,7 @@ Two independent pieces are needed:
 
 ## Table of Contents
 
+- [Choosing the Remote User](#choosing-the-remote-user)
 - [1. SSH Key Authentication](#1-ssh-key-authentication)
   - [1.1 Generate a Key Pair](#11-generate-a-key-pair)
   - [1.2 Copy the Public Key to the Managed Node](#12-copy-the-public-key-to-the-managed-node)
@@ -29,6 +30,103 @@ Two independent pieces are needed:
 - [3. Verifying Everything Works](#3-verifying-everything-works)
 - [4. Security Notes](#4-security-notes)
 - [References](#references)
+
+---
+
+## Choosing the Remote User
+
+Before generating keys or configuring privilege escalation, decide which
+user account Ansible will log in as on the managed nodes.  There are three
+common patterns:
+
+### Option A — Your own regular user account
+
+Ansible logs in as the same user you use interactively.  `become: true`
+escalates to `root` via `sudo` or `doas`.
+
+**Pros:** no extra account to provision; personal keys already exist.  
+**Cons:** personal keys and work keys share the same authorized_keys entry;
+harder to audit which actions were automated vs. manual.
+
+```yaml
+# group_vars/all/vars.yml
+ansible_user: alice
+ansible_ssh_private_key_file: ~/.ssh/ansible_ed25519
+```
+
+### Option B — A dedicated `ansible` service account (recommended)
+
+Create a separate unprivileged user (commonly named `ansible`) on every
+managed node.  Ansible always logs in as this account; human operators use
+their own accounts.
+
+**Pros:** clean audit trail; the service account's SSH key can be rotated
+independently; the account can be locked or removed without affecting anyone's
+login access.  
+**Cons:** requires provisioning the account on every host.
+
+```bash
+# On each managed node — create the account (adjust command per distro)
+useradd -m -s /bin/bash ansible                # Debian / Ubuntu / RHEL
+useradd -m -s /bin/bash -G wheel ansible       # Fedora / RHEL (wheel group)
+adduser --shell /bin/bash ansible              # Alpine
+pw useradd ansible -m -s /bin/sh               # FreeBSD
+```
+
+Then copy the controller's public key to the new account (see
+[section 1.2](#12-copy-the-public-key-to-the-managed-node)):
+
+```bash
+ssh-copy-id -i ~/.ssh/ansible_ed25519.pub ansible@managed-host
+```
+
+```yaml
+# group_vars/all/vars.yml
+ansible_user: ansible
+ansible_ssh_private_key_file: ~/.ssh/ansible_ed25519
+```
+
+### Option C — Log in as `root` directly (**not recommended**)
+
+Ansible can connect directly as `root` (`ansible_user: root`), which
+eliminates the need for `become`.  **Avoid this in all but the most
+isolated lab environments** for the following reasons:
+
+- Many modern distributions disable root SSH login by default
+  (`PermitRootLogin no` in `sshd_config`) — for good reason.
+- A compromised controller key gives immediate, unrestricted access to
+  every managed node with no privilege-escalation barrier.
+- Root actions are harder to trace when all automation and manual logins
+  share the same account.
+- Accidental playbook errors (wrong inventory, wrong variable) have
+  no safety net — a mistaken `file: state=absent path=/` runs immediately.
+
+If you must log in as root (e.g. on a freshly installed system before
+creating a service account), restrict it to initial bootstrapping only,
+then disable root SSH login and switch to option B:
+
+```ini
+# /etc/ssh/sshd_config on the managed node — disable after bootstrapping
+PermitRootLogin no
+```
+
+### Summary
+
+| | Option A (own user) | Option B (ansible user) | Option C (root) |
+|-|---------------------|------------------------|-----------------|
+| Isolation | Low | **High** | None |
+| Audit trail | Mixed | **Clean** | None |
+| Key rotation | Disruptive | **Independent** | Risky |
+| `become` required | Yes | Yes | No |
+| Recommended | ✓ acceptable | **✓ preferred** | ✗ avoid |
+
+**References:**
+- OpenSSH `sshd_config(5)` — `PermitRootLogin`:
+  <https://man.openbsd.org/sshd_config#PermitRootLogin>
+- Ansible best practices — connection variables:
+  <https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html>
+- CIS Benchmark recommendation to disable direct root login:
+  <https://www.cisecurity.org/benchmark/distribution_independent_linux>
 
 ---
 
