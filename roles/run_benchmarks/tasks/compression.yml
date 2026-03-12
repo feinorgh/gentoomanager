@@ -33,6 +33,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compression.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_compression_result
   changed_when: false
   failed_when: false

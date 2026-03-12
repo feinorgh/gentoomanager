@@ -495,10 +495,9 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      dmidecode -t 17 2>/dev/null \
+      (sudo -n dmidecode -t 17 2>/dev/null || true) \
         | awk -F': ' '/^\s+Speed:/ && !/Unknown/{gsub(/^ +/,"",$2); print $2; exit}'
   register: run_benchmarks_mem_speed_raw
-  become: true
   changed_when: false
   failed_when: false
   when: ansible_system | default('') == 'Linux'

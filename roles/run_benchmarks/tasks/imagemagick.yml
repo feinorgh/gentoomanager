@@ -131,6 +131,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/imagemagick_kodak_encode.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_kodak_encode_result
   changed_when: false
   failed_when: false
@@ -243,6 +245,8 @@
         --ignore-failure \
         --export-json imagemagick_encode.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_imagemagick_encode_result
   changed_when: false
   failed_when: false
@@ -279,6 +283,8 @@
         --ignore-failure \
         --export-json imagemagick_decode.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_imagemagick_decode_result
   changed_when: false
   failed_when: false

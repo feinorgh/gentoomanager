@@ -69,6 +69,8 @@
         kill "$XVFB_PID" 2>/dev/null || true
       fi
       rm -rf "$XDG_RUNTIME_DIR"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_startup_result
   changed_when: false
   failed_when: false

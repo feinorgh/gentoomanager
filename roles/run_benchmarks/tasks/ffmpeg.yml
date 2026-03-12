@@ -136,6 +136,8 @@
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
         "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
+  args:
+    executable: /bin/bash
   register: run_benchmarks_ffmpeg_video_encode_result
   changed_when: false
   failed_when: false
@@ -203,6 +205,8 @@
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_decode.json \
         "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
+  args:
+    executable: /bin/bash
   register: run_benchmarks_ffmpeg_video_decode_result
   changed_when: false
   failed_when: false
@@ -246,6 +250,8 @@
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_encode.json \
         "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
+  args:
+    executable: /bin/bash
   register: run_benchmarks_ffmpeg_audio_encode_result
   changed_when: false
   failed_when: false
@@ -307,6 +313,8 @@
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_decode.json \
         "${CMDS[@]}"
   when: run_benchmarks_ffmpeg_check.rc == 0
+  args:
+    executable: /bin/bash
   register: run_benchmarks_ffmpeg_audio_decode_result
   changed_when: false
   failed_when: false

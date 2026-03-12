@@ -71,6 +71,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_crypto_symmetric_result
   changed_when: false
   failed_when: false
@@ -126,6 +128,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_crypto_hash_result
   changed_when: false
   failed_when: false
@@ -169,6 +173,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_crypto_hash_coreutils_result
   changed_when: false
   failed_when: false
@@ -279,6 +285,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_crypto_asymmetric_result
   changed_when: false
   failed_when: false
@@ -322,6 +330,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_crypto_hmac_result
   changed_when: false
   failed_when: false

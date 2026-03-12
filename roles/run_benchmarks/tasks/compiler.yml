@@ -123,6 +123,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_compiler_c_result
   changed_when: false
   failed_when: false
@@ -166,6 +168,8 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
         "${CMDS[@]}"
+  args:
+    executable: /bin/bash
   register: run_benchmarks_compiler_c_runtime_result
   changed_when: false
   failed_when: false
