@@ -9,9 +9,8 @@ on: # yamllint disable-line rule:truthy
   pull_request:
     branches: [main]
   workflow_dispatch:
-  # TO-DO: Below is an example cron scheduler. Uncomment and tweak it as per your requirement
   # schedule:
-    # - cron: '0 0 * * *'
+  #   - cron: '0 0 * * *'
 
 jobs:
   changelog:
@@ -27,6 +26,8 @@ jobs:
     uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@main
   unit-source:
     uses: ansible-network/github_actions/.github/workflows/unit_source.yml@main
+  integration:
+    uses: ansible/ansible-content-actions/.github/workflows/integration.yaml@main
   all_green:
     if: ${{ always() }}
     needs:
@@ -36,6 +37,7 @@ jobs:
       - unit-galaxy
       - unit-source
       - ansible-lint
+      - integration
     runs-on: ubuntu-latest
     steps:
       - run: >-
@@ -43,7 +45,8 @@ jobs:
           set([
           '${{ needs.changelog.result }}',
           '${{ needs.sanity.result }}',
-          '${{ needs.unit-galaxy.result }}'
-          '${{ needs.ansible-lint.result }}'
-          '${{ needs.unit-source.result }}'
+          '${{ needs.unit-galaxy.result }}',
+          '${{ needs.ansible-lint.result }}',
+          '${{ needs.unit-source.result }}',
+          '${{ needs.integration.result }}'
           ])"

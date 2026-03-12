@@ -253,23 +253,45 @@ resolved versions.
 
 ## CI / GitHub Actions
 
-The CI workflow (`.github/workflows/tests.yml`) runs these jobs on
-every pull request:
+### Tests (`tests.yml`)
 
-| Job | What it does |
-|-----|-------------|
-| `changelog` | Verifies a changelog fragment exists |
-| `build-import` | Builds and imports the collection into Galaxy |
-| `ansible-lint` | Runs `ansible-lint` on all playbooks and roles |
-| `sanity` | Runs `ansible-test sanity` |
-| `unit-galaxy` | Installs collection from Galaxy and runs unit tests |
-| `unit-source` | Runs unit tests directly from source |
+Runs on every pull request and on `workflow_dispatch`:
 
-All jobs use the reusable workflows from
-`ansible/ansible-content-actions` and
-`ansible-network/github_actions`.
+| Job | Reusable workflow | What it does |
+|-----|------------------|-------------|
+| `changelog` | `ansible-content-actions/changelog.yaml` | Verifies a changelog fragment exists (PR only) |
+| `build-import` | `ansible-content-actions/build_import.yaml` | Builds the collection tarball and validates it with the Galaxy importer |
+| `ansible-lint` | `ansible-content-actions/ansible_lint.yaml` | Runs `ansible-lint` on all playbooks and roles |
+| `sanity` | `ansible-content-actions/sanity.yaml` | Runs `ansible-test sanity` across a Python/Ansible version matrix |
+| `unit-galaxy` | `ansible-content-actions/unit.yaml` | Installs collection from Galaxy and runs pytest unit tests |
+| `unit-source` | `ansible-network/github_actions/unit_source.yml` | Runs pytest unit tests directly from source |
+| `integration` | `ansible-content-actions/integration.yaml` | Runs Molecule integration tests across a Python/Ansible version matrix |
+| `all_green` | *(inline)* | Aggregates all job results; branch protection can require this single job |
 
-To reproduce a CI failure locally:
+All reusable workflows are sourced from
+`ansible/ansible-content-actions@main` and
+`ansible-network/github_actions@main`.
+
+### Release (`release.yml`)
+
+Triggered when a GitHub Release is published:
+
+| Job | Reusable workflow | What it does |
+|-----|------------------|-------------|
+| `release_galaxy` | `ansible-content-actions/release_galaxy.yaml` | Publishes the collection to Ansible Galaxy |
+| `release_automation_hub` | `ansible-content-actions/release_ah.yaml` | Publishes the collection to Red Hat Automation Hub |
+
+**Required repository secrets:**
+
+| Secret | Used by | Where to obtain |
+|--------|---------|-----------------|
+| `ANSIBLE_GALAXY_API_KEY` | `release_galaxy` | [galaxy.ansible.com](https://galaxy.ansible.com) → Preferences → API Key |
+| `AH_TOKEN` | `release_automation_hub` | [console.redhat.com](https://console.redhat.com) → Automation Hub → Connect to Hub |
+
+Both jobs use the `release` environment in GitHub repository settings,
+which can be configured to require manual approval before publishing.
+
+### Reproducing CI failures locally
 
 ```bash
 # Unit tests (same as unit-source job)
@@ -277,6 +299,9 @@ make test
 
 # Lint (same as ansible-lint job)
 make lint
+
+# Integration tests (same as integration job — requires Molecule)
+uv run molecule test -s integration_probe_command_output
 ```
 
 ---
