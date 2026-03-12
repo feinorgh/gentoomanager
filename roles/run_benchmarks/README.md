@@ -17,12 +17,16 @@ Supports Linux (all major distributions), macOS, FreeBSD, and Windows.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `run_benchmarks_work_dir` | `/tmp/benchmarks` | Remote working directory |
+| `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory |
 | `run_benchmarks_fixture_dir` | *(controller path)* | Local directory for corpora fixtures |
-| `run_benchmarks_runs` | `10` | Number of hyperfine timed runs |
+| `run_benchmarks_runs` | `5` | Number of hyperfine timed runs |
 | `run_benchmarks_warmup` | `3` | Number of hyperfine warm-up runs |
+| `run_benchmarks_ffmpeg_video_runs` | `3` | Timed runs for FFmpeg video benchmarks |
+| `run_benchmarks_ffmpeg_video_warmup` | `2` | Warmup runs for FFmpeg video benchmarks |
+| `run_benchmarks_startup_runs` | `3` | Timed runs for application startup benchmarks |
+| `run_benchmarks_startup_warmup` | `2` | Warmup runs for application startup benchmarks |
+| `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
 | `run_benchmarks_categories` | *(all)* | List of benchmark categories to run |
-| `run_benchmarks_install_ffmpeg` | `false` | Enable FFmpeg benchmark category |
 | `run_benchmarks_report_dir` | `benchmarks/` | Output directory for JSON results |
 
 See `defaults/main.yml` for the full variable reference.

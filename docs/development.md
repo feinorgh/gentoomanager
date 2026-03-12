@@ -118,6 +118,7 @@ Run `make help` to list all targets:
 | `make test` | `uv run pytest tests/unit/` | `.venv/bin/pytest tests/unit/` |
 | `make lint` | `uv run ruff check …` + `uv run ansible-lint` | `.venv/bin/ruff check …` + `.venv/bin/ansible-lint` |
 | `make fmt` | `uv run ruff format …` | `.venv/bin/ruff format …` |
+| `make shellcheck` | `shellcheck scripts/*.sh` + YAML block extractor | same |
 | `make clean` | `rm -rf .venv` | same |
 
 ---
@@ -312,7 +313,7 @@ external secrets or accounts required.
 
 1. Update `version` in `galaxy.yml`.
 2. Add a changelog fragment under `changelogs/fragments/`.
-3. Commit and push to `master`.
+3. Commit and push to `main`.
 4. Go to *GitHub → Releases → Draft a new release*, set a tag (e.g. `v1.1.0`),
    fill in the title/notes, and click **Publish release**.
 5. The workflow attaches the tarball automatically within ~1 minute.

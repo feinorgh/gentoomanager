@@ -237,6 +237,7 @@ pytest tests/unit/
 | `make test` | Run the unit test suite |
 | `make lint` | Run `ruff` linter and `ansible-lint` |
 | `make fmt` | Auto-format Python sources with `ruff format` |
+| `make shellcheck` | Lint `.sh` files and YAML `shell:` blocks with shellcheck |
 | `make clean` | Remove the `.venv` directory |
 
 `uv` is used automatically when it is on `PATH`; otherwise the targets

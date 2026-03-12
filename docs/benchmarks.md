@@ -210,7 +210,7 @@ Benchmark control:
   --runs N                    Repetitions per benchmark (default: 5)
   --warmup N                  Warmup runs (default: 3)
   --cpu-affinity RANGE        Pin benchmarks to CPU range (e.g. 0-3)
-  --compress-size MB          Test data size for compression (default: 256)
+  --compress-size MB          Test data size for compression (default: 64)
   --ffmpeg-duration SEC       Test clip duration for FFmpeg (default: 10)
 
 Flags:
@@ -340,9 +340,9 @@ binary, medical image, XML, database, etc.).  This is the standard corpus
 used to publish zstd, lz4, and brotli reference benchmarks.  Downloaded once
 to the controller by `scripts/download_benchmark_fixtures.py` and copied to
 each host; if unavailable, falls back to a random binary file of
-**256 MiB** (the default `--compress-size` value) — which only tests the
+**64 MiB** (the default `--compress-size` value) — which only tests the
 incompressible-data fast-path, not actual compression performance.  Any
-previously generated fallback file smaller than 256 MiB is automatically
+previously generated fallback file smaller than 64 MiB is automatically
 deleted and regenerated at the start of the next benchmark run.
 
 The `xz-compress` benchmark passes `-T0` to enable multi-threaded compression,
@@ -532,11 +532,10 @@ depending on installed libraries and Gentoo USE flags.
 |-----------------|------------|-------------------------|
 | h264-encode     | libx264    | preset medium, CRF 23   |
 | h265-encode     | libx265    | preset medium, CRF 28   |
-| vp8-encode      | libvpx     | CRF 10, 1M bitrate      |
-| vp9-encode      | libvpx-vp9 | CRF 30, variable        |
+| vp8-encode      | libvpx     | CRF 10, 1M bitrate, deadline=realtime |
+| vp9-encode      | libvpx-vp9 | CRF 30, deadline=realtime, cpu-used 8 |
 | av1-svt-encode  | libsvtav1  | CRF 35, preset 8        |
 | av1-aom-encode  | libaom-av1 | CRF 35, cpu-used 8      |
-| av1-rav1e-encode| librav1e   | QP 100, speed 10        |
 | theora-encode   | libtheora  | quality 7               |
 | xvid-encode     | libxvid    | quality 5               |
 | mpeg2-encode    | mpeg2video | 5 Mbit/s                |
@@ -890,7 +889,7 @@ passed), the corresponding benchmark task falls back to a synthetic source:
 
 | Fixture | Fallback |
 |---------|----------|
-| `silesia_combined.bin` | **256 MiB** random binary (`/dev/urandom`); any existing file < 256 MiB is rebuilt |
+| `silesia_combined.bin` | **64 MiB** random binary (`/dev/urandom`); any existing file < 64 MiB is rebuilt |
 | `bbb_1080p_30s.mkv` | `testsrc2` 1080p FFV1 synthetic video |
 | `bbb_audio_60s.wav` | 440 Hz sine PCM audio |
 | `kodak/` | Kodak benchmark is skipped |
@@ -943,7 +942,12 @@ or in inventory.
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
 | `run_benchmarks_work_dir_win` | `C:\ansible-benchmarks` | Remote working directory (Windows) |
-| `run_benchmarks_compress_size_mb` | `256` | Test data size for compression fallback (MB) |
+| `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
+| `run_benchmarks_ffmpeg_video_runs` | `3` | Hyperfine iterations for FFmpeg video encode/decode |
+| `run_benchmarks_ffmpeg_video_warmup` | `2` | Warmup runs for FFmpeg video benchmarks |
+| `run_benchmarks_ffmpeg_task_timeout_sec` | `7200` | Per-task timeout for FFmpeg benchmarks (s) |
+| `run_benchmarks_startup_runs` | `3` | Hyperfine iterations for application startup benchmarks |
+| `run_benchmarks_startup_warmup` | `2` | Warmup runs for application startup benchmarks |
 | `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
 | `run_benchmarks_min_disk_mb` | `2048` | Minimum free disk space on work_dir partition (MB) |
 | `run_benchmarks_min_ram_mb` | `4096` | Minimum total RAM when work_dir is on tmpfs (MB) |
