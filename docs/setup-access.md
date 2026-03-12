@@ -21,6 +21,7 @@ Two independent pieces are needed:
   - [1.3 Manual Setup (when ssh-copy-id is unavailable)](#13-manual-setup-when-ssh-copy-id-is-unavailable)
   - [1.4 Test the Connection](#14-test-the-connection)
   - [1.5 Ansible Connection Variables](#15-ansible-connection-variables)
+  - [1.6 Storing the Key Passphrase in ansible-vault](#16-storing-the-key-passphrase-in-ansible-vault)
 - [2. Passwordless Privilege Escalation](#2-passwordless-privilege-escalation)
   - [2.1 sudo — Linux (all distros)](#21-sudo--linux-all-distros)
   - [2.2 doas — Gentoo, FreeBSD, OpenBSD](#22-doas--gentoo-freebsd-openbsd)
@@ -431,6 +432,132 @@ private_key_file     = ~/.ssh/ansible_ed25519
   <https://docs.ansible.com/ansible/latest/reference_appendices/special_variables.html>
 - `ansible.cfg` reference:
   <https://docs.ansible.com/ansible/latest/reference_appendices/config.html>
+
+---
+
+### 1.6 Storing the Key Passphrase in ansible-vault
+
+If you use a passphrase-protected SSH key and want fully unattended runs
+without a long-lived agent, you can store the passphrase in an
+**ansible-vault**-encrypted variable and have a `pre_tasks` block unlock
+the key on the controller before Ansible opens any SSH connections.
+
+> **Important:** this approach unlocks the key on the **controller**
+> (the machine running `ansible-playbook`), not on the managed hosts.
+> The unlocked key stays in the controller's ssh-agent for the duration
+> of the playbook run.  Pair it with one of the agent patterns in
+> [section 1.1](#11-generate-a-key-pair) so the agent socket exists
+> before the pre-task runs.
+
+#### Step 1 — Store the passphrase in a vault-encrypted file
+
+```bash
+# Create an encrypted variable file (you will be prompted for a vault password)
+ansible-vault create group_vars/all/vault.yml
+```
+
+Inside `vault.yml`:
+
+```yaml
+vault_ssh_key_passphrase: "your-key-passphrase-here"
+```
+
+Or use an inline vault string inside an existing variable file:
+
+```bash
+ansible-vault encrypt_string 'your-key-passphrase-here' \
+    --name vault_ssh_key_passphrase
+```
+
+Paste the output block into any variable file (e.g.
+`group_vars/all/vars.yml`).
+
+#### Step 2 — Add a pre-task to unlock the key
+
+Add the following to any playbook that needs the passphrase-protected
+key.  The task runs only on the controller (`delegate_to: localhost`),
+never on the managed hosts.
+
+```yaml
+- hosts: all
+  pre_tasks:
+    - name: Unlock SSH key using vault passphrase
+      ansible.builtin.shell: |
+        _askpass=$(mktemp)
+        printf '#!/bin/sh\necho "%s"\n' "{{ vault_ssh_key_passphrase }}" \
+            > "$_askpass"
+        chmod 700 "$_askpass"
+        DISPLAY= SSH_ASKPASS="$_askpass" SSH_ASKPASS_REQUIRE=force \
+            ssh-add "{{ ansible_ssh_private_key_file | \
+                        default(lookup('env','HOME') + '/.ssh/ansible_ed25519') }}"
+        rm -f "$_askpass"
+      delegate_to: localhost
+      run_once: true
+      no_log: true       # prevents the passphrase appearing in logs
+      changed_when: false
+  roles:
+    - …
+```
+
+`SSH_ASKPASS_REQUIRE=force` (OpenSSH ≥ 8.4) tells `ssh-add` to use
+the `SSH_ASKPASS` script even when a terminal is attached, avoiding an
+interactive prompt.  On older OpenSSH, set `DISPLAY=` (empty) instead
+to trigger the same behaviour.
+
+#### Step 3 — Run the playbook
+
+```bash
+# Supply the vault password interactively
+ansible-playbook site.yml --ask-vault-pass
+
+# Or via a password file (useful in CI)
+ansible-playbook site.yml --vault-password-file ~/.vault_pass
+
+# Or via an environment variable
+ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_pass ansible-playbook site.yml
+```
+
+The vault password file should be readable only by your user:
+
+```bash
+chmod 600 ~/.vault_pass
+```
+
+#### Multiple vault IDs
+
+If you manage several vaults (e.g. per-environment), use `--vault-id`:
+
+```bash
+# Encrypt with a named ID
+ansible-vault encrypt_string 'passphrase' \
+    --vault-id production@~/.vault_pass_prod \
+    --name vault_ssh_key_passphrase
+
+# Run with the matching ID
+ansible-playbook site.yml --vault-id production@~/.vault_pass_prod
+```
+
+#### Security considerations
+
+- The temporary `SSH_ASKPASS` script is written to a `mktemp` path and
+  deleted immediately after `ssh-add` exits.  `no_log: true` prevents
+  Ansible from recording the passphrase in its output or callback logs.
+- Never commit unencrypted passphrases to version control.  Use
+  `.gitignore` or `git-crypt` to protect any plaintext vault password
+  files.
+- In CI systems, inject the vault password via an encrypted secret
+  (GitHub Actions secret, GitLab CI variable, etc.) rather than
+  storing it in the repository.
+
+**References:**
+- Ansible Vault user guide:
+  <https://docs.ansible.com/ansible/latest/vault_guide/index.html>
+- `ansible-vault(1)` man page:
+  <https://docs.ansible.com/ansible/latest/cli/ansible-vault.html>
+- `SSH_ASKPASS` / `SSH_ASKPASS_REQUIRE` in `ssh(1)`:
+  <https://man.openbsd.org/ssh>
+- Ansible `no_log` directive:
+  <https://docs.ansible.com/ansible/latest/reference_appendices/logging.html>
 
 ---
 
