@@ -12,6 +12,7 @@ An Ansible collection for **managing Gentoo Linux systems** and running a
 - [Playbooks](#playbooks)
 - [Scripts](#scripts)
 - [Benchmark documentation](#benchmark-documentation)
+- [Passwordless access setup](#passwordless-access-setup)
 - [License](#license)
 
 ## Requirements
@@ -220,6 +221,16 @@ suite user guide including:
 - All benchmark categories and what they measure
 - Configuration reference
 - Troubleshooting guide
+
+## Passwordless access setup
+
+See **[docs/setup-access.md](docs/setup-access.md)** for step-by-step
+instructions on:
+- Generating and distributing SSH key pairs
+- Configuring passwordless `sudo` (all Linux distros)
+- Configuring passwordless `doas` (Gentoo, FreeBSD, OpenBSD)
+- Setting the relevant Ansible connection and become variables
+- Security notes and verification commands
 
 ## License
 
