@@ -11,6 +11,7 @@ An Ansible collection for **managing Gentoo Linux systems** and running a
 - [Roles](#roles)
 - [Playbooks](#playbooks)
 - [Scripts](#scripts)
+- [Development and testing](#development-and-testing)
 - [Benchmark documentation](#benchmark-documentation)
 - [Passwordless access setup](#passwordless-access-setup)
 - [License](#license)
@@ -241,6 +242,10 @@ pytest tests/unit/
 `uv` is used automatically when it is on `PATH`; otherwise the targets
 fall back to `python3 -m venv` + `pip`.  Install `uv` from
 <https://docs.astral.sh/uv/getting-started/installation/>.
+
+See **[docs/development.md](docs/development.md)** for the full
+development guide, including dependency management, integration tests,
+CI details, and project layout.
 
 ## Benchmark documentation
 
