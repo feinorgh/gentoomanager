@@ -34,6 +34,13 @@ strategy:
 3. **`eselect rust update`** is run after either install to activate the latest
    available Rust toolchain.
 
+Gentoo VMs are provisioned serially (one host at a time) to avoid saturating
+shared hypervisor CPUs during source compilation. Before provisioning begins,
+the VM's RAM is scaled to its libvirt maximum (`virsh setmem --live`), delegated
+to the `hypervisor_host`. RAM is always restored to the inactive configuration
+value when provisioning finishes — even if it fails. Bare-metal Gentoo hosts
+(no `hypervisor_host`) skip the RAM scaling steps.
+
 ## Dependencies
 
 None.
