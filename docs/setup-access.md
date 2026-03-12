@@ -54,10 +54,40 @@ ssh-keygen -t ed25519 -C "ansible@controller" -f ~/.ssh/ansible_ed25519
   empty (just press Enter) or use `ssh-agent` to unlock it once per session.
 
 > **Using ssh-agent with a passphrase-protected key:**
+>
+> The simplest correct pattern is to start the agent in a subshell so
+> that it is killed automatically when the subshell exits:
+>
+> ```bash
+> # Start a shell session with an agent that dies when the shell exits.
+> ssh-agent bash          # or: ssh-agent $SHELL
+> ssh-add ~/.ssh/ansible_ed25519
+> ansible-playbook …      # run your playbooks here
+> exit                    # agent is killed as the subshell exits
+> ```
+>
+> If you need the agent in your *current* shell, kill it on exit with a
+> trap to avoid leaving a stale agent process running after logout:
+>
 > ```bash
 > eval "$(ssh-agent -s)"
+> trap "ssh-agent -k" EXIT   # kill the agent when this shell exits
 > ssh-add ~/.ssh/ansible_ed25519
-> # The agent holds the decrypted key for the rest of the shell session.
+> ```
+>
+> **Note:** `eval "$(ssh-agent -s)"` without the trap leaves an orphan
+> agent process running after the shell exits, since `SSH_AGENT_PID`
+> goes out of scope.
+>
+> **Preferred alternative — use your desktop / login-session agent:**
+> Most Linux desktops (GNOME Keyring, KDE Wallet) and macOS start an
+> agent automatically at login and expose `$SSH_AUTH_SOCK`.  If that
+> variable is already set, `ssh-add` alone is sufficient:
+>
+> ```bash
+> # Check whether a session agent is already running
+> echo "$SSH_AUTH_SOCK"
+> ssh-add ~/.ssh/ansible_ed25519   # load your key into the existing agent
 > ```
 
 **References:**
