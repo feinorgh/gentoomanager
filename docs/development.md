@@ -299,22 +299,32 @@ make shellcheck
 
 ### Release (`release.yml`)
 
-Triggered when a GitHub Release is published:
+Triggered when a GitHub Release is published.  The workflow builds the
+collection tarball with `ansible-galaxy collection build` and uploads it
+as an asset on the same release using the built-in `GITHUB_TOKEN` — no
+external secrets or accounts required.
 
-| Job | Reusable workflow | What it does |
-|-----|------------------|-------------|
-| `release_galaxy` | `ansible-content-actions/release_galaxy.yaml` | Publishes the collection to Ansible Galaxy |
-| `release_automation_hub` | `ansible-content-actions/release_ah.yaml` | Publishes the collection to Red Hat Automation Hub |
+| Job | What it does |
+|-----|-------------|
+| `build-and-attach` | Builds `local-gentoomanager-<version>.tar.gz` and attaches it to the GitHub Release |
 
-**Required repository secrets:**
+**How to make a release:**
 
-| Secret | Used by | Where to obtain |
-|--------|---------|-----------------|
-| `ANSIBLE_GALAXY_API_KEY` | `release_galaxy` | [galaxy.ansible.com](https://galaxy.ansible.com) → Preferences → API Key |
-| `AH_TOKEN` | `release_automation_hub` | [console.redhat.com](https://console.redhat.com) → Automation Hub → Connect to Hub |
+1. Update `version` in `galaxy.yml`.
+2. Add a changelog fragment under `changelogs/fragments/`.
+3. Commit and push to `master`.
+4. Go to *GitHub → Releases → Draft a new release*, set a tag (e.g. `v1.1.0`),
+   fill in the title/notes, and click **Publish release**.
+5. The workflow attaches the tarball automatically within ~1 minute.
 
-Both jobs use the `release` environment in GitHub repository settings,
-which can be configured to require manual approval before publishing.
+Users can then install directly from the GitHub Release asset:
+
+```bash
+ansible-galaxy collection install \
+  https://github.com/feinorgh/gentoomanager/releases/download/v1.1.0/local-gentoomanager-1.1.0.tar.gz
+```
+
+No `ANSIBLE_GALAXY_API_KEY` or `AH_TOKEN` secrets are needed.
 
 ### Reproducing CI failures locally
 
