@@ -33,7 +33,7 @@
 
       def bench_json():
           data = {f"key_{i}": list(range(100)) for i in range(100)}
-          for _ in range(50):
+          for _ in range(200):
               s = json.dumps(data)
               json.loads(s)
 
@@ -42,20 +42,20 @@
               r'(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)'
           )
           text = "Connect from 192.168.1.100 to 10.0.0.1 via 172.16.0.255 " * 1000
-          for _ in range(100):
+          for _ in range(500):
               pattern.findall(text)
 
       def bench_hash():
           data = b"x" * (1024 * 1024)
-          for _ in range(50):
+          for _ in range(200):
               hashlib.sha256(data).hexdigest()
 
       def bench_list_comprehension():
-          for _ in range(100):
+          for _ in range(500):
               _ = [x ** 2 for x in range(10000)]
 
       def bench_dict_operations():
-          for _ in range(100):
+          for _ in range(500):
               d = {str(i): i for i in range(10000)}
               _ = sum(d.values())
 

@@ -58,7 +58,10 @@ run_benchmarks_min_disk_mb: 2048
 run_benchmarks_min_ram_mb: 4096
 
 # Test data sizes
-run_benchmarks_compress_size_mb: 64
+# Fallback random testdata.bin size (MiB) when the Silesia corpus is absent.
+# 256 MiB keeps lz4 above 100 ms on modern hardware and gives MD5/SHA a
+# meaningful runtime.  xz uses -T0 in the compression task to remain fast.
+run_benchmarks_compress_size_mb: 256
 run_benchmarks_ffmpeg_duration_sec: 10
 
 # Per-command time limit passed to hyperfine (--time-limit, seconds).

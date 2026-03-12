@@ -115,22 +115,21 @@
       cd {{ run_benchmarks_work_dir }}
       IM={{ run_benchmarks_im_bin }}
 
-      CMDS=()
-      count=0
-      for img in kodak/kodim*.png; do
-        [ -f "$img" ] || continue
-        name=$(basename "$img" .png)
-        CMDS+=(--command-name "$name" "${IM} ${img} -quality 90 JPEG:/dev/null")
-        count=$((count + 1))
-      done
+      # Count available Kodak images
+      count=$(find kodak -name "kodim*.png" -type f 2>/dev/null | wc -l)
       [ "$count" -eq 0 ] && exit 0
 
+      # Benchmark: encode all Kodak images in a single command to accumulate
+      # enough work for a meaningful timing (24 × ~20 ms = ~480 ms per run).
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/imagemagick_kodak_encode.json \
-        "${CMDS[@]}"
+        --command-name "kodak-24-jpeg-q90" \
+          "for img in kodak/kodim*.png; do ${IM} \"\$img\" -quality 90 JPEG:/dev/null; done" \
+        --command-name "kodak-24-png-z6" \
+          "for img in kodak/kodim*.png; do ${IM} \"\$img\" -define png:compression-level=6 PNG:/dev/null; done"
   args:
     executable: /bin/bash
   register: run_benchmarks_kodak_encode_result

@@ -45,10 +45,10 @@
         --export-json {{ run_benchmarks_work_dir }}/process.json \
         --command-name "fork-exec-1k" \
           "{{ run_benchmarks_work_dir }}/bench_fork 1000" \
-        --command-name "shell-spawn-100" \
-          "sh -c 'for i in \$(seq 100); do /bin/true; done'" \
+        --command-name "shell-spawn-500" \
+          "sh -c 'for i in \$(seq 500); do /bin/true; done'" \
         --command-name "python3-import" \
-          "python3 -c 'import os, sys, json, re, hashlib, pathlib'"
+          "python3 -c 'import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools'"
   register: run_benchmarks_process_result
   changed_when: false
   failed_when: false

@@ -16,8 +16,8 @@
         CMDS+=(--command-name "bzip2-compress"   "bzip2 -k -f testdata.bin && rm -f testdata.bin.bz2")
         CMDS+=(--command-name "bzip2-decompress" "bzip2 -k testdata.bin && bzip2 -d -f testdata.bin.bz2")
       {% elif tool == 'xz' %}
-        CMDS+=(--command-name "xz-compress"      "xz -k -f testdata.bin && rm -f testdata.bin.xz")
-        CMDS+=(--command-name "xz-decompress"    "xz -k testdata.bin && xz -d -f testdata.bin.xz")
+        CMDS+=(--command-name "xz-compress"      "xz -k -f -T0 testdata.bin && rm -f testdata.bin.xz")
+        CMDS+=(--command-name "xz-decompress"    "xz -k -T0 testdata.bin && xz -d -f -T0 testdata.bin.xz")
       {% elif tool == 'zstd' %}
         CMDS+=(--command-name "zstd-compress"    "zstd -f testdata.bin -o testdata.bin.zst && rm -f testdata.bin.zst")
         CMDS+=(--command-name "zstd-decompress"  "zstd -f testdata.bin -o testdata.bin.zst && zstd -d -f testdata.bin.zst")

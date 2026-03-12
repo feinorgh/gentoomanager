@@ -7,20 +7,44 @@
     chdir: "{{ run_benchmarks_work_dir }}"
     creates: "{{ run_benchmarks_work_dir }}/sortdata.txt"
 
-- name: Create directory tree for find benchmarks
+- name: Check findtree file count
   ansible.builtin.shell:
     cmd: |
-      set -e
-      cd {{ run_benchmarks_work_dir }}
-      mkdir -p findtree
-      for i in $(seq 1 50); do
-        mkdir -p "findtree/dir_$i/sub_a" "findtree/dir_$i/sub_b"
-        for j in $(seq 1 20); do
-          dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_a/file_$j.txt" 2>/dev/null
-          dd if=/dev/urandom bs=1k count=1 of="findtree/dir_$i/sub_b/file_$j.dat" 2>/dev/null
-        done
-      done
+      set -o pipefail
+      find {{ run_benchmarks_work_dir }}/findtree -type f 2>/dev/null | wc -l || echo 0
+  register: run_benchmarks_findtree_count
+  changed_when: false
+  failed_when: false
+
+- name: Remove undersized findtree (will be regenerated with 10 000 files)
+  # Old runs created 2 000 files (50 dirs × 2 subdirs × 20 files).
+  # find/du/tar on 2 000 inodes completes in < 50 ms — not statistically
+  # meaningful.  10 000 files pushes timings comfortably above 100 ms.
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/findtree"
+    state: absent
+  when: run_benchmarks_findtree_count.stdout | trim | int < 9000
+
+- name: Create large directory tree for find/tar/du benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import os
+      base = "{{ run_benchmarks_work_dir }}/findtree"
+      for i in range(100):
+          for sub in ("sub_a", "sub_b"):
+              d = os.path.join(base, "dir_%03d" % i, sub)
+              os.makedirs(d, exist_ok=True)
+              for j in range(50):
+                  with open(os.path.join(d, "file_%02d.txt" % j), "w") as f:
+                      f.write("bench dir=%03d sub=%s n=%02d\n" % (i, sub, j) + "x" * 256 + "\n")
+                  with open(os.path.join(d, "file_%02d.dat" % j), "w") as f:
+                      f.write("bench dir=%03d sub=%s n=%02d\n" % (i, sub, j) + "y" * 256 + "\n")
+      PYEOF
     creates: "{{ run_benchmarks_work_dir }}/findtree"
+  changed_when: false
+  failed_when: false
 
 - name: Run coreutils benchmarks
   ansible.builtin.shell:

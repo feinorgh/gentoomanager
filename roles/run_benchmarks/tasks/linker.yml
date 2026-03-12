@@ -15,23 +15,43 @@
 
 # ── Generate synthetic multi-object project ───────────────────────────────
 
+- name: Count existing linker source files
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      find {{ run_benchmarks_work_dir }}/linker_src -name "unit_*.c" 2>/dev/null | wc -l || echo 0
+  register: run_benchmarks_linker_src_count
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_linker_gcc_check.rc == 0
+
+- name: Remove undersized linker project (will be regenerated with 400 files)
+  # Old runs generated 200 files; lld links those in < 150 ms.  400 files
+  # keeps lld comfortably above 250 ms and bfd above 400 ms.
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/linker_src"
+    state: absent
+  when:
+    - run_benchmarks_linker_gcc_check.rc == 0
+    - run_benchmarks_linker_src_count.stdout | trim | int < 350
+
 - name: Generate synthetic C source files for linker benchmark
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       DIR="{{ run_benchmarks_work_dir }}/linker_src"
       mkdir -p "$DIR"
-      # Generate 200 small C files each defining 10 functions
+      # Generate 400 small C files each defining 10 functions
       python3 - <<'PYEOF'
       import os
       outdir = "{{ run_benchmarks_work_dir }}/linker_src"
       # header
       with open(os.path.join(outdir, "bench_link.h"), "w") as f:
-          for i in range(200):
+          for i in range(400):
               for j in range(10):
                   f.write("double fn_%d_%d(double x);\n" % (i, j))
       # source files
-      for i in range(200):
+      for i in range(400):
           with open(os.path.join(outdir, "unit_%03d.c" % i), "w") as f:
               f.write('#include "bench_link.h"\n')
               for j in range(10):
@@ -40,7 +60,7 @@
       with open(os.path.join(outdir, "main.c"), "w") as f:
           f.write('#include "bench_link.h"\n#include <stdio.h>\n')
           f.write("int main(void) {\n  double s = 0.0;\n")
-          for i in range(200):
+          for i in range(400):
               for j in range(10):
                   f.write("  s += fn_%d_%d((double)%d);\n" % (i, j, i*j))
           f.write('  printf("%.3f\\n", s);\n  return 0;\n}\n')
