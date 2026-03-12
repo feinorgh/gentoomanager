@@ -20,6 +20,20 @@ FFmpeg installation.
 | `provision_benchmarks_freebsd_hyperfine_port` | `benchmarks/hyperfine` | FreeBSD port for hyperfine |
 | `provision_benchmarks_freebsd_ffmpeg_port` | `multimedia/ffmpeg` | FreeBSD port for FFmpeg |
 
+## OS-Specific Notes
+
+### Gentoo
+
+Rust is installed separately from the main package list using a preferred/fallback
+strategy:
+
+1. **`dev-lang/rust`** (source build) is attempted first — preferred because it
+   is compiled with the system's `CFLAGS`, `CHOST`, and other Portage settings.
+2. **`dev-lang/rust-bin`** (pre-built binary) is installed as a fallback if the
+   source build is unavailable (e.g. not keyworded or masked on that host).
+3. **`eselect rust update`** is run after either install to activate the latest
+   available Rust toolchain.
+
 ## Dependencies
 
 None.
