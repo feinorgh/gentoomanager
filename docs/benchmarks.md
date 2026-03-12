@@ -32,6 +32,8 @@ reports with charts.
   - [Disk I/O](#disk-io)
   - [Linker](#linker)
   - [OpenCV](#opencv)
+  - [GIMP](#gimp)
+  - [Inkscape](#inkscape)
   - [Application Startup](#application-startup)
   - [Gentoo Build Times](#gentoo-build-times)
 - [Reports](#reports)
@@ -174,6 +176,14 @@ ansible-playbook playbooks/provision_benchmarks.yml \
 ansible-playbook playbooks/provision_benchmarks.yml \
   -e provision_benchmarks_install_opencv=true
 
+# Install GIMP for batch-mode image-processing benchmarks
+ansible-playbook playbooks/provision_benchmarks.yml \
+  -e provision_benchmarks_install_gimp=true
+
+# Install Inkscape 1.x for SVG rendering benchmarks
+ansible-playbook playbooks/provision_benchmarks.yml \
+  -e provision_benchmarks_install_inkscape=true
+
 # Prompt for sudo password
 ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
 ```
@@ -200,7 +210,7 @@ Benchmark control:
   --runs N                    Repetitions per benchmark (default: 5)
   --warmup N                  Warmup runs (default: 3)
   --cpu-affinity RANGE        Pin benchmarks to CPU range (e.g. 0-3)
-  --compress-size MB          Test data size for compression (default: 64)
+  --compress-size MB          Test data size for compression (default: 256)
   --ffmpeg-duration SEC       Test clip duration for FFmpeg (default: 10)
 
 Flags:
@@ -329,8 +339,14 @@ Tests compression and decompression speed on a real-world mixed-content corpus.
 binary, medical image, XML, database, etc.).  This is the standard corpus
 used to publish zstd, lz4, and brotli reference benchmarks.  Downloaded once
 to the controller by `scripts/download_benchmark_fixtures.py` and copied to
-each host; if unavailable, falls back to a random binary file (which only
-tests the incompressible-data fast-path, not actual compression performance).
+each host; if unavailable, falls back to a random binary file of
+**256 MiB** (the default `--compress-size` value) — which only tests the
+incompressible-data fast-path, not actual compression performance.  Any
+previously generated fallback file smaller than 256 MiB is automatically
+deleted and regenerated at the start of the next benchmark run.
+
+The `xz-compress` benchmark passes `-T0` to enable multi-threaded compression,
+exercising multi-core performance in addition to per-core IPC.
 
 The [Canterbury corpus](https://corpus.canterbury.ac.nz/) is also downloaded
 to `benchmarks/fixtures/cantrbry/` for ad-hoc comparison with published
@@ -369,6 +385,20 @@ and SHA-NI hardware instructions), LTO, and optimization level.
 `rsa-2048-sign`, `rsa-2048-verify`, `rsa-4096-sign`,
 `ecdsa-p256-sign`, `ecdsa-p256-verify`,
 `ed25519-sign`, `ed25519-verify`
+
+Individual asymmetric operations complete in well under 1 ms, making it
+impossible for hyperfine to measure them accurately in a single invocation.
+Each command therefore wraps the `openssl` call in a shell loop to bring the
+total runtime above 100 ms:
+
+| Command | Loop count | Reason |
+|---|---|---|
+| `rsa-2048-sign` / `rsa-2048-verify` | 100 | ~1 ms/op on modern hardware |
+| `rsa-4096-sign` / `rsa-4096-verify` | 50 | ~2–4 ms/op |
+| `ecdsa-p256-sign` / `ecdsa-p256-verify` | 200 | ~0.3–0.5 ms/op |
+| `ed25519-sign` / `ed25519-verify` | 1000 | ~0.05–0.1 ms/op |
+
+The input file `signdata.bin` is **1 KiB** of deterministic random data.
 
 **HMAC:** `hmac-sha256`, `hmac-sha512`, `hmac-sha3-256`
 
@@ -441,13 +471,18 @@ The project is generated at benchmark time by
 
 Tests Python interpreter performance on micro-benchmarks.
 
-| Benchmark  | Description                            |
-|------------|----------------------------------------|
-| fibonacci  | Recursive Fibonacci(32)                |
-| json-serde | JSON encode/decode round-trip          |
-| regex      | Regex IP address matching              |
-| hashlib    | MD5 hashing                            |
-| numpy      | NumPy matrix operations (if installed) |
+| Benchmark | Iterations | Description                            |
+|-----------|-----------|----------------------------------------|
+| fibonacci  | —         | Recursive Fibonacci(32)                |
+| json-serde | —         | JSON encode/decode round-trip          |
+| regex      | —         | Regex IP address matching              |
+| hashlib    | —         | MD5 hashing                            |
+| numpy      | —         | NumPy matrix operations (if installed) |
+| bench_json | 200       | JSON encode/decode (inline script)     |
+| bench_regex | 500      | Regex matching (inline script)         |
+| bench_hash | 200       | hashlib hashing (inline script)        |
+| bench_list_comprehension | 500 | List comprehension (inline script) |
+| bench_dict_operations | 500  | Dict operations (inline script)    |
 
 ### Numeric
 
@@ -465,14 +500,25 @@ Tests floating-point performance using NumPy (requires numpy installed).
 
 Tests SQLite I/O, transaction throughput, and query performance.
 
-| Benchmark      | Description                                |
-|----------------|--------------------------------------------|
-| insert-batch   | Bulk insert with transaction batching      |
-| insert-single  | Single-row inserts (sync writes)           |
-| select-scan    | Full table scan with filter                |
-| select-index   | Indexed point lookup                       |
-| update         | In-place row updates                       |
-| pragma-wal     | Write-Ahead Logging mode performance       |
+The template database contains **1 000 000 rows** and is created via Python's
+`sqlite3` module at setup time.  If an existing database is smaller than
+**10 MiB** it is considered stale (from an older run) and is automatically
+deleted and regenerated before benchmarks run.
+
+**Write benchmarks:**
+
+| Benchmark    | Description                                      |
+|--------------|--------------------------------------------------|
+| insert-100k  | Bulk-insert 100 000 rows (Python inline script)  |
+| update-500k  | Update 500 000 rows in place                     |
+
+**Read benchmarks:**
+
+| Benchmark        | Description                                    |
+|------------------|------------------------------------------------|
+| full-scan-agg    | Full table scan with aggregate (COUNT/SUM)     |
+| indexed-range-sum| Range query on indexed column with SUM         |
+| order-top-100k   | ORDER BY + LIMIT 100 000 on large table        |
 
 ### FFmpeg
 
@@ -550,13 +596,15 @@ Identical on every host and every run.
 
 **[Kodak Lossless True Color Image Suite](http://r0k.us/graphics/kodak/)** —
 24 natural-scene photographs at 768×512 (free for research use), the standard
-reference set used in published image-codec papers.  Each image is encoded to
-JPEG Q90 and the result discarded; this measures how encoder speed varies
-across diverse photographic content.
+reference set used in published image-codec papers.  All 24 images are
+processed in **2 batch commands** using shell loops rather than 24 individual
+hyperfine commands; this avoids hyperfine startup overhead dominating the
+measurement:
 
-| Benchmark       | Description                              |
-|-----------------|------------------------------------------|
-| kodimNN-encode  | JPEG Q90 encode of each Kodak image      |
+| Benchmark              | Description                                      |
+|------------------------|--------------------------------------------------|
+| encode-all-24-jpeg-q90 | JPEG Q90 encode of all 24 Kodak images (shell loop) |
+| encode-all-24-png-z6   | PNG zlib-level-6 encode of all 24 images (shell loop) |
 
 ### Coreutils
 
@@ -570,6 +618,11 @@ Tests common command-line utilities on multi-megabyte datasets.
 | grep      | grep  | Pattern matching             |
 | wc        | wc    | Line/word/byte counting      |
 | diff      | diff  | File comparison              |
+
+The `findtree` fixture consists of **10 000 files** arranged as
+100 directories × 2 subdirectories × 50 files each.  If an existing tree
+contains fewer than 9 000 files (generated by an older run), it is
+automatically removed and rebuilt at the start of the next run.
 
 ### Memory
 
@@ -586,12 +639,14 @@ Tests memory allocation, copy, and access patterns.
 
 Tests process creation and IPC overhead.
 
-| Benchmark      | Description                            |
-|----------------|----------------------------------------|
-| fork-exec      | Fork + exec latency                    |
-| pipe-throughput| Data throughput over a pipe            |
-| shell-startup  | `/bin/sh -c true` startup latency      |
-| python-startup | `python3 -c pass` startup latency      |
+| Benchmark        | Description                                                       |
+|------------------|-------------------------------------------------------------------|
+| fork-exec        | Fork + exec latency                                               |
+| pipe-throughput  | Data throughput over a pipe                                       |
+| shell-startup    | `/bin/sh -c true` startup latency                                 |
+| python-startup   | `python3 -c pass` startup latency                                 |
+| shell-spawn-500  | 500 `/bin/true` invocations per hyperfine run (process spawn cost)|
+| python3-import   | Import latency: `os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools` |
 
 ### Disk I/O
 
@@ -621,6 +676,21 @@ Tests link time for both static and dynamic linking.
 | gold-dynamic     | Link with GNU gold (if available)      |
 | mold-dynamic     | Link with mold (if available)          |
 
+The linker project consists of **400 source files** (`unit_000.c` …
+`unit_399.c`), each containing 10 distinct functions, giving a realistic
+many-object link workload.  Typical link times on a 2-vCPU VM:
+
+| Linker | Typical time |
+|--------|--------------|
+| ld (BFD)  | 0.8–2.0 s |
+| gold      | 0.4–1.0 s |
+| lld       | 0.2–0.6 s |
+| mold      | 0.1–0.3 s |
+
+If the project directory contains fewer than **350** `unit_*.c` files (from
+an older run), it is automatically deleted and regenerated before benchmarks
+run.
+
 ### OpenCV
 
 Tests image processing operations (requires OpenCV Python bindings).
@@ -631,6 +701,77 @@ Tests image processing operations (requires OpenCV Python bindings).
 | blur          | Gaussian blur filter           |
 | edge-detect   | Canny edge detection           |
 | color-convert | Color space conversion         |
+
+#### Kodak Corpus Benchmarks (`opencv_kodak.json`)
+
+When Kodak images are available, a second set of benchmarks operates on all
+24 natural-scene photographs to measure OpenCV throughput on realistic
+photographic content.  The images are copied to the work directory
+independently of the ImageMagick category, so these benchmarks function even
+when ImageMagick is not installed.  If the Kodak images are absent the entire
+`opencv_kodak.json` run is skipped gracefully.
+
+| Command            | Operation                                               |
+|--------------------|---------------------------------------------------------|
+| `kodak-load`       | Decode all 24 PNGs — PNG decode throughput baseline     |
+| `kodak-blur`       | GaussianBlur + bilateralFilter on all 24 images         |
+| `kodak-edges`      | Canny + Sobel edge detection on all 24 images           |
+| `kodak-color`      | BGR→HSV and BGR→Lab colour space conversion on all 24   |
+| `kodak-orb`        | ORB keypoint detection and description on all 24 images |
+| `kodak-clahe`      | CLAHE histogram equalisation on all 24 images           |
+| `kodak-encode-jpeg`| In-memory JPEG Q90 re-encode on all 24 images           |
+
+Results are written to `opencv_kodak.json`.
+
+### GIMP
+
+**File:** `gimp.json`  
+**Requires:** GIMP installed (`media-gfx/gimp` on Gentoo). Enable with `provision_benchmarks_install_gimp: true`.  
+**Corpus:** All 24 Kodak natural-scene photographs (768×512 PNG)
+
+Benchmarks GIMP's batch-mode image processing using Script-Fu (`-i -n --no-data --no-fonts`).
+`--no-data` and `--no-fonts` suppress loading of brushes, patterns, and fonts to keep startup
+overhead consistent. Each benchmark processes all 24 Kodak images in a single GIMP invocation,
+so startup time (typically 2–4 s in batch mode) is included in each measurement — this reflects
+real-world GIMP invocation cost.
+
+A Script-Fu library (`gimp_bench.scm`) and a shell wrapper (`gimp_bench_run.sh`) are written to
+the work directory during setup.
+
+| Command | Operation |
+|---|---|
+| `gimp-load-24` | Load + release all 24 PNGs — PNG decode throughput baseline |
+| `gimp-blur-24` | Gaussian blur 21×21 kernel on all 24 images |
+| `gimp-unsharp-24` | Unsharp mask (radius 3, strength 0.5) on all 24 images |
+| `gimp-pipeline-24` | brightness-contrast + Gaussian blur + 2× cubic scale on all 24 |
+
+Kodak images are copied to the work directory independently of the ImageMagick category,
+so these benchmarks function even when ImageMagick is not installed.
+
+### Inkscape
+
+**File:** `inkscape.json`  
+**Requires:** Inkscape **1.x** (`media-gfx/inkscape` on Gentoo). Enable with `provision_benchmarks_install_inkscape: true`.  
+**Fixture:** `inkscape_bench.svg` — generated on the host during setup
+
+A complex 440-element SVG fixture is generated via an inline Python script on first run:
+- **300 star/polygon paths** with bezier curves, linear gradient fills, and occasional
+  Gaussian-blur or drop-shadow filter effects
+- **80 transformed groups** of 4 gradient-filled rectangles (rotate + scale transforms)
+- **60 text labels** with gradient fills and mixed font families
+
+The fixture is deterministic (`random.seed(42)`) for reproducible timings. At 96 DPI the
+output is ~1200×900 px; at 300 DPI it is ~3750×2813 px, exercising the full rasterisation
+pipeline at a meaningful resolution.
+
+| Command | Operation |
+|---|---|
+| `render-96dpi` | SVG → PNG at 96 DPI (screen resolution) |
+| `render-300dpi` | SVG → PNG at 300 DPI (print resolution, ~10 MP output) |
+| `export-pdf` | SVG → PDF via Cairo |
+
+> **Note:** Uses Inkscape 1.x CLI syntax (`--export-type`, `--export-dpi`, `--export-filename`).
+> Inkscape 0.9x is not supported.
 
 ### Application Startup
 
@@ -737,9 +878,10 @@ each benchmark play via `delegate_to: localhost, run_once: true`.
 | [Silesia](http://sun.aei.polsl.pl/~sdeor/corpus/) | Compression | 211 MiB (12 files) | Free for benchmarking |
 | [Canterbury](https://corpus.canterbury.ac.nz/) | Compression (reference) | 2.8 MiB (18 files) | Public domain |
 | [Big Buck Bunny](https://peach.blender.org/) 1080p | FFmpeg video | ≈30 s FFV1 + 60 s WAV | CC BY 3.0, Blender Foundation |
-| [Kodak LTCI](http://r0k.us/graphics/kodak/) | ImageMagick | 24 PNG, ≈18 MiB | Free for research |
+| [Kodak LTCI](http://r0k.us/graphics/kodak/) | ImageMagick / OpenCV / GIMP | 24 PNG, ≈18 MiB | Free for research |
 | Seed-42 4K PNG | ImageMagick | 48 MiB (generated) | Generated locally |
 | [SQLite amalgamation](https://www.sqlite.org/amalgamation.html) 3.52 | Compiler | ≈8.5 MiB (`sqlite3.c`) | Public domain |
+| SQLite benchmark DB | SQLite | ≥10 MiB (1 000 000 rows, Python-generated) | Generated locally |
 
 ### Fallback Behaviour
 
@@ -748,7 +890,7 @@ passed), the corresponding benchmark task falls back to a synthetic source:
 
 | Fixture | Fallback |
 |---------|----------|
-| `silesia_combined.bin` | 64 MiB random binary (`/dev/urandom`) |
+| `silesia_combined.bin` | **256 MiB** random binary (`/dev/urandom`); any existing file < 256 MiB is rebuilt |
 | `bbb_1080p_30s.mkv` | `testsrc2` 1080p FFV1 synthetic video |
 | `bbb_audio_60s.wav` | 440 Hz sine PCM audio |
 | `kodak/` | Kodak benchmark is skipped |
@@ -801,7 +943,7 @@ or in inventory.
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
 | `run_benchmarks_work_dir_win` | `C:\ansible-benchmarks` | Remote working directory (Windows) |
-| `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
+| `run_benchmarks_compress_size_mb` | `256` | Test data size for compression fallback (MB) |
 | `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
 | `run_benchmarks_min_disk_mb` | `2048` | Minimum free disk space on work_dir partition (MB) |
 | `run_benchmarks_min_ram_mb` | `4096` | Minimum total RAM when work_dir is on tmpfs (MB) |
@@ -825,6 +967,8 @@ or in inventory.
 | `provision_benchmarks_install_ffmpeg` | `true` | Install FFmpeg from extra repos |
 | `provision_benchmarks_install_numpy` | `true` | Install NumPy Python bindings |
 | `provision_benchmarks_install_opencv` | `false` | Install OpenCV Python bindings |
+| `provision_benchmarks_install_gimp` | `false` | Install GIMP for batch-mode image-processing benchmarks |
+| `provision_benchmarks_install_inkscape` | `false` | Install Inkscape 1.x for SVG rendering benchmarks |
 
 ## Troubleshooting
 
