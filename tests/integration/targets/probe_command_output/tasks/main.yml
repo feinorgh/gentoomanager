@@ -1,0 +1,68 @@
+---
+# Integration test for the probe_command_output custom module.
+# Runs against localhost (delegated driver — no container needed).
+
+- name: Test probe_command_output — regex extraction
+  local.gentoomanager.probe_command_output:
+    probes:
+      - key: shell_version
+        command: [sh, --version]
+        pattern: 'version\s+(\S+)'
+        combine_stderr: true
+        raw: false
+      - key: echo_words
+        command: [echo, "alpha beta gamma"]
+        pattern: '(\w+)'
+      - key: raw_uname
+        command: [uname, -s]
+        raw: true
+  register: probe_result
+
+- name: Assert data dict is returned
+  ansible.builtin.assert:
+    that:
+      - probe_result.data is defined
+      - probe_result.data is mapping
+
+- name: Assert echo_words captured three tokens
+  ansible.builtin.assert:
+    that:
+      - probe_result.data.echo_words | length == 3
+      - "'alpha' in probe_result.data.echo_words"
+      - "'beta'  in probe_result.data.echo_words"
+      - "'gamma' in probe_result.data.echo_words"
+
+- name: Assert raw uname contains at least one character
+  ansible.builtin.assert:
+    that:
+      - probe_result.data.raw_uname | length > 0
+
+- name: Test probe_command_output — raw output truncation
+  local.gentoomanager.probe_command_output:
+    probes:
+      - key: truncated
+        command: [python3, -c, "print('x' * 500)"]
+        raw: true
+        max_length: 10
+  register: trunc_result
+
+- name: Assert truncation is applied
+  ansible.builtin.assert:
+    that:
+      - trunc_result.data.truncated | length <= 10
+
+- name: Test probe_command_output — sort and unique flags
+  local.gentoomanager.probe_command_output:
+    probes:
+      - key: deduped
+        command: [echo, "foo foo bar baz bar"]
+        pattern: '(\w+)'
+        sort: true
+        unique: true
+  register: dedup_result
+
+- name: Assert results are sorted and deduplicated
+  ansible.builtin.assert:
+    that:
+      - dedup_result.data.deduped | length == 3
+      - dedup_result.data.deduped == dedup_result.data.deduped | sort

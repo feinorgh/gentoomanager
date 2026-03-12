@@ -512,3 +512,180 @@ class TestAnonymizeHosts:
         assert "gentoo-alice" not in html
         assert "gentoo-bob" not in html
         assert "Zeus" in html
+
+
+# ---------------------------------------------------------------------------
+# New benchmark categories: GIMP, Inkscape, OpenCV Kodak
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def extended_results(tmp_path: Path) -> Path:
+    """Like sample_results but includes gimp, inkscape, and opencv_kodak data.
+
+    One host ('gentoo-alice') has all categories; 'gentoo-bob' is missing gimp
+    to verify graceful handling of absent optional categories.
+    """
+    results = tmp_path / "results"
+
+    gimp_data = _make_hyperfine_json(
+        ("gimp-load-24", 8.5, 0.3),
+        ("gimp-blur-24", 12.1, 0.5),
+        ("gimp-unsharp-24", 15.6, 0.7),
+        ("gimp-pipeline-24", 32.4, 1.2),
+    )
+    inkscape_data = _make_hyperfine_json(
+        ("inkscape-render-96dpi", 4.2, 0.2),
+        ("inkscape-render-300dpi", 11.3, 0.4),
+        ("inkscape-export-pdf", 6.7, 0.3),
+    )
+    opencv_kodak_data = _make_hyperfine_json(
+        ("kodak-load", 0.82, 0.03),
+        ("kodak-blur", 1.45, 0.05),
+        ("kodak-edges", 1.38, 0.04),
+        ("kodak-color", 0.95, 0.03),
+        ("kodak-orb", 3.21, 0.12),
+        ("kodak-clahe", 2.06, 0.08),
+        ("kodak-encode-jpeg", 1.77, 0.06),
+    )
+
+    for host in ["gentoo-alice", "gentoo-bob"]:
+        host_dir = results / host
+        host_dir.mkdir(parents=True)
+        flags = "-O2 -march=native -pipe" if host == "gentoo-alice" else "-O3 -flto"
+        (host_dir / "metadata.json").write_text(json.dumps(_make_metadata(host, flags)))
+        (host_dir / "compression.json").write_text(
+            json.dumps(
+                _make_hyperfine_json(
+                    ("gzip-compress", 1.1, 0.05),
+                    ("zstd-compress", 0.4, 0.02),
+                )
+            )
+        )
+        # opencv_kodak present for both hosts
+        (host_dir / "opencv_kodak.json").write_text(json.dumps(opencv_kodak_data))
+        # inkscape present for both hosts
+        (host_dir / "inkscape.json").write_text(json.dumps(inkscape_data))
+        # gimp only for alice
+        if host == "gentoo-alice":
+            (host_dir / "gimp.json").write_text(json.dumps(gimp_data))
+
+    return tmp_path
+
+
+class TestNewCategoriesLoaded:
+    def test_opencv_kodak_in_hosts(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        for host in ("gentoo-alice", "gentoo-bob"):
+            assert "opencv_kodak" in hosts[host]["benchmarks"]
+
+    def test_inkscape_in_hosts(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        for host in ("gentoo-alice", "gentoo-bob"):
+            assert "inkscape" in hosts[host]["benchmarks"]
+
+    def test_gimp_absent_for_bob(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        assert "gimp" not in hosts["gentoo-bob"]["benchmarks"]
+
+    def test_opencv_kodak_has_seven_benchmarks(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        results = hosts["gentoo-alice"]["benchmarks"]["opencv_kodak"]
+        assert len(results) == 7
+
+    def test_inkscape_has_three_benchmarks(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        results = hosts["gentoo-alice"]["benchmarks"]["inkscape"]
+        assert len(results) == 3
+
+    def test_gimp_has_four_benchmarks(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        results = hosts["gentoo-alice"]["benchmarks"]["gimp"]
+        assert len(results) == 4
+
+
+class TestNewCategoriesInReport:
+    def test_gimp_section_in_markdown(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        assert "gimp" in md.lower() or "GIMP" in md
+
+    def test_inkscape_section_in_markdown(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        assert "inkscape" in md.lower() or "Inkscape" in md
+
+    def test_opencv_kodak_in_markdown(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        assert "opencv_kodak" in md.lower() or "OpenCV" in md or "kodak" in md.lower()
+
+    def test_new_categories_in_html(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        table = build_comparison_table(hosts)
+        html = generate_html(hosts, table)
+        assert "inkscape" in html.lower() or "Inkscape" in html
+        assert "opencv_kodak" in html.lower() or "kodak" in html.lower()
+
+
+class TestMissingCategoryGraceful:
+    """Report must not crash when a category is missing for one host."""
+
+    def test_build_table_with_partial_gimp(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        # Should not raise
+        table = build_comparison_table(hosts)
+        assert table is not None
+
+    def test_markdown_with_partial_gimp(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        # Alice's results appear; no crash for bob's missing gimp
+        assert "gimp" in md.lower() or "GIMP" in md
+
+    def test_html_with_partial_gimp(self, extended_results: Path) -> None:
+        hosts = load_results(extended_results)
+        table = build_comparison_table(hosts)
+        html = generate_html(hosts, table)
+        assert "<html" in html.lower()
+
+    def test_all_categories_absent_from_one_host(self, tmp_path: Path) -> None:
+        """One host with only metadata should still produce a valid report."""
+        base = tmp_path / "base"
+        (base / "results" / "gentoo-minimal").mkdir(parents=True)
+        (base / "results" / "gentoo-minimal" / "metadata.json").write_text(
+            json.dumps(_make_metadata("gentoo-minimal"))
+        )
+        hosts = load_results(base)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        assert "gentoo-minimal" in md
+
+
+class TestSkipCompleteMapConsistency:
+    """Verify the playbook's skip-complete categories map covers all categories
+    that the benchmark report knows about.  This is a regression guard to ensure
+    new categories are added to both the report *and* the playbook."""
+
+    _PLAYBOOK = (
+        Path(__file__).resolve().parents[2] / "playbooks" / "run_benchmarks.yml"
+    )
+    _REPORT_CATEGORIES = {
+        "compression", "crypto", "compiler", "python", "ffmpeg",
+        "coreutils", "opencv", "sqlite", "imagemagick",
+        "linker", "process", "gimp", "inkscape",
+    }
+
+    def test_playbook_exists(self) -> None:
+        assert self._PLAYBOOK.exists(), "run_benchmarks.yml not found"
+
+    def test_playbook_has_all_report_categories(self) -> None:
+        content = self._PLAYBOOK.read_text()
+        for cat in self._REPORT_CATEGORIES:
+            assert cat in content, (
+                f"Category '{cat}' found in report but missing from run_benchmarks.yml"
+            )

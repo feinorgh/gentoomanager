@@ -30,7 +30,7 @@ import inventory_generator as inv  # noqa: E402
 def sanitize_group_name(raw: str) -> str:
     """Sanitize a string for use as an Ansible group name."""
     sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", raw)
-    if not sanitized[0].isalpha():
+    if not sanitized or not sanitized[0].isalpha():
         sanitized = "os_" + sanitized
     return sanitized
 
@@ -320,3 +320,150 @@ class TestCrossImplementation:
         assert "all" in inv_data
         assert inv_data["_meta"]["hostvars"] == {}
         assert inv_data["all"]["children"] == []
+
+
+# ── Edge case tests ──────────────────────────────────────────────────────
+
+
+class TestSanitizeGroupNameEdgeCases:
+    def test_empty_string_gets_prefix(self) -> None:
+        # An empty sanitized string starts with a non-alpha char after join,
+        # but the input itself should not crash.
+        result = sanitize_group_name("")
+        assert result  # must be non-empty
+        assert re.match(r"[a-zA-Z]", result), "Result must start with a letter"
+
+    def test_all_special_chars(self) -> None:
+        result = sanitize_group_name("!@#$%^")
+        # All special chars become underscores; starts with digit/underscore -> prefix
+        assert re.match(r"[a-zA-Z_]", result)
+        assert re.match(r"^[a-zA-Z0-9_]+$", result)
+
+    def test_very_long_name_preserved(self) -> None:
+        long_name = "a" * 256
+        result = sanitize_group_name(long_name)
+        assert len(result) == 256
+
+    def test_leading_digit_gets_os_prefix(self) -> None:
+        assert sanitize_group_name("9lives") == "os_9lives"
+
+    def test_underscore_only_input(self) -> None:
+        result = sanitize_group_name("___")
+        # All underscores — first char is not alpha, should get prefix
+        assert re.match(r"^[a-zA-Z]", result)
+
+    def test_single_alpha_char(self) -> None:
+        result = sanitize_group_name("x")
+        assert result == "x"
+
+    def test_preserves_existing_underscores(self) -> None:
+        assert sanitize_group_name("my_group_name") == "my_group_name"
+
+    def test_unicode_chars_become_underscores(self) -> None:
+        result = sanitize_group_name("gentoo-ñ-系")
+        assert re.match(r"^[a-zA-Z0-9_]+$", result)
+
+
+class TestExtractBaseOsEdgeCases:
+    def test_pure_letters(self) -> None:
+        assert extract_base_os("ubuntu") == "ubuntu"
+
+    def test_letters_digits_underscores(self) -> None:
+        assert extract_base_os("ubuntu_22_04") == "ubuntu"
+
+    def test_single_letter(self) -> None:
+        result = extract_base_os("a")
+        assert result == "a"
+
+    def test_digits_only_returns_none_or_fallback(self) -> None:
+        result = extract_base_os("12345")
+        # Either None or some fallback — must not crash
+        assert result is None or isinstance(result, str)
+
+    def test_mixed_version_formats(self) -> None:
+        for raw, expected_base in [
+            ("rhel_9_3", "rhel"),
+            ("opensuse_leap_15_5", "opensuse"),
+            ("fedora40", "fedora"),
+            ("debian12", "debian"),
+            ("archlinux", "archlinux"),
+        ]:
+            result = extract_base_os(raw)
+            assert result == expected_base, f"extract_base_os({raw!r}) = {result!r}"
+
+
+class TestResolveNameCollisionEdgeCases:
+    def test_no_collision(self) -> None:
+        assert resolve_name_collision("gentoo-vm1", "gentoo", "gentoo") == "gentoo-vm1"
+
+    def test_collision_with_os_group(self) -> None:
+        assert resolve_name_collision("fedora", "fedora", "fedora") == "fedora_host"
+
+    def test_collision_with_base_os_only(self) -> None:
+        assert resolve_name_collision("ubuntu", "ubuntu_22_04", "ubuntu") == "ubuntu_host"
+
+    def test_no_collision_when_base_os_is_none(self) -> None:
+        # Should not crash when base_os is None
+        result = resolve_name_collision("myvm", "mygroup", None)
+        assert result == "myvm"
+
+    def test_already_suffixed_name_not_double_suffixed(self) -> None:
+        # A name that ends in _host should still be treated normally
+        result = resolve_name_collision("gentoo_host", "gentoo", "gentoo")
+        assert result == "gentoo_host"
+
+    def test_similar_but_not_equal_name_not_renamed(self) -> None:
+        assert resolve_name_collision("fedora-dev", "fedora", "fedora") == "fedora-dev"
+
+
+class TestBuildInventoryEdgeCases:
+    def test_empty_hypervisor_set(self) -> None:
+        inv_data = _build({})
+        assert inv_data["_meta"]["hostvars"] == {}
+        assert inv_data["all"]["children"] == []
+
+    def test_duplicate_vms_across_hypervisors(self) -> None:
+        """Same VM name on two different hypervisors should appear only once."""
+        vms = {
+            "hv1": [{"name": "gentoo-shared", "os": "gentoo", "hostname": "shared"}],
+            "hv2": [{"name": "gentoo-shared", "os": "gentoo", "hostname": "shared"}],
+        }
+        inv_data = _build(vms)
+        # Host should appear exactly once in the group
+        gentoo_hosts = inv_data["gentoo"]["hosts"]
+        assert gentoo_hosts.count("gentoo-shared") == 1
+
+    def test_mixed_os_vms(self) -> None:
+        vms = {
+            "hv": [
+                {"name": "vm-gentoo", "os": "gentoo", "hostname": "vm-gentoo"},
+                {"name": "vm-ubuntu", "os": "ubuntu_22_04", "hostname": "vm-ubuntu"},
+                {"name": "vm-fedora", "os": "fedora40", "hostname": "vm-fedora"},
+            ]
+        }
+        inv_data = _build(vms)
+        assert "gentoo" in inv_data
+        assert "ubuntu_22_04" in inv_data or "ubuntu" in inv_data
+        assert "fedora40" in inv_data or "fedora" in inv_data
+
+    def test_each_host_has_ansible_host_var(self) -> None:
+        vms = {
+            "hv": [
+                {"name": f"vm-{n}", "os": "gentoo", "hostname": f"host-{n}"}
+                for n in range(5)
+            ]
+        }
+        inv_data = _build(vms)
+        for n in range(5):
+            assert f"vm-{n}" in inv_data["_meta"]["hostvars"]
+            assert "ansible_host" in inv_data["_meta"]["hostvars"][f"vm-{n}"]
+
+    def test_hypervisor_group_created_per_hypervisor(self) -> None:
+        vms = {
+            "hv-alpha": [{"name": "vm1", "os": "gentoo", "hostname": "vm1"}],
+            "hv-beta": [{"name": "vm2", "os": "gentoo", "hostname": "vm2"}],
+        }
+        inv_data = _build(vms)
+        assert "hypervisor_hv_alpha" in inv_data or "hypervisor_hv-alpha" in inv_data or \
+               any("hv_alpha" in k or "hv-alpha" in k for k in inv_data)
+        assert any("hv_beta" in k or "hv-beta" in k for k in inv_data)
