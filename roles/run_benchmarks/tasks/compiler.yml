@@ -332,3 +332,130 @@
   when:
     - run_benchmarks_compiler_go_result is not skipped
     - run_benchmarks_compiler_go_result.rc | default(0) != 0
+
+# ---------------------------------------------------------------------------
+# SQLite amalgamation compile benchmark
+# ---------------------------------------------------------------------------
+# Compiles sqlite3.c (~8.5 MiB, ~230 k lines) at -O0 / -O2 / -O3 with each
+# available C compiler.  Typical times: gcc -O0 ~5 s, -O2 ~15 s, -O3 ~25 s.
+# Uses run_benchmarks_large_compile_runs / large_compile_warmup so the total
+# wall-clock time stays manageable.
+
+- name: Copy SQLite amalgamation to work directory
+  ansible.builtin.copy:
+    src: "{{ run_benchmarks_fixture_dir }}/sqlite3.c"
+    dest: "{{ run_benchmarks_work_dir }}/sqlite3.c"
+    mode: "0644"
+  register: run_benchmarks_sqlite3_copy
+  changed_when: false
+  failed_when: false
+
+- name: Run SQLite amalgamation compile benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      CMDS=()
+      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% set cc_parts = cc.split() %}
+      {% if cc_parts | length >= 2 %}
+      {% set cc_label = cc_parts[0] %}
+      {% set cc_exe = cc_parts[1] %}
+      if [ -x "{{ cc_exe }}" ]; then
+        for opt in "-O0" "-O2" "-O3"; do
+          OPTLABEL=$(echo "$opt" | tr ' ' '_')
+          CMDS+=(--command-name "{{ cc_label }}-${OPTLABEL}"
+            "{{ cc_exe }} $opt -o /dev/null -c sqlite3.c")
+        done
+      fi
+      {% endif %}
+      {% endfor %}
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_large_compile_runs }} \
+        --warmup {{ run_benchmarks_large_compile_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_sqlite.json \
+        "${CMDS[@]}"
+  args:
+    executable: /bin/bash
+  when:
+    - run_benchmarks_sqlite3_copy is not failed
+    - run_benchmarks_sqlite3_copy.rc | default(0) == 0
+    - run_benchmarks_cc_versions.stdout_lines | default([]) | length > 0
+  register: run_benchmarks_compiler_sqlite_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_sqlite benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_sqlite benchmark exited
+      rc={{ run_benchmarks_compiler_sqlite_result.rc }}.
+      {{ run_benchmarks_compiler_sqlite_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_sqlite_result is not skipped
+    - run_benchmarks_compiler_sqlite_result.rc | default(0) != 0
+
+# ---------------------------------------------------------------------------
+# Multi-file C project compile benchmark
+# ---------------------------------------------------------------------------
+# Generates a 30-module project (~5 800 lines) and benchmarks sequential
+# (-j1) vs parallel (-j$(nproc)) make with each available C compiler.
+# Uses run_benchmarks_large_compile_runs / large_compile_warmup.
+
+- name: Generate multi-file C benchmark project
+  ansible.builtin.script:
+    cmd: >-
+      generate_multifile_bench.py
+      {{ run_benchmarks_work_dir }}/multifile_project
+    creates: "{{ run_benchmarks_work_dir }}/multifile_project/Makefile"
+  changed_when: false
+  failed_when: false
+  register: run_benchmarks_multifile_gen
+
+- name: Run multi-file C project compile benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      PROJ={{ run_benchmarks_work_dir }}/multifile_project
+      NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+      CMDS=()
+      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% set cc_parts = cc.split() %}
+      {% if cc_parts | length >= 2 %}
+      {% set cc_label = cc_parts[0] %}
+      {% set cc_exe = cc_parts[1] %}
+      if [ -x "{{ cc_exe }}" ]; then
+        CMDS+=(
+          --command-name "{{ cc_label }}-j1"
+            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j1 -s)"
+          --command-name "{{ cc_label }}-jN"
+            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j${NPROC} -s)"
+        )
+      fi
+      {% endif %}
+      {% endfor %}
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_large_compile_runs }} \
+        --warmup {{ run_benchmarks_large_compile_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_multifile.json \
+        "${CMDS[@]}"
+  args:
+    executable: /bin/bash
+  when:
+    - run_benchmarks_multifile_gen is not failed
+    - run_benchmarks_cc_versions.stdout_lines | default([]) | length > 0
+  register: run_benchmarks_compiler_multifile_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_multifile benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_multifile benchmark exited
+      rc={{ run_benchmarks_compiler_multifile_result.rc }}.
+      {{ run_benchmarks_compiler_multifile_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_multifile_result is not skipped
+    - run_benchmarks_compiler_multifile_result.rc | default(0) != 0

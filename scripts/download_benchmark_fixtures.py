@@ -12,6 +12,8 @@ Downloads and prepares:
     © Blender Foundation, CC BY 3.0 — https://peach.blender.org/
   - **Kodak Lossless True Color Image Suite** (24 PNG, ≈18 MiB) — ImageMagick benchmarks
     http://r0k.us/graphics/kodak/kodak/kodimNN.png
+  - **SQLite amalgamation** (≈8.5 MiB, single C translation unit) — compiler benchmarks
+    https://www.sqlite.org/2026/sqlite-amalgamation-3520000.zip
 
 All files are written to the specified output directory.  Re-running is
 safe — existing files are skipped unless ``--force`` is passed.
@@ -311,6 +313,53 @@ def download_kodak(fixtures_dir: Path, force: bool = False) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# SQLite amalgamation
+# ---------------------------------------------------------------------------
+
+SQLITE_URL = "https://www.sqlite.org/2026/sqlite-amalgamation-3520000.zip"
+SQLITE_ZIP_NAME = "sqlite-amalgamation-3520000.zip"
+
+
+def download_sqlite_amalgamation(fixtures_dir: Path, force: bool = False) -> bool:
+    """Download the SQLite amalgamation and extract sqlite3.c.
+
+    The amalgamation is a single ~8.5 MiB C translation unit used by the
+    compiler benchmarks to measure compile time on a realistic, non-trivial
+    workload (gcc -O0 ~4–8 s, -O2 ~12–25 s, -O3 ~20–35 s).
+    """
+    dest = fixtures_dir / "sqlite3.c"
+
+    if dest.exists() and not force:
+        mib = dest.stat().st_size / (1024 * 1024)
+        print(f"  Exists ({mib:.1f} MiB), skipping: sqlite3.c")
+        return True
+
+    zip_path = fixtures_dir / SQLITE_ZIP_NAME
+    if not download(SQLITE_URL, zip_path, SQLITE_ZIP_NAME, force=force):
+        return False
+
+    print("  Extracting sqlite3.c from amalgamation zip …")
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            # The zip contains a directory; find sqlite3.c inside it
+            names = [n for n in zf.namelist() if n.endswith("/sqlite3.c")]
+            if not names:
+                print("  ERROR: sqlite3.c not found in zip archive")
+                return False
+            member = names[0]
+            with zf.open(member) as src, open(dest, "wb") as dst:
+                dst.write(src.read())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR extracting sqlite3.c: {exc}")
+        return False
+
+    zip_path.unlink(missing_ok=True)
+    mib = dest.stat().st_size / (1024 * 1024)
+    print(f"  SQLite amalgamation: sqlite3.c ({mib:.1f} MiB)")
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -357,6 +406,9 @@ def main() -> int:
 
     print("\n=== Kodak Lossless True Color Image Suite ===")
     results["kodak"] = download_kodak(fixtures_dir, force=args.force)
+
+    print("\n=== SQLite amalgamation ===")
+    results["sqlite"] = download_sqlite_amalgamation(fixtures_dir, force=args.force)
 
     print()
     failed = [k for k, v in results.items() if not v]

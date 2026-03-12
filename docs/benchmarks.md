@@ -400,6 +400,43 @@ Tests compilation speed and the performance of the compiled output.
 | rust-release         | rustc | Compile in release mode        |
 | go-build             | go    | Compile a Go program           |
 
+Results are written to `compiler_c_compile.json`, `compiler_c_runtime.json`,
+`compiler_rust.json`, and `compiler_go.json`.
+
+#### SQLite Amalgamation Compile (`compiler_sqlite.json`)
+
+Compiles the SQLite 3.52 amalgamation (`sqlite3.c`, ≈8.5 MiB, ≈230 000 lines)
+at `-O0`, `-O2`, and `-O3` with each available C compiler.  This gives
+meaningful, multi-second timings that clearly separate fast and slow
+configurations:
+
+| Optimisation | Typical time (2-vCPU VM) |
+|--------------|--------------------------|
+| `-O0`        | 4–8 s                    |
+| `-O2`        | 12–25 s                  |
+| `-O3`        | 20–35 s                  |
+
+The fixture file `benchmarks/fixtures/sqlite3.c` is downloaded by
+`scripts/download_benchmark_fixtures.py`.
+
+#### Multi-file Parallel Build (`compiler_multifile.json`)
+
+Compiles a generated 30-module C project (~5 800 lines of non-trivial
+arithmetic, sorting, and hashing code) sequentially (`-j1`) and in parallel
+(`-j$(nproc)`) at `-O2` with each available C compiler.  This directly
+measures parallelism benefit and is sensitive to CPU count and core speed.
+
+Typical times on a 2-vCPU VM at -O2:
+
+| Mode    | Typical time |
+|---------|--------------|
+| `-j1`   | 3–6 s        |
+| `-j2`   | 1.5–3 s      |
+
+The project is generated at benchmark time by
+`scripts/generate_multifile_bench.py` and written to
+`{{ run_benchmarks_work_dir }}/multifile_project/`.
+
 ### Python
 
 Tests Python interpreter performance on micro-benchmarks.
@@ -702,6 +739,7 @@ each benchmark play via `delegate_to: localhost, run_once: true`.
 | [Big Buck Bunny](https://peach.blender.org/) 1080p | FFmpeg video | ≈30 s FFV1 + 60 s WAV | CC BY 3.0, Blender Foundation |
 | [Kodak LTCI](http://r0k.us/graphics/kodak/) | ImageMagick | 24 PNG, ≈18 MiB | Free for research |
 | Seed-42 4K PNG | ImageMagick | 48 MiB (generated) | Generated locally |
+| [SQLite amalgamation](https://www.sqlite.org/amalgamation.html) 3.52 | Compiler | ≈8.5 MiB (`sqlite3.c`) | Public domain |
 
 ### Fallback Behaviour
 
@@ -757,6 +795,8 @@ or in inventory.
 |----------|---------|-------------|
 | `run_benchmarks_runs` | `5` | Hyperfine iterations per benchmark |
 | `run_benchmarks_warmup` | `3` | Warmup runs before measurement |
+| `run_benchmarks_large_compile_runs` | `3` | Hyperfine iterations for large-compile benchmarks (SQLite amalgamation, multi-file) |
+| `run_benchmarks_large_compile_warmup` | `1` | Warmup runs for large-compile benchmarks |
 | `run_benchmarks_categories` | `[]` (all) | Categories to run |
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
@@ -917,6 +957,7 @@ and set `ansible_python_interpreter`.
     │   ├── bbb_1080p_30s.mkv               # 30-second FFV1 lossless clip
     │   ├── bbb_audio_60s.wav               # 60-second PCM audio
     │   ├── kodak/                          # Kodak True Color Image Suite (24 PNG)
+    │   ├── sqlite3.c                       # SQLite 3.52 amalgamation (~8.5 MiB)
     │   ├── im_4k.png                       # Deterministic seed-42 4K noise image
     │   ├── im_4k_q90.jpg                   # JPEG Q90 derivative
     │   └── im_4k.webp                      # WebP Q90 derivative
