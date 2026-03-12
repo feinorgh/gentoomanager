@@ -3,12 +3,6 @@
 
 profile: basic
 
-# Paths to lint (relative to repo root).
-include_paths:
-  - roles/
-  - playbooks/
-  - galaxy.yml
-
 # Paths to exclude from linting.
 exclude_paths:
   - .venv/

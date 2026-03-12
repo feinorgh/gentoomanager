@@ -5,15 +5,15 @@
 - name: Test probe_command_output — regex extraction
   local.gentoomanager.probe_command_output:
     probes:
-      - key: shell_version
+      - result_key: shell_version
         command: [sh, --version]
         pattern: 'version\s+(\S+)'
         combine_stderr: true
         raw: false
-      - key: echo_words
+      - result_key: echo_words
         command: [echo, "alpha beta gamma"]
         pattern: '(\w+)'
-      - key: raw_uname
+      - result_key: raw_uname
         command: [uname, -s]
         raw: true
   register: probe_result
@@ -40,7 +40,7 @@
 - name: Test probe_command_output — raw output truncation
   local.gentoomanager.probe_command_output:
     probes:
-      - key: truncated
+      - result_key: truncated
         command: [python3, -c, "print('x' * 500)"]
         raw: true
         max_length: 10
@@ -54,7 +54,7 @@
 - name: Test probe_command_output — sort and unique flags
   local.gentoomanager.probe_command_output:
     probes:
-      - key: deduped
+      - result_key: deduped
         command: [echo, "foo foo bar baz bar"]
         pattern: '(\w+)'
         sort: true

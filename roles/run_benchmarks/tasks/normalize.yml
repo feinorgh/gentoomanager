@@ -144,7 +144,7 @@
     cmd: |
       set -eo pipefail
       DISK=$(lsblk -dno NAME | head -1)
-      cat "/sys/block/${DISK}/queue/scheduler" | grep -oP '\[\K[^\]]+'
+      grep -oP '\[\K[^\]]+' "/sys/block/${DISK}/queue/scheduler"
   register: run_benchmarks_orig_iosched
   changed_when: false
   failed_when: false
@@ -258,7 +258,7 @@
     cmd: |
       # Request zero latency from PM QoS — keeps CPU in C0 during benchmarks
       for f in /sys/devices/system/cpu/cpu*/power/pm_qos_resume_latency_us; do
-        [ -f "$f" ] && echo 0 > "$f" 2>/dev/null || true
+        if [ -f "$f" ]; then echo 0 > "$f" 2>/dev/null; fi
       done
   become: true
   changed_when: true

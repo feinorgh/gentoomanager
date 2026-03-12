@@ -1,4 +1,14 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# Copyright (c) 2024, local.gentoomanager contributors
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or
+# https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
 """
 Ansible module: probe_command_output
 
@@ -15,13 +25,6 @@ their output into dicts (e.g. FFmpeg codec discovery, OpenSSL algorithm
 discovery).
 """
 
-from __future__ import annotations
-
-import re
-import subprocess
-
-from ansible.module_utils.basic import AnsibleModule
-
 DOCUMENTATION = r"""
 ---
 module: probe_command_output
@@ -32,6 +35,8 @@ description:
     returns the raw output as a string.
   - Results are collected under caller-supplied keys in the C(data)
     return value.
+author:
+  - local.gentoomanager contributors
 options:
   probes:
     description:
@@ -40,7 +45,7 @@ options:
     elements: dict
     required: true
     suboptions:
-      key:
+      result_key:
         description: Key name for this probe's result in C(data).
         type: str
         required: true
@@ -54,6 +59,7 @@ options:
           - Regular expression applied to the command output.
           - Required unless C(raw) is C(true).
         type: str
+        default: ""
       group:
         description: Capture group index to extract (1-based).
         type: int
@@ -89,34 +95,34 @@ options:
 
 EXAMPLES = r"""
 - name: Discover available FFmpeg codecs
-  probe_command_output:
+  local.gentoomanager.probe_command_output:
     probes:
-      - key: video_encoders
+      - result_key: video_encoders
         command: [ffmpeg, -encoders]
         pattern: '^\s*V[\.\w]{5}\s+(\S+)'
-      - key: audio_encoders
+      - result_key: audio_encoders
         command: [ffmpeg, -encoders]
         pattern: '^\s*A[\.\w]{5}\s+(\S+)'
-      - key: video_decoders
+      - result_key: video_decoders
         command: [ffmpeg, -decoders]
         pattern: '^\s*V[\.\w]{5}\s+(\S+)'
-      - key: audio_decoders
+      - result_key: audio_decoders
         command: [ffmpeg, -decoders]
         pattern: '^\s*A[\.\w]{5}\s+(\S+)'
   register: ffmpeg_codecs
 
 - name: Detect available OpenSSL algorithms
-  probe_command_output:
+  local.gentoomanager.probe_command_output:
     probes:
-      - key: ciphers
+      - result_key: ciphers
         command: [openssl, enc, -list]
         pattern: '-(\S+)'
         combine_stderr: true
-      - key: digests
+      - result_key: digests
         command: [openssl, dgst, -list]
         pattern: '-(\S+)'
         combine_stderr: true
-      - key: speed_help
+      - result_key: speed_help
         command: [openssl, speed, -help]
         combine_stderr: true
         raw: true
@@ -127,8 +133,8 @@ EXAMPLES = r"""
 RETURN = r"""
 data:
   description: >
-    Dict mapping each probe's C(key) to either a list of regex matches
-    or a raw string (when C(raw) is true).
+    Dict mapping each probe's C(result_key) to either a list of regex
+    matches or a raw string (when C(raw) is true).
   type: dict
   returned: always
 commands_run:
@@ -136,6 +142,11 @@ commands_run:
   type: int
   returned: always
 """
+
+import re  # noqa: E402
+import subprocess  # noqa: E402
+
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
 
 def run_probe(probe: dict, timeout: int) -> tuple[str | list, str | None]:
@@ -202,7 +213,7 @@ def main() -> None:
                 elements="dict",
                 required=True,
                 options=dict(
-                    key=dict(type="str", required=True),
+                result_key=dict(type="str", required=True),
                     command=dict(type="list", elements="str", required=True),
                     pattern=dict(type="str", default=""),
                     group=dict(type="int", default=1),
@@ -226,9 +237,9 @@ def main() -> None:
 
     for probe in probes:
         result, err = run_probe(probe, timeout)
-        data[probe["key"]] = result
+        data[probe["result_key"]] = result
         if err:
-            errors.append(f"{probe['key']}: {err}")
+            errors.append(f"{probe['result_key']}: {err}")
 
     if errors:
         module.exit_json(
