@@ -4,3 +4,5 @@
 collections:
   # Required by site.yml (community.general.portage module)
   - name: community.general
+  # Required by roles using ansible.windows.* modules
+  - name: ansible.windows

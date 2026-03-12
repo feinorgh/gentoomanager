@@ -33,7 +33,7 @@
 # All generated fixture files have a creates: guard; a stale 0-byte file
 # permanently prevents regeneration, so we sweep them out up front.
 - name: Remove 0-byte stale fixture files in work directory
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: find "{{ run_benchmarks_work_dir }}" -maxdepth 3 -type f -empty -delete -print
   register: run_benchmarks_stale_removed
   changed_when: run_benchmarks_stale_removed.stdout | length > 0
@@ -41,7 +41,7 @@
 
 # ── Download standardised fixture files on controller (once per collection run)
 - name: Remove 0-byte stale fixture files in controller fixture directory
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: find "{{ run_benchmarks_fixture_dir }}" -maxdepth 1 -type f -empty -delete -print
   register: run_benchmarks_fixture_stale_removed
   changed_when: run_benchmarks_fixture_stale_removed.stdout | length > 0
@@ -267,11 +267,11 @@
         [ -n "$val" ] && echo "${field#--with-}${val}"
       done
       # Boolean hardening features — emit present ones as flags
-      echo "$cfg" | grep -q 'enable-default-pie'          && echo 'default-pie=yes'     || echo 'default-pie=no'
-      echo "$cfg" | grep -q 'enable-default-ssp'          && echo 'default-ssp=yes'     || echo 'default-ssp=no'
-      echo "$cfg" | grep -q 'enable-link-mutex'           && echo 'link-mutex=yes'      || true
-      echo "$cfg" | grep -q 'enable-lto'                  && echo 'lto-support=yes'     || echo 'lto-support=no'
-      echo "$cfg" | grep -q 'with-build-config=bootstrap-lto' && echo 'bootstrap-lto=yes' || true
+      if echo "$cfg" | grep -q 'enable-default-pie';          then echo 'default-pie=yes';     else echo 'default-pie=no';  fi
+      if echo "$cfg" | grep -q 'enable-default-ssp';          then echo 'default-ssp=yes';     else echo 'default-ssp=no';  fi
+      if echo "$cfg" | grep -q 'enable-link-mutex';           then echo 'link-mutex=yes';       fi
+      if echo "$cfg" | grep -q 'enable-lto';                  then echo 'lto-support=yes';      else echo 'lto-support=no'; fi
+      if echo "$cfg" | grep -q 'with-build-config=bootstrap-lto'; then echo 'bootstrap-lto=yes'; fi
   register: run_benchmarks_gcc_config_raw
   changed_when: false
   failed_when: false

@@ -21,7 +21,7 @@
        [provision_benchmarks_freebsd_hyperfine_port] +
        ([provision_benchmarks_freebsd_ffmpeg_port] if provision_benchmarks_install_ffmpeg | bool else []) +
        (provision_benchmarks_numpy_packages['FreeBSD'] if provision_benchmarks_install_numpy | bool else []) }}
-  register: _freebsd_pkg_check
+  register: provision_benchmarks_freebsd_pkg_check
   failed_when: false
   changed_when: false
   become: true
@@ -30,7 +30,7 @@
   ansible.builtin.command:
     cmd: /usr/bin/make install BATCH=yes
     chdir: "/usr/ports/{{ item.item }}"
-  loop: "{{ _freebsd_pkg_check.results }}"
+  loop: "{{ provision_benchmarks_freebsd_pkg_check.results }}"
   when: item.rc != 0
   become: true
   failed_when: false

@@ -19,7 +19,9 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+_UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -599,7 +601,7 @@ def generate_markdown(
     """Generate the full Markdown report."""
     lines: list[str] = []
     hostnames = sorted(hosts.keys())
-    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+    timestamp = datetime.now(tz=_UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     lines.append("# Gentoo VM Benchmark Report")
     lines.append("")
@@ -792,7 +794,7 @@ def generate_markdown(
                 dur_str = f"{dur // 60}m {dur % 60:02d}s"
                 ts = entry.get("timestamp", 0)
                 date_str = (
-                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
+                    datetime.fromtimestamp(ts, tz=_UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
                 )
                 bt_rows.append(
                     [
@@ -832,7 +834,7 @@ def generate_html(
 ) -> str:
     """Generate an interactive HTML report with Chart.js."""
     hostnames = sorted(hosts.keys())
-    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+    timestamp = datetime.now(tz=_UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # Pre-build Chart.js datasets per category
     chart_blocks: list[str] = []
@@ -1006,7 +1008,7 @@ def generate_html(
                 dur_str = f"{dur // 60}m {dur % 60:02d}s"
                 ts = entry.get("timestamp", 0)
                 date_str = (
-                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
+                    datetime.fromtimestamp(ts, tz=_UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
                 )
                 rows_html += f"""          <tr>
             <td>{entry["host"]}</td>
