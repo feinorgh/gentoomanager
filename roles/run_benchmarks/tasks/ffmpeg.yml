@@ -118,11 +118,15 @@
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -cpu-used 8 -an -f null /dev/null)")
       has libsvtav1  && CMDS+=(--command-name "av1-svt-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null)")
-{% if run_benchmarks_ffmpeg_include_libaom %}
+{% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
+      # Extended: slow/research AV1 encoders
       has libaom-av1 && CMDS+=(--command-name "av1-aom-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null /dev/null)")
 {% endif %}
-      # rav1e omitted: research-only encoder; 10x slower than SVT-AV1 at equivalent quality
+{% if run_benchmarks_ffmpeg_extended_codecs %}
+      has librav1e   && CMDS+=(--command-name "av1-rav1e-encode"
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null /dev/null)")
+      # Extended: legacy / niche video codecs
       has libtheora  && CMDS+=(--command-name "theora-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 7 -an -f null /dev/null)")
       has libxvid    && CMDS+=(--command-name "xvid-encode"
@@ -131,6 +135,7 @@
         "$(wrap ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 5M -an -f null /dev/null)")
       has mjpeg      && CMDS+=(--command-name "mjpeg-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 5 -an -f null /dev/null)")
+{% endif %}
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_ffmpeg_video_runs }} \
@@ -173,14 +178,16 @@
       if has libvpx;     then ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an test_vp8.webm  2>/dev/null || true; fi
       if has libvpx-vp9; then ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -an test_vp9.webm 2>/dev/null || true; fi
       if has libsvtav1;  then ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 45 -preset 12 -an test_av1_svt.mp4            2>/dev/null || true; fi
-{% if run_benchmarks_ffmpeg_include_libaom %}
+{% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
       if has libaom-av1; then ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 50 -cpu-used 8 -row-mt 1 -an test_av1_aom.mp4 2>/dev/null || true; fi
 {% endif %}
+{% if run_benchmarks_ffmpeg_extended_codecs %}
       if has librav1e;   then ffmpeg -y -i test_raw.avi -c:v librav1e -qp 200 -speed 10 -an test_av1_rav1e.mp4            2>/dev/null || true; fi
       if has libtheora;  then ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 5 -an test_theora.mkv                         2>/dev/null || true; fi
       if has libxvid;    then ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 8 -an test_xvid.avi                             2>/dev/null || true; fi
       if has mpeg2video; then ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 8M -an test_mpeg2.mpg                        2>/dev/null || true; fi
       if has mjpeg;      then ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 10 -an test_mjpeg.avi                             2>/dev/null || true; fi
+{% endif %}
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: true
 
@@ -243,10 +250,13 @@
       has libmp3lame && CMDS+=(--command-name "mp3-encode"     "ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k -f null /dev/null")
       has flac       && CMDS+=(--command-name "flac-encode"    "ffmpeg -y -i test_raw.wav -c:a flac -f null /dev/null")
       has libvorbis  && CMDS+=(--command-name "vorbis-encode"  "ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 -f null /dev/null")
+{% if run_benchmarks_ffmpeg_extended_codecs %}
+      # Extended: niche / legacy audio codecs
       has ac3        && CMDS+=(--command-name "ac3-encode"     "ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k -f null /dev/null")
       has eac3       && CMDS+=(--command-name "eac3-encode"    "ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k -f null /dev/null")
       has wavpack    && CMDS+=(--command-name "wavpack-encode" "ffmpeg -y -i test_raw.wav -c:a wavpack -f null /dev/null")
       has alac       && CMDS+=(--command-name "alac-encode"    "ffmpeg -y -i test_raw.wav -c:a alac -f null /dev/null")
+{% endif %}
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_ffmpeg_audio_runs }} \
@@ -287,10 +297,12 @@
       if has libmp3lame; then ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k test_enc_mp3.mp3  2>/dev/null || true; fi
       if has flac;       then ffmpeg -y -i test_raw.wav -c:a flac test_enc_flac.flac                2>/dev/null || true; fi
       if has libvorbis;  then ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 test_enc_vorbis.ogg   2>/dev/null || true; fi
+{% if run_benchmarks_ffmpeg_extended_codecs %}
       if has ac3;        then ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k test_enc_ac3.ac3         2>/dev/null || true; fi
       if has eac3;       then ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k test_enc_eac3.eac3      2>/dev/null || true; fi
       if has wavpack;    then ffmpeg -y -i test_raw.wav -c:a wavpack test_enc_wavpack.wv             2>/dev/null || true; fi
       if has alac;       then ffmpeg -y -i test_raw.wav -c:a alac test_enc_alac.m4a                  2>/dev/null || true; fi
+{% endif %}
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: true
 

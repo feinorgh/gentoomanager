@@ -79,12 +79,21 @@ run_benchmarks_ffmpeg_video_warmup: 1
 run_benchmarks_ffmpeg_audio_runs: 3
 run_benchmarks_ffmpeg_audio_warmup: 1
 # Whether to include libaom-av1 in video encode/decode benchmarks.
-# libaom is the AV1 reference encoder and can take 5–10 min per benchmark
-# run. Disabled by default; SVT-AV1 (libsvtav1) is always included and is
-# the production AV1 encoder. Enable this only for deep AV1 comparisons.
+# Deprecated: superseded by run_benchmarks_ffmpeg_extended_codecs.
+# Kept for backwards compatibility — setting this to true still works but
+# only enables libaom; use the new flag to gate all extended codecs at once.
 run_benchmarks_ffmpeg_include_libaom: false
+# Include non-standard FFmpeg codecs: slow, experimental, legacy, or niche.
+# When false (default), only widely-used production codecs are benchmarked:
+#   Video encode/decode: h264, h265, vp8, vp9, svt-av1
+#   Audio encode/decode: aac, opus, mp3, flac, vorbis
+# When true, adds:
+#   Video: libaom-av1 (reference/research, very slow), librav1e (experimental),
+#          theora (legacy Ogg), xvid (legacy MPEG-4), mpeg2 (legacy), mjpeg (niche)
+#   Audio: ac3/eac3 (Dolby, niche on Linux), wavpack (lossless), alac (Apple lossless)
+# Enable with: -e "run_benchmarks_ffmpeg_extended_codecs=true"
+run_benchmarks_ffmpeg_extended_codecs: false
 # Application startup: 3 runs are enough — variance comes from page-cache
-# state, not measurement noise; extra runs don't reduce uncertainty further.
 run_benchmarks_startup_runs: 3
 run_benchmarks_startup_warmup: 2
 
