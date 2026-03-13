@@ -1,4 +1,3 @@
-# Standalone scripts — not Ansible modules; shebang/pep8/pylint rules don't apply
 inventory_generator.py shebang
 inventory_generator.py pep8
 inventory_generator.py pylint
@@ -23,14 +22,12 @@ scripts/generate_multifile_bench.py pylint
 scripts/shellcheck_yaml_blocks.py shebang
 scripts/shellcheck_yaml_blocks.py pep8
 scripts/shellcheck_yaml_blocks.py pylint
-# Role helper scripts (not modules)
 roles/run_benchmarks/files/gen_sortdata.py shebang
 roles/run_benchmarks/files/gen_sortdata.py pep8
 roles/run_benchmarks/files/gen_sortdata.py pylint
 roles/run_benchmarks/files/generate_multifile_bench.py shebang
 roles/run_benchmarks/files/generate_multifile_bench.py pep8
 roles/run_benchmarks/files/generate_multifile_bench.py pylint
-# Unit tests — not collection modules; pep8/pylint rules don't apply
 tests/unit/test_benchmark_report.py pep8
 tests/unit/test_benchmark_report.py pylint
 tests/unit/test_collapse_use_flags.py pep8

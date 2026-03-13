@@ -145,12 +145,11 @@ commands_run:
 """
 
 import re  # noqa: E402
-import subprocess  # noqa: E402
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
 
-def run_probe(probe: dict, timeout: int) -> tuple[str | list, str | None]:
+def run_probe(probe, module):
     """Execute one probe and return (result, error_message)."""
     command = probe["command"]
     combine_stderr = probe.get("combine_stderr", False)
@@ -161,23 +160,14 @@ def run_probe(probe: dict, timeout: int) -> tuple[str | list, str | None]:
     do_sort = probe.get("sort", True)
     do_unique = probe.get("unique", True)
 
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except FileNotFoundError:
-        return ([] if not raw else ""), f"command not found: {command[0]}"
-    except subprocess.TimeoutExpired:
-        return ([] if not raw else ""), f"command timed out after {timeout}s"
-    except OSError as exc:
-        return ([] if not raw else ""), str(exc)
+    rc, stdout, stderr = module.run_command(command, check_rc=False)
 
-    text = result.stdout
+    if rc == -1:
+        return ([] if not raw else ""), stderr.strip() or "command failed"
+
+    text = stdout
     if combine_stderr:
-        text = text + result.stderr
+        text = text + stderr
 
     if raw:
         output = text[:max_length] if max_length > 0 else text
@@ -189,7 +179,7 @@ def run_probe(probe: dict, timeout: int) -> tuple[str | list, str | None]:
     try:
         compiled = re.compile(pattern, re.MULTILINE)
     except re.error as exc:
-        return [], f"invalid regex '{pattern}': {exc}"
+        return [], "invalid regex '{0}': {1}".format(pattern, exc)
 
     matches = []
     for m in compiled.finditer(text):
@@ -199,14 +189,14 @@ def run_probe(probe: dict, timeout: int) -> tuple[str | list, str | None]:
             pass
 
     if do_unique:
-        matches = list(dict.fromkeys(matches))  # preserves order, deduplicates
+        matches = list(dict.fromkeys(matches))
     if do_sort:
         matches = sorted(matches)
 
     return matches, None
 
 
-def main() -> None:
+def main():
     module = AnsibleModule(
         argument_spec=dict(
             probes=dict(
@@ -214,7 +204,7 @@ def main() -> None:
                 elements="dict",
                 required=True,
                 options=dict(
-                output_name=dict(type="str", required=True),
+                    output_name=dict(type="str", required=True),
                     command=dict(type="list", elements="str", required=True),
                     pattern=dict(type="str", default=""),
                     group=dict(type="int", default=1),
@@ -231,16 +221,15 @@ def main() -> None:
     )
 
     probes = module.params["probes"]
-    timeout = module.params["timeout"]
 
-    data: dict = {}
-    errors: list[str] = []
+    data = {}
+    errors = []
 
     for probe in probes:
-        result, err = run_probe(probe, timeout)
+        result, err = run_probe(probe, module)
         data[probe["output_name"]] = result
         if err:
-            errors.append(f"{probe['output_name']}: {err}")
+            errors.append("{0}: {1}".format(probe["output_name"], err))
 
     if errors:
         module.exit_json(
