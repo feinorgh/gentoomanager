@@ -166,17 +166,17 @@
       ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ V/ {print $2}')
       has() { echo "$ENCS" | grep -qx "$1"; }
 
-      if has libx264;    then ffmpeg -y -i test_raw.avi -c:v libx264 -preset ultrafast -crf 18 -an test_h264.mp4           2>/dev/null; fi
-      if has libx265;    then ffmpeg -y -i test_raw.avi -c:v libx265 -preset ultrafast -crf 22 -an test_h265.mp4           2>/dev/null; fi
-      if has libvpx;     then ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an test_vp8.webm  2>/dev/null; fi
-      if has libvpx-vp9; then ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -an test_vp9.webm 2>/dev/null; fi
-      if has libsvtav1;  then ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 45 -preset 12 -an test_av1_svt.mp4            2>/dev/null; fi
-      if has libaom-av1; then ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 50 -cpu-used 8 -row-mt 1 -an test_av1_aom.mp4 2>/dev/null; fi
-      if has librav1e;   then ffmpeg -y -i test_raw.avi -c:v librav1e -qp 200 -speed 10 -an test_av1_rav1e.mp4            2>/dev/null; fi
-      if has libtheora;  then ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 5 -an test_theora.mkv                         2>/dev/null; fi
-      if has libxvid;    then ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 8 -an test_xvid.avi                             2>/dev/null; fi
-      if has mpeg2video; then ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 8M -an test_mpeg2.mpg                        2>/dev/null; fi
-      if has mjpeg;      then ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 10 -an test_mjpeg.avi                             2>/dev/null; fi
+      if has libx264;    then ffmpeg -y -i test_raw.avi -c:v libx264 -preset ultrafast -crf 18 -an test_h264.mp4           2>/dev/null || true; fi
+      if has libx265;    then ffmpeg -y -i test_raw.avi -c:v libx265 -preset ultrafast -crf 22 -an test_h265.mp4           2>/dev/null || true; fi
+      if has libvpx;     then ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an test_vp8.webm  2>/dev/null || true; fi
+      if has libvpx-vp9; then ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -an test_vp9.webm 2>/dev/null || true; fi
+      if has libsvtav1;  then ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 45 -preset 12 -an test_av1_svt.mp4            2>/dev/null || true; fi
+      if has libaom-av1; then ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 50 -cpu-used 8 -row-mt 1 -an test_av1_aom.mp4 2>/dev/null || true; fi
+      if has librav1e;   then ffmpeg -y -i test_raw.avi -c:v librav1e -qp 200 -speed 10 -an test_av1_rav1e.mp4            2>/dev/null || true; fi
+      if has libtheora;  then ffmpeg -y -i test_raw.avi -c:v libtheora -q:v 5 -an test_theora.mkv                         2>/dev/null || true; fi
+      if has libxvid;    then ffmpeg -y -i test_raw.avi -c:v libxvid -q:v 8 -an test_xvid.avi                             2>/dev/null || true; fi
+      if has mpeg2video; then ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 8M -an test_mpeg2.mpg                        2>/dev/null || true; fi
+      if has mjpeg;      then ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 10 -an test_mjpeg.avi                             2>/dev/null || true; fi
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: true
 
@@ -278,15 +278,15 @@
       ENCS=$(ffmpeg -encoders 2>/dev/null | awk '/^ A/ {print $2}')
       has() { echo "$ENCS" | grep -qx "$1"; }
 
-      if has aac;        then ffmpeg -y -i test_raw.wav -c:a aac -b:a 192k test_enc_aac.m4a        2>/dev/null; fi
-      if has libopus;    then ffmpeg -y -i test_raw.wav -c:a libopus -b:a 128k test_enc_opus.opus   2>/dev/null; fi
-      if has libmp3lame; then ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k test_enc_mp3.mp3  2>/dev/null; fi
-      if has flac;       then ffmpeg -y -i test_raw.wav -c:a flac test_enc_flac.flac                2>/dev/null; fi
-      if has libvorbis;  then ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 test_enc_vorbis.ogg   2>/dev/null; fi
-      if has ac3;        then ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k test_enc_ac3.ac3         2>/dev/null; fi
-      if has eac3;       then ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k test_enc_eac3.eac3      2>/dev/null; fi
-      if has wavpack;    then ffmpeg -y -i test_raw.wav -c:a wavpack test_enc_wavpack.wv             2>/dev/null; fi
-      if has alac;       then ffmpeg -y -i test_raw.wav -c:a alac test_enc_alac.m4a                  2>/dev/null; fi
+      if has aac;        then ffmpeg -y -i test_raw.wav -c:a aac -b:a 192k test_enc_aac.m4a        2>/dev/null || true; fi
+      if has libopus;    then ffmpeg -y -i test_raw.wav -c:a libopus -b:a 128k test_enc_opus.opus   2>/dev/null || true; fi
+      if has libmp3lame; then ffmpeg -y -i test_raw.wav -c:a libmp3lame -b:a 192k test_enc_mp3.mp3  2>/dev/null || true; fi
+      if has flac;       then ffmpeg -y -i test_raw.wav -c:a flac test_enc_flac.flac                2>/dev/null || true; fi
+      if has libvorbis;  then ffmpeg -y -i test_raw.wav -c:a libvorbis -q:a 4 test_enc_vorbis.ogg   2>/dev/null || true; fi
+      if has ac3;        then ffmpeg -y -i test_raw.wav -c:a ac3 -b:a 384k test_enc_ac3.ac3         2>/dev/null || true; fi
+      if has eac3;       then ffmpeg -y -i test_raw.wav -c:a eac3 -b:a 384k test_enc_eac3.eac3      2>/dev/null || true; fi
+      if has wavpack;    then ffmpeg -y -i test_raw.wav -c:a wavpack test_enc_wavpack.wv             2>/dev/null || true; fi
+      if has alac;       then ffmpeg -y -i test_raw.wav -c:a alac test_enc_alac.m4a                  2>/dev/null || true; fi
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: true
 
