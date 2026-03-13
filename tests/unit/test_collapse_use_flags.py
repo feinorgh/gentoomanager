@@ -254,7 +254,7 @@ class TestCollapseGlobalUse:
             _make_host("h1", ["gentoo"], global_use=["-pulseaudio"]),
             _make_host("h2", ["gentoo"], global_use=["-pulseaudio"]),
         ]
-        all_data, _, _ = self._run(hosts)
+        all_data, _unused, _unused2 = self._run(hosts)
         assert "-pulseaudio" in all_data["global_use_flags"]
 
 
@@ -275,7 +275,7 @@ class TestCollapseUseExpand:
             _make_host("h1", ["gentoo"], use_expand={"VIDEO_CARDS": ["amdgpu"]}),
             _make_host("h2", ["gentoo"], use_expand={"VIDEO_CARDS": ["amdgpu"]}),
         ]
-        all_data, _, _ = self._run(hosts)
+        all_data, _unused, _unused2 = self._run(hosts)
         assert "+amdgpu" in all_data["use_expand"]["VIDEO_CARDS"]
 
     def test_different_video_cards_go_to_host(self):
@@ -283,7 +283,7 @@ class TestCollapseUseExpand:
             _make_host("h1", ["gentoo"], use_expand={"VIDEO_CARDS": ["amdgpu"]}),
             _make_host("h2", ["gentoo"], use_expand={"VIDEO_CARDS": ["nouveau"]}),
         ]
-        all_data, _, host_data = self._run(hosts)
+        all_data, _unused, host_data = self._run(hosts)
         assert "VIDEO_CARDS" not in all_data.get("use_expand", {})
         assert "+amdgpu" in host_data["h1"]["use_expand"]["VIDEO_CARDS"]
         assert "+nouveau" in host_data["h2"]["use_expand"]["VIDEO_CARDS"]
@@ -307,7 +307,7 @@ class TestCollapseBuildProfile:
             _make_host("h1", ["gentoo"], build_profile={"CFLAGS": cflags}),
             _make_host("h2", ["gentoo"], build_profile={"CFLAGS": cflags}),
         ]
-        all_data, _, _ = self._run(hosts)
+        all_data, _unused, _unused2 = self._run(hosts)
         assert all_data["build_profile"]["CFLAGS"] == cflags
 
     def test_different_cflags_go_to_host(self):
@@ -315,7 +315,7 @@ class TestCollapseBuildProfile:
             _make_host("h1", ["gentoo"], build_profile={"CFLAGS": "-O2"}),
             _make_host("h2", ["gentoo"], build_profile={"CFLAGS": "-O3"}),
         ]
-        all_data, _, host_data = self._run(hosts)
+        all_data, _unused, host_data = self._run(hosts)
         assert "CFLAGS" not in all_data.get("build_profile", {})
         assert host_data["h1"]["build_profile"]["CFLAGS"] == "-O2"
 
@@ -338,7 +338,7 @@ class TestCollapsePackageUse:
             _make_host("h1", ["gentoo"], package_use=pkg),
             _make_host("h2", ["gentoo"], package_use=pkg),
         ]
-        all_data, _, _ = self._run(hosts)
+        all_data, _unused, _unused2 = self._run(hosts)
         assert "+python" in all_data["package_use"]["app-editors/vim"]
 
     def test_host_unique_package_entry(self):
@@ -346,7 +346,7 @@ class TestCollapsePackageUse:
             _make_host("h1", ["gentoo"], package_use={"app-foo/bar": ["foo"]}),
             _make_host("h2", ["gentoo"], package_use={}),
         ]
-        all_data, _, host_data = self._run(hosts)
+        all_data, _unused, host_data = self._run(hosts)
         assert "app-foo/bar" not in all_data.get("package_use", {})
         assert "+foo" in host_data["h1"]["package_use"]["app-foo/bar"]
 
@@ -356,7 +356,7 @@ class TestCollapsePackageUse:
             _make_host("h2", ["gentoo", "lto_enabled"], package_use={"dev-libs/openssl": ["lto"]}),
             _make_host("h3", ["gentoo"], package_use={}),
         ]
-        all_data, group_data, _ = self._run(hosts)
+        all_data, group_data, _unused = self._run(hosts)
         assert "dev-libs/openssl" not in all_data.get("package_use", {})
         assert "+lto" in group_data["lto_enabled"]["package_use"]["dev-libs/openssl"]
 
@@ -378,7 +378,7 @@ class TestCollapseMakeConf:
             _make_host("h1", ["gentoo"], make_conf_raw='ACCEPT_LICENSE="@FREE"'),
             _make_host("h2", ["gentoo"], make_conf_raw='ACCEPT_LICENSE="@FREE"'),
         ]
-        all_data, _, _ = self._run(hosts)
+        all_data, _unused, _unused2 = self._run(hosts)
         assert all_data["make_conf"]["ACCEPT_LICENSE"] == "@FREE"
 
     def test_different_var_to_host(self):
@@ -386,7 +386,7 @@ class TestCollapseMakeConf:
             _make_host("h1", ["gentoo"], make_conf_raw='PORTDIR="/var/db/repos/gentoo"'),
             _make_host("h2", ["gentoo"], make_conf_raw='PORTDIR="/var/db/repos/custom"'),
         ]
-        all_data, _, host_data = self._run(hosts)
+        all_data, _unused, host_data = self._run(hosts)
         assert "PORTDIR" not in all_data.get("make_conf", {})
         assert host_data["h1"]["make_conf"]["PORTDIR"] == "/var/db/repos/gentoo"
 
@@ -403,7 +403,7 @@ class TestCollapseMakeConf:
                 make_conf_raw='USE="X"\nVIDEO_CARDS="amdgpu"\nCFLAGS="-O2"\nACCEPT_LICENSE="@FREE"',
             ),
         ]
-        all_data, _, _ = self._run(hosts)
+        all_data, _unused, _unused2 = self._run(hosts)
         mc = all_data.get("make_conf", {})
         assert "USE" not in mc
         assert "VIDEO_CARDS" not in mc
@@ -442,7 +442,7 @@ class TestCollapseUseFlagTypes:
                 profile_local_flags=profile_local,
             ),
         ]
-        all_data, _, host_data = self._run(hosts)
+        all_data, _unused, host_data = self._run(hosts)
         assert "+X" in all_data["use_flag_types"]["global"]
         assert "+gnome-shell" in all_data["use_flag_types"]["local"]
         assert "+custom" in all_data["use_flag_types"]["unknown"]
@@ -465,7 +465,7 @@ class TestCollapseUseFlagTypes:
                 profile_local_flags=[],
             ),
         ]
-        all_data, _, host_data = self._run(hosts)
+        all_data, _unused, host_data = self._run(hosts)
         assert "+X" in all_data["use_flag_types"]["global"]
         assert "+extra" in all_data["use_flag_types"]["unknown"]
         assert not host_data

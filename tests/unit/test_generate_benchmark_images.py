@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -70,7 +70,8 @@ class TestGenerateImage:
     def test_force_regenerates_existing_files(self, tmp_path: Path) -> None:
         gbi.generate_image(tmp_path, size=32, seed=1)
         mtime_before = (tmp_path / "im_4k.png").stat().st_mtime_ns
-        import time; time.sleep(0.05)
+        import time
+        time.sleep(0.05)
         gbi.generate_image(tmp_path, size=32, seed=1, force=True)
         mtime_after = (tmp_path / "im_4k.png").stat().st_mtime_ns
         assert mtime_after > mtime_before

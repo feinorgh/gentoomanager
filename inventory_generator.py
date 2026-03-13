@@ -122,6 +122,7 @@ def get_vms_from_host(host):
                 ["ssh"] + SSH_OPTIONS + [host, agent_cmd],
                 capture_output=True,
                 text=True,
+                check=False,
             )
 
             if agent_result.returncode == 0:
@@ -139,6 +140,7 @@ def get_vms_from_host(host):
                     ["ssh"] + SSH_OPTIONS + [host, xml_cmd],
                     capture_output=True,
                     text=True,
+                    check=False,
                 )
                 if xml_result.returncode == 0:
                     try:
@@ -172,6 +174,7 @@ def get_vms_from_host(host):
                 ["ssh"] + SSH_OPTIONS + [host, hostname_cmd],
                 capture_output=True,
                 text=True,
+                check=False,
             )
             if hostname_result.returncode == 0:
                 try:
@@ -202,6 +205,7 @@ def probe_build_profile(host: str, vm: str) -> dict:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         cflags = ""
         features = ""

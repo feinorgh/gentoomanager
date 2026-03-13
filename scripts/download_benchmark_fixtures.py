@@ -73,8 +73,8 @@ def download(url: str, dest: Path, desc: str, force: bool = False) -> bool:
                         pct = min(done * 100 // total, 100)
                         mb = done / (1024 * 1024)
                         tmb = total / (1024 * 1024)
-                        bar = "=" * (pct // 2) + ">" + " " * (50 - pct // 2)
-                        print(f"\r  [{bar}] {pct}%  {mb:.1f}/{tmb:.1f} MiB", end="", flush=True)
+                        progress_bar = "=" * (pct // 2) + ">" + " " * (50 - pct // 2)
+                        print(f"\r  [{progress_bar}] {pct}%  {mb:.1f}/{tmb:.1f} MiB", end="", flush=True)
         print()
         tmp.rename(dest)
         mib = dest.stat().st_size / (1024 * 1024)
@@ -189,7 +189,7 @@ def _run_ffmpeg(args: list[str], desc: str) -> bool:
     """Run an FFmpeg command.  Return True on success."""
     cmd = ["ffmpeg", "-y", "-loglevel", "warning"] + args
     print(f"  {desc}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         print(f"  FFmpeg failed: {result.stderr[-500:]}")
         return False

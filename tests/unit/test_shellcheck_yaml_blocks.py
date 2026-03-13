@@ -8,7 +8,6 @@ import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
@@ -176,7 +175,7 @@ class TestExtractBlocks:
         f.write_text(content)
         blocks = syb.extract_blocks(f)
         assert len(blocks) == 1
-        _, script = blocks[0]
+        _unused, script = blocks[0]
         assert "{{" not in script
         assert syb._PLACEHOLDER in script
 
@@ -188,7 +187,7 @@ class TestExtractBlocks:
         f.write_text(content)
         blocks = syb.extract_blocks(f)
         assert len(blocks) == 1
-        name, _ = blocks[0]
+        name, _unused = blocks[0]
         assert "unnamed" in name.lower()
 
     def test_nonexistent_file_returns_empty(self, tmp_path: Path) -> None:

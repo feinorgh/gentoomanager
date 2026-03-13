@@ -146,6 +146,7 @@ def run_shellcheck(script: str, shell: str = "bash") -> subprocess.CompletedProc
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
 
@@ -212,10 +213,10 @@ def main(argv: list[str] | None = None) -> int:
             if result.returncode != 0:
                 failed_blocks += 1
                 rel = yaml_file.relative_to(repo_root)
-                print(f"\n{'='*72}")
+                print(f"\n{'=' * 72}")
                 print(f"  File : {rel}")
                 print(f"  Task : {task_name}")
-                print(f"{'='*72}")
+                print(f"{'=' * 72}")
                 # Scrub the temp path from shellcheck output
                 output = re.sub(r"/tmp/tmp\S+\.sh", f"{rel}:<task>", result.stdout)
                 print(output, end="")
