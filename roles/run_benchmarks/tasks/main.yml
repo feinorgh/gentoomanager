@@ -25,12 +25,20 @@
   ansible.builtin.set_fact:
     run_benchmarks_active_categories: >-
       {{
-        run_benchmarks_categories
-        if (run_benchmarks_categories | length > 0)
+        _cats if (_cats | length > 0)
         else ['compression', 'crypto', 'compiler', 'python',
               'ffmpeg', 'imagemagick', 'coreutils', 'opencv', 'gimp',
               'inkscape', 'startup', 'gentoo_build_times', 'numeric',
               'sqlite', 'memory', 'process', 'disk', 'linker']
+      }}
+  vars:
+    _cats: >-
+      {{
+        run_benchmarks_categories
+        if run_benchmarks_categories is not string
+        else (run_benchmarks_categories | from_yaml
+              if run_benchmarks_categories | length > 0
+              else [])
       }}
   tags: [benchmark]
 
