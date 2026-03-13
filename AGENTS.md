@@ -112,6 +112,11 @@ Valid section keys: `major_changes`, `minor_changes`, `bugfixes`,
 - Python: follow **ruff** defaults (line length 100, double quotes via the
   project's `pyproject.toml`).  No manual `# noqa` unless genuinely
   unavoidable — fix the root cause first.
+- Do **not** use bare `_` as a throwaway variable name — `ansible-test
+  sanity` runs pylint with `disallowed-name` enabled.  Use a descriptive
+  name instead (e.g. `_ignored`, `_host_os`, `_unused`).
+- Always pass `check=False` (or `check=True`) explicitly to
+  `subprocess.run()` — pylint's `subprocess-run-check` rule requires it.
 - Ansible tasks: use fully-qualified collection names (`ansible.builtin.*`).
   Add `# noqa: <rule>` with a comment explaining why only when ansible-lint
   cannot be satisfied correctly.
