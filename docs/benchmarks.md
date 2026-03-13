@@ -212,6 +212,8 @@ Benchmark control:
   --cpu-affinity RANGE        Pin benchmarks to CPU range (e.g. 0-3)
   --compress-size MB          Test data size for compression (default: 64)
   --ffmpeg-duration SEC       Test clip duration for FFmpeg (default: 10)
+  --extended-codecs           Include non-standard FFmpeg codecs (slow,
+                              experimental, and legacy; see FFmpeg section)
 
 Flags:
   --include-windows           Also run benchmarks on Windows VMs
@@ -290,6 +292,9 @@ Pass an empty list `[]` (the default) to run all categories.
 
 # Longer FFmpeg test clip
 ./scripts/run_benchmarks.sh --ffmpeg-duration 30
+
+# FFmpeg with extended (slow/legacy) codecs
+./scripts/run_benchmarks.sh --category ffmpeg --extended-codecs
 ```
 
 ### Skipping Already-Benchmarked Hosts
@@ -526,7 +531,7 @@ Automatically discovers all available encoders and decoders and
 benchmarks them.  Codec availability varies across distributions
 depending on installed libraries and Gentoo USE flags.
 
-**Video encoders** (benchmarked when available):
+**Video encoders — standard** (always benchmarked when available):
 
 | Benchmark       | Library    | Parameters              |
 |-----------------|------------|-------------------------|
@@ -535,15 +540,22 @@ depending on installed libraries and Gentoo USE flags.
 | vp8-encode      | libvpx     | CRF 10, 1M bitrate, deadline=realtime |
 | vp9-encode      | libvpx-vp9 | CRF 30, deadline=realtime, cpu-used 8 |
 | av1-svt-encode  | libsvtav1  | CRF 35, preset 8        |
-| av1-aom-encode  | libaom-av1 | CRF 35, cpu-used 8      |
-| theora-encode   | libtheora  | quality 7               |
-| xvid-encode     | libxvid    | quality 5               |
-| mpeg2-encode    | mpeg2video | 5 Mbit/s                |
-| mjpeg-encode    | mjpeg      | quality 5               |
+
+**Video encoders — extended** (only with `--extended-codecs` /
+`run_benchmarks_ffmpeg_extended_codecs=true`):
+
+| Benchmark       | Library    | Notes                   |
+|-----------------|------------|-------------------------|
+| av1-aom-encode  | libaom-av1 | Reference AV1 encoder; very slow (research use) |
+| av1-rav1e-encode| librav1e   | Experimental AV1 encoder |
+| theora-encode   | libtheora  | Legacy Ogg/Theora       |
+| xvid-encode     | libxvid    | Legacy MPEG-4 Part 2    |
+| mpeg2-encode    | mpeg2video | Legacy MPEG-2           |
+| mjpeg-encode    | mjpeg      | Motion JPEG             |
 
 **Video decoders:** Each successfully encoded format is also decoded.
 
-**Audio encoders** (benchmarked when available):
+**Audio encoders — standard** (always benchmarked when available):
 
 | Benchmark     | Library   | Parameters    |
 |---------------|-----------|---------------|
@@ -552,10 +564,16 @@ depending on installed libraries and Gentoo USE flags.
 | mp3-encode    | libmp3lame| 192 kbit/s    |
 | flac-encode   | flac      | Lossless      |
 | vorbis-encode | libvorbis | quality 4     |
-| ac3-encode    | ac3       | 384 kbit/s    |
-| eac3-encode   | eac3      | 384 kbit/s    |
-| wavpack-encode| wavpack   | Lossless      |
-| alac-encode   | alac      | Lossless      |
+
+**Audio encoders — extended** (only with `--extended-codecs` /
+`run_benchmarks_ffmpeg_extended_codecs=true`):
+
+| Benchmark      | Library | Notes              |
+|----------------|---------|--------------------|
+| ac3-encode     | ac3     | Dolby Digital, 384 kbit/s |
+| eac3-encode    | eac3    | Dolby Digital Plus, 384 kbit/s |
+| wavpack-encode | wavpack | Lossless           |
+| alac-encode    | alac    | Apple Lossless     |
 
 **Audio decoders:** Each successfully encoded format is also decoded.
 
@@ -944,8 +962,11 @@ or in inventory.
 | `run_benchmarks_work_dir_win` | `C:\ansible-benchmarks` | Remote working directory (Windows) |
 | `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
 | `run_benchmarks_ffmpeg_video_runs` | `3` | Hyperfine iterations for FFmpeg video encode/decode |
-| `run_benchmarks_ffmpeg_video_warmup` | `2` | Warmup runs for FFmpeg video benchmarks |
-| `run_benchmarks_ffmpeg_task_timeout_sec` | `7200` | Per-task timeout for FFmpeg benchmarks (s) |
+| `run_benchmarks_ffmpeg_video_warmup` | `1` | Warmup runs for FFmpeg video benchmarks |
+| `run_benchmarks_ffmpeg_audio_runs` | `3` | Hyperfine iterations for FFmpeg audio encode/decode |
+| `run_benchmarks_ffmpeg_audio_warmup` | `1` | Warmup runs for FFmpeg audio benchmarks |
+| `run_benchmarks_ffmpeg_task_timeout_sec` | `5400` | Per-task timeout for FFmpeg benchmarks (s) |
+| `run_benchmarks_ffmpeg_extended_codecs` | `false` | Include extended codecs (slow/experimental/legacy; see [FFmpeg](#ffmpeg)) |
 | `run_benchmarks_startup_runs` | `3` | Hyperfine iterations for application startup benchmarks |
 | `run_benchmarks_startup_warmup` | `2` | Warmup runs for application startup benchmarks |
 | `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
@@ -1017,16 +1038,21 @@ benchmarks/results/<hostname>/compression.json
 
 ### Slow AV1 encoding benchmarks
 
-`libaom-av1` is significantly slower than other codecs even at the fastest
-preset.  Run FFmpeg separately on a subset of hosts if needed:
+`libaom-av1` and `librav1e` are significantly slower than other codecs and are
+excluded from the standard run.  They are available as **extended codecs** — opt
+in only when needed:
 
 ```bash
-# Everything except FFmpeg
-./scripts/run_benchmarks.sh --category compression,crypto,compiler,python,coreutils
+# FFmpeg with all extended (slow/legacy) codecs
+./scripts/run_benchmarks.sh --category ffmpeg --extended-codecs
 
-# FFmpeg only on one host
-./scripts/run_benchmarks.sh --host gentoo-vm1 --category ffmpeg
+# Or via Ansible variable
+ansible-playbook playbooks/run_benchmarks.yml \
+  -e run_benchmarks_ffmpeg_extended_codecs=true
 ```
+
+If you only need the standard fast codecs, the default run takes approximately
+20 minutes for FFmpeg across a typical Gentoo VM fleet.
 
 ### RHEL / OL hosts fail with "SyntaxError: future feature annotations"
 
