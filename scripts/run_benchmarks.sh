@@ -115,6 +115,12 @@ require_cmd() {
 # ── Argument parsing ─────────────────────────────────────────────────────────
 VERBOSITY=""
 BECOME_PASS=0
+INCLUDE_WINDOWS=0
+NO_RAM_SCALE=0
+SKIP_COMPLETE=0
+NO_REPORT=0
+DRY_RUN=0
+EXTENDED_CODECS=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
