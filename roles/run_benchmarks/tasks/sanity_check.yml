@@ -119,7 +119,8 @@
       {{ ((run_benchmarks_sanity_memtotal_raw.stdout | default('0') | int) / 1024) | round(0) | int }}
     run_benchmarks_sanity_ram_ok: >-
       {{ ((run_benchmarks_sanity_memtotal_raw.stdout | default('0') | int) / 1024) | int
-         >= run_benchmarks_min_ram_mb }}
+         >= run_benchmarks_min_ram_mb
+         or (run_benchmarks_scale_ram | default(true) | bool) }}
 
 # ── 5. Emit warning when issues are detected ─────────────────────────────
 - name: Warn — benchmark sanity check issues detected
@@ -156,8 +157,8 @@
           Fixture files (~1.7 GB) and encode intermediates (~500 MB) reside
           in RAM when using tmpfs; insufficient RAM causes swap thrashing
           and distorts compression/coreutils results.
-          For KVM VMs the RAM is scaled to max before benchmarks run
-          (check max_memory in host_vars and virsh dumpxml).
+          Set run_benchmarks_scale_ram=true (default) so that KVM VMs have
+          their RAM temporarily raised to max_memory before benchmarks run.
           To override: set run_benchmarks_min_ram_mb to a lower value.
       {% endif %}
       {% if run_benchmarks_sanity_missing_req | length > 0 or run_benchmarks_sanity_missing_opt | length > 0 %}

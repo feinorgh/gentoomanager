@@ -54,9 +54,9 @@
     cmd: >-
       python3 {{ playbook_dir | dirname }}/scripts/download_benchmark_fixtures.py
       {{ run_benchmarks_fixture_dir }}
-    creates: "{{ run_benchmarks_fixture_dir }}/silesia_combined.bin"
   delegate_to: localhost
   run_once: true
+  changed_when: false
 
 # ── Populate compression test data ───────────────────────────────────────────
 - name: Check whether compression test data is already present on host
