@@ -1,7 +1,8 @@
 ---
-# Collect system boot timing via systemd-analyze.
-# Writes boot_times.json to the work directory.
-# If systemd-analyze is unavailable (OpenRC, container, etc.), writes {"available": false}.
+# Collect system boot timing.
+# 1. Prefers systemd-analyze (accurate phase breakdown + per-service blame).
+# 2. Falls back to dmesg timestamp parsing for non-systemd hosts (OpenRC,
+#    SysVinit, etc.).  Writes boot_times.json to the work directory.
 
 - name: Check systemd-analyze availability
   ansible.builtin.command: systemd-analyze --version
@@ -16,7 +17,7 @@
       import subprocess, json, re, sys
 
       def parse_time(s):
-          """Parse a systemd time string (e.g. '2.168s', '302ms', '1min 2.3s') → float seconds."""
+          """Parse a systemd time string ('2.168s', '302ms', '1min 2.3s') → float seconds."""
           s = s.strip()
           m = re.match(r'(\d+)min\s+([\d.]+)s', s)
           if m:
@@ -29,10 +30,9 @@
               return round(float(m.group(1)), 3)
           return None
 
-      # Pattern that captures a systemd-formatted time token (ms/s/min s)
       TIME_TOK = r'[\d.]+ms|[\d]+min\s+[\d.]+s|[\d.]+s'
 
-      out = {'available': True}
+      out = {'available': True, 'method': 'systemd-analyze'}
       try:
           txt = subprocess.check_output(['systemd-analyze'], text=True, stderr=subprocess.DEVNULL)
           for key, label in [
@@ -45,7 +45,6 @@
               pat = rf'({TIME_TOK})\s*\({re.escape(label)}\)'
               m = re.search(pat, txt)
               out[key] = parse_time(m.group(1)) if m else None
-          # Total is after the '=' sign
           m = re.search(rf'=\s*({TIME_TOK})', txt)
           out['total_sec'] = parse_time(m.group(1)) if m else None
       except Exception as e:
@@ -54,7 +53,6 @@
           print(json.dumps(out))
           sys.exit(0)
 
-      # Top slow services
       try:
           blame = subprocess.check_output(
               ['systemd-analyze', 'blame', '--no-pager'], text=True, stderr=subprocess.DEVNULL)
@@ -78,7 +76,7 @@
   failed_when: false
   when: run_benchmarks_boot_sa_check.rc == 0
 
-- name: Write boot times result (systemd available)
+- name: Write boot times result (systemd)
   ansible.builtin.copy:
     content: "{{ run_benchmarks_boot_result.stdout }}\n"
     dest: "{{ run_benchmarks_work_dir }}/boot_times.json"
@@ -87,9 +85,123 @@
     - run_benchmarks_boot_sa_check.rc == 0
     - run_benchmarks_boot_result.stdout | default('') | length > 0
 
-- name: Write boot times result (systemd unavailable)
+# ── dmesg fallback (OpenRC / SysVinit / any non-systemd Linux) ────────────────
+#
+# dmesg timestamps are "seconds since boot" for every kernel and early-userspace
+# message, providing a reasonable equivalent to systemd-analyze's kernel and
+# (partial) userspace phases:
+#
+#   kernel_sec   – timestamp of last "pure kernel" message, identified by the
+#                  "Freeing unused kernel image" line that marks end of kernel
+#                  init.  Falls back to the last message before any obvious init
+#                  string if that marker is absent.
+#   userspace_sec – time between kernel handoff and the last dmesg entry within
+#                   the boot window (≤ 300 s).  Early-userspace writes to dmesg
+#                   (udev, OpenRC, module loads) appear here.
+#   total_sec     – last dmesg timestamp within the boot window.
+#   top_services  – not available; empty list.
+
+- name: Collect boot times via dmesg (non-systemd fallback) # noqa: command-instead-of-shell
+  ansible.builtin.shell:
+    cmd: |
+      python3 - << 'PYEOF'
+      import subprocess, json, re, sys
+
+      BOOT_WINDOW_SEC = 300   # ignore dmesg entries > 5 min after boot
+
+      # Kernel-init-complete markers (last one seen → kernel phase end)
+      KERNEL_END_RE = re.compile(
+          r'Freeing unused kernel (?:image|memory)'
+          r'|Initialisation of inode table'
+          r'|All bugs added by Dave Miller'
+          r'|Brought up \d+ CPU'
+      )
+      # Userspace-start markers (first one seen → init handoff)
+      USERSPACE_START_RE = re.compile(
+          r'(?i)run /sbin/init|openrc|INIT:|sysvinit|runit|s6-svscan'
+          r'|systemd\[1\]|Starting version'
+      )
+
+      def dmesg_ts(line):
+          """Extract dmesg timestamp → float, or None."""
+          m = re.match(r'\[\s*([\d.]+)\]', line)
+          return float(m.group(1)) if m else None
+
+      try:
+          raw = subprocess.check_output(
+              ['dmesg'], text=True, stderr=subprocess.DEVNULL)
+      except Exception as e:
+          print(json.dumps({'available': False, 'method': 'dmesg', 'error': str(e)}))
+          sys.exit(0)
+
+      lines = raw.strip().splitlines()
+      # Collect timestamped entries within the boot window
+      boot_lines = []
+      for line in lines:
+          t = dmesg_ts(line)
+          if t is not None and t <= BOOT_WINDOW_SEC:
+              boot_lines.append((t, line))
+
+      if not boot_lines:
+          print(json.dumps({'available': False, 'method': 'dmesg',
+                            'error': 'no timestamped dmesg entries in boot window'}))
+          sys.exit(0)
+
+      all_ts = [t for t, _ in boot_lines]
+      total_sec = round(max(all_ts), 3)
+
+      # Find kernel phase end
+      kernel_end_ts = None
+      for t, line in boot_lines:
+          if KERNEL_END_RE.search(line):
+              kernel_end_ts = t  # keep updating — want the last match
+
+      # Find userspace start (first init-related message)
+      userspace_start_ts = None
+      for t, line in boot_lines:
+          if USERSPACE_START_RE.search(line):
+              userspace_start_ts = t
+              break  # want the first match
+
+      # Derive phases
+      if kernel_end_ts is not None:
+          kernel_sec = round(kernel_end_ts, 3)
+      elif userspace_start_ts is not None:
+          kernel_sec = round(userspace_start_ts, 3)
+      else:
+          # No clear boundary — use 50% heuristic as rough kernel share
+          kernel_sec = round(total_sec * 0.5, 3)
+
+      if userspace_start_ts is not None:
+          userspace_sec = round(total_sec - userspace_start_ts, 3)
+      elif kernel_end_ts is not None:
+          userspace_sec = round(total_sec - kernel_end_ts, 3)
+      else:
+          userspace_sec = None
+
+      out = {
+          'available': True,
+          'method': 'dmesg',
+          'firmware_sec': None,
+          'loader_sec': None,
+          'kernel_sec': kernel_sec,
+          'userspace_sec': userspace_sec,
+          'graphical_sec': None,
+          'total_sec': total_sec,
+          'top_services': [],
+      }
+      print(json.dumps(out))
+      PYEOF
+  register: run_benchmarks_boot_dmesg_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_boot_sa_check.rc != 0
+
+- name: Write boot times result (dmesg fallback)
   ansible.builtin.copy:
-    content: '{"available": false}'
+    content: "{{ run_benchmarks_boot_dmesg_result.stdout }}\n"
     dest: "{{ run_benchmarks_work_dir }}/boot_times.json"
     mode: '0644'
-  when: run_benchmarks_boot_sa_check.rc != 0
+  when:
+    - run_benchmarks_boot_sa_check.rc != 0
+    - run_benchmarks_boot_dmesg_result.stdout | default('') | length > 0

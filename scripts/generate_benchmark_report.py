@@ -958,12 +958,16 @@ def generate_markdown(
         lines.append("## System Boot Times")
         lines.append("")
         lines.append(
-            "Measured via `systemd-analyze` at benchmark time. "
+            "Measured at benchmark time. "
             "Times in seconds. **Lowest total** is bold. "
-            "Hosts without systemd show —."
+            "`systemd-analyze` gives a full phase breakdown; "
+            "`dmesg` provides kernel and early-userspace phases only "
+            "(firmware/loader/graphical unavailable, service blame not available)."
         )
         lines.append("")
-        bth_headers = ["Host", "Firmware", "Loader", "Kernel", "Userspace", "Graphical", "Total"]
+        bth_headers = [
+            "Host", "Method", "Firmware", "Loader", "Kernel", "Userspace", "Graphical", "Total"
+        ]
         bth_rows: list[list[str]] = []
         boot_totals = {
             h: d["total_sec"]
@@ -978,7 +982,7 @@ def generate_markdown(
         for hostname in hostnames:
             d = boot_data.get(hostname)
             if not d or not d.get("available"):
-                bth_rows.append([hostname, "—", "—", "—", "—", "—", "—"])
+                bth_rows.append([hostname, "—", "—", "—", "—", "—", "—", "—"])
                 continue
             total_str = _fmt_bt(d.get("total_sec"))
             if hostname == fastest_boot:
@@ -986,6 +990,7 @@ def generate_markdown(
             bth_rows.append(
                 [
                     hostname,
+                    d.get("method", "—"),
                     _fmt_bt(d.get("firmware_sec")),
                     _fmt_bt(d.get("loader_sec")),
                     _fmt_bt(d.get("kernel_sec")),
@@ -1305,12 +1310,17 @@ def generate_html(
         boot_times_html = f"""
     <section id="cat-boot-times">
       <h2>System Boot Times</h2>
-      <p>Measured via <code>systemd-analyze</code> at benchmark time.
-         Times in seconds. <strong>Lowest</strong> per row is bold.
-         Hosts without systemd show —.</p>
+      <p>Measured at benchmark time. Times in seconds.
+         <strong>Lowest</strong> per row is bold.<br>
+         <code>systemd-analyze</code>: full phase breakdown + per-service blame. &nbsp;
+         <code>dmesg</code>: kernel and early-userspace phases only
+         (firmware/loader/graphical unavailable; service blame not available).</p>
       <table>
         <thead><tr><th>Phase</th>{host_hdrs}</tr></thead>
         <tbody>
+          <tr><td>Method</td>{"".join(
+              f"<td><code>{boot_data_html.get(h, {}).get('method', '—')}</code></td>"
+              for h in hostnames)}</tr>
 {phase_rows_html}        </tbody>
       </table>
       {"<h3>Slowest Services at Boot</h3>" + svc_sections_html if svc_sections_html else ""}
