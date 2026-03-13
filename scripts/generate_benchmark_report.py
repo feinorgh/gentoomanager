@@ -87,6 +87,7 @@ CATEGORY_TITLES = {
     "process": "Process Creation (fork/exec rate)",
     "disk": "Disk I/O — Sequential (256 MiB write/read)",
     "linker": "Linker Performance (bfd / lld / gold)",
+    "bash": "Bash Shell Performance",
 }
 
 # Greek mythology names for host anonymization (deterministic order)

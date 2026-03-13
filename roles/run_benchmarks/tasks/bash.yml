@@ -1,0 +1,114 @@
+---
+# Benchmark bash shell interpreter performance.
+#
+# Covers the operations most relevant to a build-system workload:
+#   startup   — raw binary start/exit cost (no rc files)
+#   arith     — integer arithmetic via (( )) in a tight loop
+#   str-concat— string concatenation with +=
+#   str-subst — global pattern substitution ${s//x/y}
+#   array     — indexed array build + full iteration
+#   assoc     — associative array (declare -A) fill + key scan
+#   func      — function-call overhead (no subshells)
+#   cmd-subst — $( ) command substitution cost (always forks a subshell)
+#   while-read— while IFS= read -r loop over 3 000 lines
+#   regex     — [[ "$s" =~ ERE ]] in a tight loop
+#   glob      — [[ "$s" == *pattern* ]] in a tight loop
+#
+# All execution benchmarks run with bash --norc --noprofile so results
+# reflect the interpreter, not rc-file loading overhead.
+
+- name: Check bash availability
+  ansible.builtin.command: bash --version
+  register: run_benchmarks_bash_check
+  failed_when: false
+  changed_when: false
+
+- name: Warn — bash not found
+  ansible.builtin.debug:
+    msg: "bash not found; skipping bash benchmarks"
+  when: run_benchmarks_bash_check.rc != 0
+
+- name: Run bash benchmarks # noqa: command-instead-of-shell
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      BENCH="{{ run_benchmarks_work_dir }}/bash_bench"
+      mkdir -p "$BENCH"
+
+      # Write benchmark scripts (single-line scripts via printf to avoid
+      # heredoc-indentation issues in the Ansible shell block).
+      printf '%s\n' \
+        'n=0; while (( n < 100000 )); do (( n++ )); done' \
+        > "$BENCH/arith_loop.sh"
+
+      printf '%s\n' \
+        's=""; for (( i=0; i<30000; i++ )); do s+="x"; done' \
+        > "$BENCH/str_concat.sh"
+
+      printf '%s\n' \
+        's=$(printf "%.0sx" {1..5000}); s="${s//x/y}"' \
+        > "$BENCH/str_subst.sh"
+
+      printf '%s\n' \
+        'a=(); for (( i=0; i<3000; i++ )); do a+=("item_$i"); done; c=0; for _ in "${a[@]}"; do (( c++ )); done' \
+        > "$BENCH/array_build.sh"
+
+      printf '%s\n' \
+        'declare -A aa; for (( i=0; i<2000; i++ )); do aa["key_$i"]="val_$i"; done; for k in "${!aa[@]}"; do v="${aa[$k]}"; done' \
+        > "$BENCH/assoc_array.sh"
+
+      printf '%s\n' \
+        'inc(){ (( result=$1+1 )); }; n=0; for (( i=0; i<5000; i++ )); do inc "$n"; n=$result; done' \
+        > "$BENCH/func_calls.sh"
+
+      printf '%s\n' \
+        'for (( i=0; i<200; i++ )); do x=$(printf "%d" "$i"); done' \
+        > "$BENCH/cmd_subst.sh"
+
+      printf '%s\n' \
+        'c=0; while IFS= read -r _; do (( c++ )); done < <(seq 1 3000)' \
+        > "$BENCH/while_read.sh"
+
+      printf '%s\n' \
+        's="Hello World Foo Bar 12345 test@example.com"; c=0; for (( i=0; i<5000; i++ )); do [[ "$s" =~ [0-9]+ ]] && (( c++ )); done' \
+        > "$BENCH/regex_match.sh"
+
+      printf '%s\n' \
+        's="Hello World Foo Bar"; c=0; for (( i=0; i<10000; i++ )); do [[ "$s" == *"World"* ]] && (( c++ )); done' \
+        > "$BENCH/glob_match.sh"
+
+      chmod +x "$BENCH"/*.sh
+
+      CMDS=()
+
+      # Startup: binary load + exit (no rc files, no profile)
+      CMDS+=(--command-name "startup-bare" "bash --norc --noprofile -c true")
+
+      # Execution benchmarks
+      for bench in \
+          arith_loop str_concat str_subst array_build assoc_array \
+          func_calls cmd_subst while_read regex_match glob_match; do
+        name="${bench//_/-}"
+        CMDS+=(--command-name "$name" "bash --norc --noprofile $BENCH/${bench}.sh")
+      done
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --runs   {{ run_benchmarks_runs }} \
+        --export-json {{ run_benchmarks_work_dir }}/bash.json \
+        "${CMDS[@]}"
+
+      rm -rf "$BENCH"
+  register: run_benchmarks_bash_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_bash_check.rc == 0
+
+- name: Warn on bash benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      bash benchmark failed or produced warnings:
+      {{ run_benchmarks_bash_result.stderr | default('') }}
+  when:
+    - run_benchmarks_bash_check.rc == 0
+    - run_benchmarks_bash_result.rc | default(0) != 0

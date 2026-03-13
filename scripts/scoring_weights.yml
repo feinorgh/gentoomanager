@@ -48,6 +48,7 @@ weights:
   # Utility / system
   coreutils:           1.0
   git:                 1.0
+  bash:                1.0
   startup:             1.0
   process:             1.0
 

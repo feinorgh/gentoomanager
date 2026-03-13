@@ -30,7 +30,7 @@
               'ffmpeg', 'imagemagick', 'coreutils', 'opencv', 'gimp',
               'inkscape', 'startup', 'gentoo_build_times', 'numeric',
               'sqlite', 'memory', 'process', 'disk', 'linker',
-              'boot_time']
+              'boot_time', 'bash']
       }}
   vars:
     _cats: >-
