@@ -866,6 +866,72 @@ python3 scripts/generate_benchmark_report.py benchmarks/ --anonymize
 Hostnames are replaced with names from Greek mythology.  The mapping is
 deterministic — sorted hostnames are assigned names in order.
 
+### Performance Scores
+
+Both reports include a **weighted performance score** (0–100) for each host
+in the Host Configuration Summary.
+
+**Formula:**
+
+1. For every benchmark a host participated in:
+   ```
+   bench_score = min_time_across_all_hosts / host_time × 100
+   ```
+   The fastest host for that benchmark scores 100; a host twice as slow scores 50.
+
+2. Scores are averaged per category → `category_score`.
+
+3. A weighted average is taken across all categories:
+   ```
+   final_score = Σ(category_score × weight) / Σ(weights_used)
+   ```
+
+Hosts that did not run a benchmark are simply excluded from that benchmark's
+scoring — they are not penalised for missing data (e.g. an incomplete run).
+
+**Customising weights:**
+
+Edit `scripts/scoring_weights.yml` to change how much each category
+contributes to the final score.  The defaults reflect a Gentoo system
+manager perspective where compilation speed is most important:
+
+```yaml
+weights:
+  compiler:    3.0   # most relevant for emerge
+  linker:      2.0
+  compression: 2.0
+  crypto:      2.0
+  memory:      2.0
+  disk:        2.0
+  ffmpeg:      1.0
+  # ... other categories at 1.0
+  gentoo_build_times: 0.0  # excluded — not comparable hyperfine data
+```
+
+You can also pass a custom weights file at report-generation time:
+
+```bash
+python3 scripts/generate_benchmark_report.py benchmarks/ --weights my_weights.yml
+```
+
+Scores are printed to stdout when the report is generated:
+
+```
+Scores (weighted, 0–100):
+   1. gentoo-beatrice: 94.3
+   2. gentoo-clio: 87.6
+   ...
+```
+
+The summary table is sorted by score (highest first) with 🥇🥈🥉 medals for
+the top three hosts.  In the HTML report, scores are colour-coded green (high)
+through amber to red (low).
+
+> **Note:** Scores are only meaningful when hosts have run the same set of
+> benchmarks.  A host that completed all categories will always score lower
+> than one that only ran fast categories from a full run, so compare scores
+> across full runs for fair results.
+
 ## Benchmark Fixture Files
 
 The benchmark suite uses real-world standardised fixture files as inputs

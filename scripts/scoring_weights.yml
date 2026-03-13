@@ -1,0 +1,56 @@
+# Benchmark scoring weights
+#
+# This file is read by scripts/generate_benchmark_report.py.
+# You can also point to a custom file with: --weights PATH
+#
+# Each category's score contribution is multiplied by its weight before the
+# weighted average is computed.  Set a weight to 0 to exclude a category from
+# the score entirely.
+#
+# Scoring formula (per host):
+#   1. For every benchmark in a category, compute a *relative score*:
+#        bench_score = min_time_across_hosts / host_time * 100
+#      The fastest host gets 100; a host twice as slow gets 50.
+#      Benchmarks where the host has no result are skipped (not penalised).
+#   2. Average the bench scores for each category → category_score.
+#   3. Compute a weighted average across all categories with weight > 0:
+#        final_score = sum(category_score * weight) / sum(weights_used)
+#
+# Weights are relative — only their ratios matter.  You can use any positive
+# numbers.  The defaults below reflect a Gentoo system manager perspective
+# where compilation performance is most important.
+
+weights:
+  # Compilation workloads — most relevant for an emerge-heavy Gentoo fleet
+  compiler:            3.0
+  linker:              2.0
+
+  # Core system throughput
+  compression:         2.0
+  crypto:              2.0
+  memory:              2.0
+  disk:                2.0
+
+  # Application-level workloads
+  ffmpeg:              1.0
+  ffmpeg_video_encode: 1.0
+  ffmpeg_video_decode: 1.0
+  ffmpeg_audio_encode: 1.0
+  ffmpeg_audio_decode: 1.0
+  imagemagick:         1.0
+  opencv:              1.0
+
+  # Language / database runtimes
+  python:              1.0
+  numeric:             1.0
+  sqlite:              1.0
+
+  # Utility / system
+  coreutils:           1.0
+  git:                 1.0
+  startup:             1.0
+  process:             1.0
+
+  # Excluded — Gentoo build times are wall-clock data, not hyperfine results,
+  # and are already influenced by all other categories.
+  gentoo_build_times:  0.0

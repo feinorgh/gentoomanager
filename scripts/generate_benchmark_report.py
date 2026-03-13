@@ -535,6 +535,133 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+
+#: Default category weights used when no weights file is found.
+_DEFAULT_WEIGHTS: dict[str, float] = {
+    "compiler": 3.0,
+    "linker": 2.0,
+    "compression": 2.0,
+    "crypto": 2.0,
+    "memory": 2.0,
+    "disk": 2.0,
+    "ffmpeg": 1.0,
+    "ffmpeg_video_encode": 1.0,
+    "ffmpeg_video_decode": 1.0,
+    "ffmpeg_audio_encode": 1.0,
+    "ffmpeg_audio_decode": 1.0,
+    "imagemagick": 1.0,
+    "opencv": 1.0,
+    "python": 1.0,
+    "numeric": 1.0,
+    "sqlite": 1.0,
+    "coreutils": 1.0,
+    "git": 1.0,
+    "startup": 1.0,
+    "process": 1.0,
+    "gentoo_build_times": 0.0,  # excluded — not hyperfine data
+}
+
+
+def load_scoring_weights(weights_path: Path | None) -> dict[str, float]:
+    """Load category weights from a YAML file.
+
+    Falls back to :data:`_DEFAULT_WEIGHTS` if the file is absent or cannot
+    be parsed (requires PyYAML; silently falls back if not installed).
+    """
+    if weights_path is None or not weights_path.exists():
+        return dict(_DEFAULT_WEIGHTS)
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        with open(weights_path) as f:
+            data = yaml.safe_load(f)
+        weights = data.get("weights", {})
+        return {str(k): float(v) for k, v in weights.items()}
+    except Exception as exc:
+        print(f"WARNING: could not load weights file {weights_path}: {exc}", file=sys.stderr)
+        return dict(_DEFAULT_WEIGHTS)
+
+
+def compute_scores(
+    table: dict[str, dict[str, dict[str, dict[str, float]]]],
+    weights: dict[str, float] | None = None,
+) -> dict[str, float]:
+    """Compute a weighted performance score for each host.
+
+    For every benchmark the host participated in::
+
+        bench_score = min_time_across_all_hosts / host_time * 100
+
+    The fastest host scores 100; a host twice as slow scores 50.
+
+    Scores are averaged per category, then a weighted average is taken across
+    all categories using *weights* (defaults to :data:`_DEFAULT_WEIGHTS`).
+
+    Returns ``{hostname: score}`` where scores are in the range (0, 100].
+    A host that only participated in a subset of benchmarks is scored only on
+    those it ran; missing benchmarks are not penalised.
+    """
+    if weights is None:
+        weights = _DEFAULT_WEIGHTS
+
+    # category → hostname → list[bench_score]
+    cat_scores: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+
+    for category, benchmarks in table.items():
+        for _bench_name, host_results in benchmarks.items():
+            valid = {h: r["mean"] for h, r in host_results.items() if r.get("mean", 0) > 0}
+            if not valid:
+                continue
+            min_time = min(valid.values())
+            for hostname, t in valid.items():
+                cat_scores[category][hostname].append(min_time / t * 100)
+
+    # Collect all hostnames seen
+    all_hosts: set[str] = set()
+    for hmap in cat_scores.values():
+        all_hosts.update(hmap)
+
+    scores: dict[str, float] = {}
+    for hostname in all_hosts:
+        weighted_sum = 0.0
+        weight_total = 0.0
+        for category, hmap in cat_scores.items():
+            w = weights.get(category, 1.0)
+            if w <= 0:
+                continue
+            if hostname not in hmap:
+                continue
+            cat_avg = sum(hmap[hostname]) / len(hmap[hostname])
+            weighted_sum += cat_avg * w
+            weight_total += w
+        scores[hostname] = weighted_sum / weight_total if weight_total > 0 else 0.0
+
+    return scores
+
+
+def _score_badge_html(score: float, rank: int) -> str:
+    """Return an HTML cell value for a score with rank medal and colour."""
+    medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, "")
+    # Gradient: 100 → green (#00e676), 50 → amber (#ffa726), 0 → red (#ef5350)
+    if score >= 75:
+        r, g, b = 0, 230, 118  # green
+    elif score >= 50:
+        t = (score - 50) / 25
+        r = int(255 * (1 - t))
+        g = int(167 + 63 * t)
+        b = int(38 * (1 - t))
+    else:
+        t = score / 50
+        r = 239
+        g = int(83 * t)
+        b = int(32 * t + 53 * (1 - t))
+    color = f"rgb({r},{g},{b})"
+    return f'<strong style="color:{color}">{medal} {score:.1f}</strong>'
+
+
 def _md_table(headers: list[str], rows: list[list[str]]) -> str:
     """Render a Markdown table with alignment."""
     widths = [len(h) for h in headers]
@@ -597,11 +724,17 @@ def _collect_codec_availability(
 def generate_markdown(
     hosts: dict[str, dict[str, Any]],
     table: dict[str, dict[str, dict[str, dict[str, float]]]],
+    scores: dict[str, float] | None = None,
 ) -> str:
     """Generate the full Markdown report."""
     lines: list[str] = []
-    hostnames = sorted(hosts.keys())
     timestamp = datetime.now(tz=_UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Sort hosts by score descending (unscored hosts sort last)
+    if scores:
+        hostnames = sorted(hosts.keys(), key=lambda h: scores.get(h, -1), reverse=True)
+    else:
+        hostnames = sorted(hosts.keys())
 
     lines.append("# Gentoo VM Benchmark Report")
     lines.append("")
@@ -613,7 +746,9 @@ def generate_markdown(
     lines.append("")
 
     summary_headers = [
+        "Rank",
         "Host",
+        "Score",
         "OS",
         "Kernel",
         "CPU",
@@ -634,16 +769,21 @@ def generate_markdown(
         "Clang",
     ]
     summary_rows: list[list[str]] = []
-    for hostname in hostnames:
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    for rank, hostname in enumerate(hostnames, 1):
         meta = hosts[hostname].get("metadata", {})
         feat = extract_features(meta)
         os_label = feat.get("os", "?")
         if feat.get("os_version", "—") != "—":
             os_label += " " + feat["os_version"]
         hv_prefix = "[HV] " if feat.get("is_hypervisor") else ""
+        score_str = f"{scores[hostname]:.1f}" if scores and hostname in scores else "—"
+        rank_str = medals.get(rank, str(rank)) if scores else "—"
         summary_rows.append(
             [
+                rank_str,
                 hv_prefix + hostname,
+                score_str,
                 os_label,
                 feat.get("kernel", "—"),
                 feat.get("cpu_model", "?")[:40],
@@ -831,9 +971,14 @@ _HV_BADGE = (
 def generate_html(
     hosts: dict[str, dict[str, Any]],
     table: dict[str, dict[str, dict[str, dict[str, float]]]],
+    scores: dict[str, float] | None = None,
 ) -> str:
     """Generate an interactive HTML report with Chart.js."""
-    hostnames = sorted(hosts.keys())
+    # Sort hosts by score descending (unscored hosts sort last)
+    if scores:
+        hostnames = sorted(hosts.keys(), key=lambda h: scores.get(h, -1), reverse=True)
+    else:
+        hostnames = sorted(hosts.keys())
     timestamp = datetime.now(tz=_UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # Pre-build Chart.js datasets per category
@@ -861,7 +1006,7 @@ def generate_html(
             }
 
     # --- Host summary ---
-    summary_html = _html_host_summary(hosts, hostnames)
+    summary_html = _html_host_summary(hosts, hostnames, scores)
 
     # --- Per-category sections ---
     for category in sorted(table.keys()):
@@ -1416,10 +1561,14 @@ def _html_runtime_env_rows(hosts: dict[str, dict[str, Any]], hostnames: list[str
     return "\n".join(rows)
 
 
-def _html_host_summary(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -> str:
+def _html_host_summary(
+    hosts: dict[str, dict[str, Any]],
+    hostnames: list[str],
+    scores: dict[str, float] | None = None,
+) -> str:
     """Build an HTML summary table of host configurations."""
     rows: list[str] = []
-    for hostname in hostnames:
+    for rank, hostname in enumerate(hostnames, 1):
         meta = hosts[hostname].get("metadata", {})
         feat = extract_features(meta)
         lto_badge = {
@@ -1431,8 +1580,17 @@ def _html_host_summary(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -
         swap_s = feat.get("swap", "—")
         swap_cell = "✓" if swap_s == "yes" else "✗" if swap_s == "no" else "—"
 
+        if scores and hostname in scores:
+            score_cell = _score_badge_html(scores[hostname], rank)
+            rank_cell = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+        else:
+            score_cell = "—"
+            rank_cell = "—"
+
         rows.append(f"""      <tr>
+        <td style="text-align:center">{rank_cell}</td>
         <td><strong>{hostname}</strong>{hv_badge}</td>
+        <td style="text-align:right">{score_cell}</td>
         <td>{feat.get("kernel", "—")}</td>
         <td>{feat.get("cpu_model", "?")}</td>
         <td>{feat.get("cpu_clock", "—")}</td>
@@ -1459,10 +1617,14 @@ def _html_host_summary(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -
       </tr>""")
 
     return f"""    <h3>Host Configuration Summary</h3>
+    <p style="font-size:0.85em;color:#aaa">Score = weighted geometric mean of per-benchmark
+    relative performance (fastest host per benchmark = 100).
+    See <code>scripts/scoring_weights.yml</code> to customise category weights.</p>
     <table>
       <thead>
         <tr>
-          <th>Host</th><th>Kernel</th><th>CPU</th><th>Clock</th><th>Cores</th><th>Opt</th>
+          <th>#</th><th>Host</th><th>Score</th><th>Kernel</th><th>CPU</th>
+          <th>Clock</th><th>Cores</th><th>Opt</th>
           <th>March</th><th>March (native)</th><th>LTO</th><th>Hardening</th>
           <th>Scheduler</th><th>Filesystem</th><th>Swap</th>
           <th>7z MIPS</th><th>PassMark (ST)</th><th>PassMark (MT)</th>
@@ -1544,6 +1706,16 @@ def main() -> None:
         action="store_true",
         help="Replace hostnames with Greek mythology names",
     )
+    parser.add_argument(
+        "--weights",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "YAML file with category scoring weights "
+            "(default: benchmarks/scoring_weights.yml if present)"
+        ),
+    )
     args = parser.parse_args()
 
     base_dir: Path = args.benchmarks_dir
@@ -1561,14 +1733,27 @@ def main() -> None:
 
     table = build_comparison_table(hosts)
 
+    # Load scoring weights and compute scores
+    weights_path = args.weights or (base_dir / "scoring_weights.yml")
+    # Also check next to the script itself as a fallback
+    if not weights_path.exists():
+        weights_path = Path(__file__).parent / "scoring_weights.yml"
+    weights = load_scoring_weights(weights_path)
+    scores = compute_scores(table, weights)
+    if scores:
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        print("Scores (weighted, 0–100):")
+        for rank, (h, s) in enumerate(ranked, 1):
+            print(f"  {rank:2}. {h}: {s:.1f}")
+
     # Markdown report
-    md = generate_markdown(hosts, table)
+    md = generate_markdown(hosts, table, scores)
     md_path = base_dir / "report.md"
     md_path.write_text(md)
     print(f"Markdown report: {md_path}")
 
     # HTML report
-    html = generate_html(hosts, table)
+    html = generate_html(hosts, table, scores)
     html_path = base_dir / "report.html"
     html_path.write_text(html)
     print(f"HTML report: {html_path}")
