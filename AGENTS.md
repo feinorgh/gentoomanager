@@ -120,6 +120,11 @@ Valid section keys: `major_changes`, `minor_changes`, `bugfixes`,
 - Ansible tasks: use fully-qualified collection names (`ansible.builtin.*`).
   Add `# noqa: <rule>` with a comment explaining why only when ansible-lint
   cannot be satisfied correctly.
+- Any `ansible.builtin.shell` task that uses bash features (`pipefail`,
+  arrays `()`, `[[ ]]`, `(( ))`, `declare -A`, etc.) **must** include
+  `executable: /bin/bash` — Ansible's default shell is `/bin/sh` (dash on
+  Ubuntu/Debian) which does not support these constructs.  Silent failures
+  (masked by `failed_when: false`) are a common symptom of this mistake.
 - Shell scripts: POSIX-compatible where possible; bash-specific features only
   when needed.  All scripts must pass ShellCheck with no warnings.
 
