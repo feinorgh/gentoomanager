@@ -29,7 +29,8 @@
         else ['compression', 'crypto', 'compiler', 'python',
               'ffmpeg', 'imagemagick', 'coreutils', 'opencv', 'gimp',
               'inkscape', 'startup', 'gentoo_build_times', 'numeric',
-              'sqlite', 'memory', 'process', 'disk', 'linker']
+              'sqlite', 'memory', 'process', 'disk', 'linker',
+              'boot_time']
       }}
   vars:
     _cats: >-

@@ -308,6 +308,9 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
             elif "video_encoders" in data:
                 # FFmpeg codec availability
                 hosts[hostname]["ffmpeg_codecs"] = data
+            elif json_file.name == "boot_times.json":
+                # systemd-analyze boot timing data
+                hosts[hostname]["boot_times"] = data
 
     return hosts
 
@@ -949,10 +952,67 @@ def generate_markdown(
             lines.append(_md_table(bt_headers, bt_rows))
             lines.append("")
 
+    # --- System boot times ---
+    boot_data = {h: hosts[h]["boot_times"] for h in hostnames if hosts[h].get("boot_times")}
+    if boot_data:
+        lines.append("## System Boot Times")
+        lines.append("")
+        lines.append(
+            "Measured via `systemd-analyze` at benchmark time. "
+            "Times in seconds. **Lowest total** is bold. "
+            "Hosts without systemd show —."
+        )
+        lines.append("")
+        bth_headers = ["Host", "Firmware", "Loader", "Kernel", "Userspace", "Graphical", "Total"]
+        bth_rows: list[list[str]] = []
+        boot_totals = {
+            h: d["total_sec"]
+            for h, d in boot_data.items()
+            if d.get("available") and d.get("total_sec") is not None
+        }
+        fastest_boot = min(boot_totals, key=boot_totals.__getitem__) if boot_totals else None
+
+        def _fmt_bt(v: float | None) -> str:
+            return f"{v:.3f}" if v is not None else "—"
+
+        for hostname in hostnames:
+            d = boot_data.get(hostname)
+            if not d or not d.get("available"):
+                bth_rows.append([hostname, "—", "—", "—", "—", "—", "—"])
+                continue
+            total_str = _fmt_bt(d.get("total_sec"))
+            if hostname == fastest_boot:
+                total_str = f"**{total_str}**"
+            bth_rows.append(
+                [
+                    hostname,
+                    _fmt_bt(d.get("firmware_sec")),
+                    _fmt_bt(d.get("loader_sec")),
+                    _fmt_bt(d.get("kernel_sec")),
+                    _fmt_bt(d.get("userspace_sec")),
+                    _fmt_bt(d.get("graphical_sec")),
+                    total_str,
+                ]
+            )
+        lines.append(_md_table(bth_headers, bth_rows))
+        lines.append("")
+
+        any_services = any(d.get("top_services") for d in boot_data.values() if d)
+        if any_services:
+            lines.append("### Slowest Services at Boot")
+            lines.append("")
+            for hostname in hostnames:
+                d = boot_data.get(hostname)
+                services = (d.get("top_services") or []) if d else []
+                if not services:
+                    continue
+                lines.append(f"**{hostname}**")
+                lines.append("")
+                svc_rows = [[s["name"], f"{s['time_sec']:.3f}"] for s in services[:10]]
+                lines.append(_md_table(["Service", "Time (s)"], svc_rows))
+                lines.append("")
+
     return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
 # HTML report
 # ---------------------------------------------------------------------------
 
@@ -1181,6 +1241,81 @@ def generate_html(
       {"".join(bt_sections)}
     </section>"""
 
+    # --- Boot times HTML ---
+    boot_data_html = {h: hosts[h]["boot_times"] for h in hostnames if hosts[h].get("boot_times")}
+    boot_times_html = ""
+    if boot_data_html:
+        nav_items.append('<a href="#cat-boot-times">Boot Times</a>')
+        host_hdrs = "".join(f"<th>{h}</th>" for h in hostnames)
+        boot_totals_html = {
+            h: d["total_sec"]
+            for h, d in boot_data_html.items()
+            if d.get("available") and d.get("total_sec") is not None
+        }
+        fastest_boot_html = (
+            min(boot_totals_html, key=boot_totals_html.__getitem__) if boot_totals_html else None
+        )
+        phase_rows_html = ""
+        for phase_key, phase_label in [
+            ("firmware_sec", "Firmware"),
+            ("loader_sec", "Loader"),
+            ("kernel_sec", "Kernel"),
+            ("userspace_sec", "Userspace"),
+            ("graphical_sec", "Graphical"),
+            ("total_sec", "Total"),
+        ]:
+            cells = ""
+            phase_vals = {
+                h: d[phase_key]
+                for h, d in boot_data_html.items()
+                if d.get("available") and d.get(phase_key) is not None
+            }
+            fastest_phase = (
+                min(phase_vals, key=phase_vals.__getitem__) if phase_vals else None
+            )
+            for hostname in hostnames:
+                d = boot_data_html.get(hostname)
+                val = d.get(phase_key) if d and d.get("available") else None
+                if val is None:
+                    cells += "<td>—</td>"
+                elif hostname == fastest_phase:
+                    cells += f'<td><strong>{val:.3f}</strong></td>'
+                else:
+                    cells += f"<td>{val:.3f}</td>"
+            phase_rows_html += f"<tr><td>{phase_label}</td>{cells}</tr>\n"
+
+        # Slowest services tables per host
+        svc_sections_html = ""
+        for hostname in hostnames:
+            d = boot_data_html.get(hostname)
+            services = (d.get("top_services") or []) if d and d.get("available") else []
+            if not services:
+                continue
+            svc_rows_html = "".join(
+                f"<tr><td><code>{s['name']}</code></td><td>{s['time_sec']:.3f}</td></tr>"
+                for s in services[:10]
+            )
+            svc_sections_html += f"""
+        <h3>{hostname}</h3>
+        <table>
+          <thead><tr><th>Service</th><th>Time (s)</th></tr></thead>
+          <tbody>{svc_rows_html}</tbody>
+        </table>"""
+
+        boot_times_html = f"""
+    <section id="cat-boot-times">
+      <h2>System Boot Times</h2>
+      <p>Measured via <code>systemd-analyze</code> at benchmark time.
+         Times in seconds. <strong>Lowest</strong> per row is bold.
+         Hosts without systemd show —.</p>
+      <table>
+        <thead><tr><th>Phase</th>{host_hdrs}</tr></thead>
+        <tbody>
+{phase_rows_html}        </tbody>
+      </table>
+      {"<h3>Slowest Services at Boot</h3>" + svc_sections_html if svc_sections_html else ""}
+    </section>"""
+
     nav_html = " · ".join(nav_items)
 
     charts_js = "\n".join(chart_blocks)
@@ -1403,6 +1538,8 @@ def generate_html(
   {codec_avail_html}
 
   {build_times_html}
+
+  {boot_times_html}
 
   </div><!-- #main-content -->
 

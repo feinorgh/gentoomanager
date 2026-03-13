@@ -54,3 +54,7 @@ weights:
   # Excluded — Gentoo build times are wall-clock data, not hyperfine results,
   # and are already influenced by all other categories.
   gentoo_build_times:  0.0
+
+  # Excluded — boot time depends heavily on enabled services and init config,
+  # not just raw hardware performance.
+  boot_time:           0.0
