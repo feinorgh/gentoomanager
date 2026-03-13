@@ -60,6 +60,9 @@ Benchmark control:
   --cpu-affinity RANGE        Pin benchmarks to CPU range (e.g. 0-3)
   --compress-size MB          Compression test data size in MB (default: 64)
   --ffmpeg-duration SEC       FFmpeg test clip duration in seconds (default: 10)
+  --extended-codecs           Include non-standard FFmpeg codecs (slow/experimental/
+                              legacy: libaom-av1, librav1e, theora, xvid, mpeg2,
+                              mjpeg, ac3, eac3, wavpack, alac)
 
 Flags:
   --include-windows           Also run benchmarks on Windows VMs
@@ -94,6 +97,9 @@ Examples:
 
   # Including Windows VMs
   $(basename "$0") --include-windows
+
+  # Run with extended (slow/legacy) FFmpeg codecs
+  $(basename "$0") --category ffmpeg --extended-codecs
 
   # Pass extra ansible flags
   $(basename "$0") -- --tags setup --skip-tags disk
@@ -150,6 +156,8 @@ while [[ $# -gt 0 ]]; do
         --ffmpeg-duration)
             [[ "$2" =~ ^[0-9]+$ ]] || die "--ffmpeg-duration requires a positive integer"
             FFMPEG_DURATION="$2"; shift 2 ;;
+        --extended-codecs)
+            EXTENDED_CODECS=1; shift ;;
         --include-windows)
             INCLUDE_WINDOWS=1; shift ;;
         --no-ram-scale)
@@ -223,6 +231,7 @@ fi
 [[ -n "${CPU_AFFINITY}" ]]   && EVARS[run_benchmarks_cpu_affinity]="${CPU_AFFINITY}"
 [[ -n "${COMPRESS_SIZE}" ]]  && EVARS[run_benchmarks_compress_size_mb]="${COMPRESS_SIZE}"
 [[ -n "${FFMPEG_DURATION}" ]] && EVARS[run_benchmarks_ffmpeg_duration_sec]="${FFMPEG_DURATION}"
+[[ "${EXTENDED_CODECS}" -eq 1 ]]  && EVARS[run_benchmarks_ffmpeg_extended_codecs]="true"
 [[ "${INCLUDE_WINDOWS}" -eq 1 ]] && EVARS[run_benchmarks_include_windows]="true"
 [[ "${NO_RAM_SCALE}" -eq 1 ]]    && EVARS[run_benchmarks_scale_ram]="false"
 [[ "${SKIP_COMPLETE}" -eq 1 ]]   && EVARS[run_benchmarks_skip_complete]="true"
