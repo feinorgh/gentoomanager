@@ -17,21 +17,21 @@ run_benchmarks_large_compile_warmup: 1
 # This eliminates per-benchmark GIMP startup overhead entirely.
 #
 # A prescaled subset of the Kodak corpus is used so each per-run operation
-# completes quickly while still covering diverse natural images.
+# GIMP startup benchmark: measures cold-start time (GEGL/BABL init, plugin
+# loading, Script-Fu interpreter startup) via hyperfine.  This is the most
+# consistent metric across GIMP 2.x and GIMP 3.x.
 #
-# run_benchmarks_gimp_runs          — measured iterations per operation
-# run_benchmarks_gimp_warmup        — discarded warmup iterations per operation
-# run_benchmarks_gimp_image_count   — images per operation run (max 24,
-#                                     evenly spaced across the 24-image corpus)
-# run_benchmarks_gimp_prescale_pct  — resize percentage applied to source
-#                                     images before benchmarking (100 = full size)
-# run_benchmarks_gimp_timeout_sec   — wall-clock timeout for the entire GIMP
-#                                     session (all ops + warmup)
-run_benchmarks_gimp_runs: 5
-run_benchmarks_gimp_warmup: 2
-run_benchmarks_gimp_image_count: 8
-run_benchmarks_gimp_prescale_pct: 50
+# run_benchmarks_gimp_runs          — measured iterations (hyperfine --runs)
+# run_benchmarks_gimp_warmup        — discarded warmup iterations
+# run_benchmarks_gimp_timeout_sec   — wall-clock timeout for the entire run
+# run_benchmarks_gimp_min_ram_mb    — minimum RAM required to run GIMP 3.x;
+#                                     hosts below this threshold are skipped
+#                                     (GIMP 3.x GEGL init is too slow on low
+#                                     RAM VMs — startup alone exceeds 5 min)
+run_benchmarks_gimp_runs: 3
+run_benchmarks_gimp_warmup: 1
 run_benchmarks_gimp_timeout_sec: 600
+run_benchmarks_gimp_min_ram_mb: 4096
 
 # CPU core(s) to pin benchmark processes to via taskset (empty string = no pinning)
 # Example: "0-3" pins to cores 0-3; leave empty for no affinity constraint

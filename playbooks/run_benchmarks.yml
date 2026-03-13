@@ -67,23 +67,9 @@
         _reachable_check is failed or
         _reachable_check.rc | default(1) != 0
 
-    - name: Gather OS and hardware facts
-      ansible.builtin.setup:
-        gather_subset:
-          - "!all"
-          - "!min"
-          - distribution
-          - os_family
-          - hardware
-
-    - name: Set effective work directory
-      ansible.builtin.set_fact:
-        run_benchmarks_effective_work_dir: >-
-          {{ run_benchmarks_work_dir_win
-             if (ansible_os_family | default('') == 'Windows')
-             else run_benchmarks_work_dir }}
-
     # ── Skip host if results are already complete (optional) ────────────
+    # These tasks only read local files on the controller — no remote facts
+    # are needed, so they can safely run before RAM scaling and fact gathering.
     - name: Check existing result files for this host on controller
       ansible.builtin.find:
         paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
@@ -161,117 +147,12 @@
         - run_benchmarks_skip_complete | default(false) | bool
         - _results_complete | default(false) | bool
 
-    # ── Sanity check: tools, sudo, disk space ───────────────────────────
-    - name: Run pre-flight sanity check
-      ansible.builtin.include_tasks:
-        file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/sanity_check.yml"
-      when: ansible_os_family | default('') != 'Windows'
-
-    # ── Hypervisor health check ─────────────────────────────────────────
-    - name: Collect hypervisor status
-      ansible.builtin.shell:
-        cmd: |
-          set -eo pipefail
-          echo "::load::$(cat /proc/loadavg)"
-          echo "::cpus::$(nproc)"
-          echo "::mem::$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{print t,a}' /proc/meminfo)"
-          echo "::swap::$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{print t,f}' /proc/meminfo)"
-          echo "::procs::$(ps -e --no-headers | wc -l)"
-      delegate_to: "{{ hypervisor_host }}"
-      register: _hv_status_raw
-      changed_when: false
-      check_mode: false
-      when: hypervisor_host != ''
-
-    - name: Parse hypervisor status
-      ansible.builtin.set_fact:
-        _hv_load_1m: >-
-          {{ (_hv_status_raw.stdout_lines
-              | select('match', '^::load::')
-              | first
-              | regex_replace('^::load::', '')
-             ).split()[0] | float }}
-        _hv_cpus: >-
-          {{ _hv_status_raw.stdout_lines
-             | select('match', '^::cpus::')
-             | first
-             | regex_replace('^::cpus::', '')
-             | int }}
-        _hv_mem_total_mb: >-
-          {{ ((_hv_status_raw.stdout_lines
-               | select('match', '^::mem::')
-               | first
-               | regex_replace('^::mem::', '')
-              ).split()[0] | int / 1024) | round(0) | int }}
-        _hv_mem_avail_mb: >-
-          {{ ((_hv_status_raw.stdout_lines
-               | select('match', '^::mem::')
-               | first
-               | regex_replace('^::mem::', '')
-              ).split()[1] | int / 1024) | round(0) | int }}
-        _hv_swap_total_kb: >-
-          {{ (_hv_status_raw.stdout_lines
-              | select('match', '^::swap::')
-              | first
-              | regex_replace('^::swap::', '')
-             ).split()[0] | int }}
-        _hv_swap_free_kb: >-
-          {{ (_hv_status_raw.stdout_lines
-              | select('match', '^::swap::')
-              | first
-              | regex_replace('^::swap::', '')
-             ).split()[1] | int }}
-        _hv_procs: >-
-          {{ _hv_status_raw.stdout_lines
-             | select('match', '^::procs::')
-             | first
-             | regex_replace('^::procs::', '')
-             | int }}
-      when: hypervisor_host != '' and _hv_status_raw is not skipped
-
-    - name: Compute hypervisor health metrics
-      ansible.builtin.set_fact:
-        _hv_load_per_cpu: >-
-          {{ (_hv_load_1m | float / (_hv_cpus | int)) | round(2) }}
-        _hv_swap_used_pct: >-
-          {{ (100 - (_hv_swap_free_kb | int * 100 / (_hv_swap_total_kb | int)))
-             | round(1)
-             if (_hv_swap_total_kb | int > 0)
-             else 0 }}
-      when: hypervisor_host != '' and _hv_status_raw is not skipped
-
-    - name: Log hypervisor status
-      ansible.builtin.debug:
-        msg: >-
-          Hypervisor {{ hypervisor_host }}:
-          load={{ _hv_load_1m }} ({{ _hv_load_per_cpu }}/cpu),
-          mem={{ _hv_mem_avail_mb }}MB free / {{ _hv_mem_total_mb }}MB,
-          swap={{ _hv_swap_used_pct }}% used,
-          procs={{ _hv_procs }}
-      when: hypervisor_host != '' and _hv_status_raw is not skipped
-
-    - name: Abort — hypervisor too loaded
-      ansible.builtin.fail:
-        msg: >-
-          Hypervisor {{ hypervisor_host }} is overloaded — skipping
-          {{ inventory_hostname }}.
-          Load/CPU={{ _hv_load_per_cpu }}
-          (threshold={{ run_benchmarks_max_load_factor }}),
-          free mem={{ _hv_mem_avail_mb }}MB
-          (threshold={{ run_benchmarks_min_free_mem_mb }}MB),
-          swap used={{ _hv_swap_used_pct }}%
-          (threshold={{ run_benchmarks_max_swap_used_pct }}%).
-      when: >-
-        hypervisor_host != '' and _hv_status_raw is not skipped and
-        ((_hv_load_per_cpu | float > run_benchmarks_max_load_factor | float) or
-         (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int) or
-         ((_hv_swap_used_pct | float > run_benchmarks_max_swap_used_pct | float) and
-          (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int * 2)))
-
   tasks:
     - name: Benchmark with RAM scaling and automatic restore
       block:
-        # ── Scale RAM up ──────────────────────────────────────────────
+        # ── 1. Scale RAM up — before any remote fact gathering ────────
+        # RAM is scaled first so that ansible_memtotal_mb (and any other
+        # hardware facts gathered below) reflect the VM's full allocation.
         - name: Read current and max VM memory
           ansible.builtin.shell:
             cmd: |
@@ -305,12 +186,137 @@
             run_benchmarks_original_ram_kib is defined and
             run_benchmarks_original_ram_kib != run_benchmarks_max_ram_kib
 
-        # ── Run benchmarks ────────────────────────────────────────────
+        # ── 2. Gather facts — after RAM scaling ───────────────────────
+        # Hardware facts (ansible_memtotal_mb etc.) now reflect scaled RAM.
+        - name: Gather OS and hardware facts
+          ansible.builtin.setup:
+            gather_subset:
+              - "!all"
+              - "!min"
+              - distribution
+              - os_family
+              - hardware
+
+        - name: Set effective work directory
+          ansible.builtin.set_fact:
+            run_benchmarks_effective_work_dir: >-
+              {{ run_benchmarks_work_dir_win
+                 if (ansible_os_family | default('') == 'Windows')
+                 else run_benchmarks_work_dir }}
+
+        # ── 3. Sanity check: tools, sudo, disk space ──────────────────
+        - name: Run pre-flight sanity check
+          ansible.builtin.include_tasks:
+            file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/sanity_check.yml"
+          when: ansible_os_family | default('') != 'Windows'
+
+        # ── 4. Hypervisor health check ────────────────────────────────
+        - name: Collect hypervisor status
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              echo "::load::$(cat /proc/loadavg)"
+              echo "::cpus::$(nproc)"
+              echo "::mem::$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{print t,a}' /proc/meminfo)"
+              echo "::swap::$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{print t,f}' /proc/meminfo)"
+              echo "::procs::$(ps -e --no-headers | wc -l)"
+          delegate_to: "{{ hypervisor_host }}"
+          register: _hv_status_raw
+          changed_when: false
+          check_mode: false
+          when: hypervisor_host != ''
+
+        - name: Parse hypervisor status
+          ansible.builtin.set_fact:
+            _hv_load_1m: >-
+              {{ (_hv_status_raw.stdout_lines
+                  | select('match', '^::load::')
+                  | first
+                  | regex_replace('^::load::', '')
+                 ).split()[0] | float }}
+            _hv_cpus: >-
+              {{ _hv_status_raw.stdout_lines
+                 | select('match', '^::cpus::')
+                 | first
+                 | regex_replace('^::cpus::', '')
+                 | int }}
+            _hv_mem_total_mb: >-
+              {{ ((_hv_status_raw.stdout_lines
+                   | select('match', '^::mem::')
+                   | first
+                   | regex_replace('^::mem::', '')
+                  ).split()[0] | int / 1024) | round(0) | int }}
+            _hv_mem_avail_mb: >-
+              {{ ((_hv_status_raw.stdout_lines
+                   | select('match', '^::mem::')
+                   | first
+                   | regex_replace('^::mem::', '')
+                  ).split()[1] | int / 1024) | round(0) | int }}
+            _hv_swap_total_kb: >-
+              {{ (_hv_status_raw.stdout_lines
+                  | select('match', '^::swap::')
+                  | first
+                  | regex_replace('^::swap::', '')
+                 ).split()[0] | int }}
+            _hv_swap_free_kb: >-
+              {{ (_hv_status_raw.stdout_lines
+                  | select('match', '^::swap::')
+                  | first
+                  | regex_replace('^::swap::', '')
+                 ).split()[1] | int }}
+            _hv_procs: >-
+              {{ _hv_status_raw.stdout_lines
+                 | select('match', '^::procs::')
+                 | first
+                 | regex_replace('^::procs::', '')
+                 | int }}
+          when: hypervisor_host != '' and _hv_status_raw is not skipped
+
+        - name: Compute hypervisor health metrics
+          ansible.builtin.set_fact:
+            _hv_load_per_cpu: >-
+              {{ (_hv_load_1m | float / (_hv_cpus | int)) | round(2) }}
+            _hv_swap_used_pct: >-
+              {{ (100 - (_hv_swap_free_kb | int * 100 / (_hv_swap_total_kb | int)))
+                 | round(1)
+                 if (_hv_swap_total_kb | int > 0)
+                 else 0 }}
+          when: hypervisor_host != '' and _hv_status_raw is not skipped
+
+        - name: Log hypervisor status
+          ansible.builtin.debug:
+            msg: >-
+              Hypervisor {{ hypervisor_host }}:
+              load={{ _hv_load_1m }} ({{ _hv_load_per_cpu }}/cpu),
+              mem={{ _hv_mem_avail_mb }}MB free / {{ _hv_mem_total_mb }}MB,
+              swap={{ _hv_swap_used_pct }}% used,
+              procs={{ _hv_procs }}
+          when: hypervisor_host != '' and _hv_status_raw is not skipped
+
+        - name: Abort — hypervisor too loaded
+          ansible.builtin.fail:
+            msg: >-
+              Hypervisor {{ hypervisor_host }} is overloaded — skipping
+              {{ inventory_hostname }}.
+              Load/CPU={{ _hv_load_per_cpu }}
+              (threshold={{ run_benchmarks_max_load_factor }}),
+              free mem={{ _hv_mem_avail_mb }}MB
+              (threshold={{ run_benchmarks_min_free_mem_mb }}MB),
+              swap used={{ _hv_swap_used_pct }}%
+              (threshold={{ run_benchmarks_max_swap_used_pct }}%).
+          when: >-
+            hypervisor_host != '' and _hv_status_raw is not skipped and
+            ((_hv_load_per_cpu | float > run_benchmarks_max_load_factor | float) or
+             (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int) or
+             ((_hv_swap_used_pct | float > run_benchmarks_max_swap_used_pct | float) and
+              (_hv_mem_avail_mb | int < run_benchmarks_min_free_mem_mb | int * 2)))
+
+        # ── 5. Run benchmarks ─────────────────────────────────────────
         - name: Run benchmark suite
           ansible.builtin.include_role:
             name: run_benchmarks
 
-        # ── Fetch results ─────────────────────────────────────────────
+        # ── 6. Fetch results ──────────────────────────────────────────
         - name: Find all benchmark result files (Unix)
           ansible.builtin.find:
             paths: "{{ run_benchmarks_effective_work_dir }}"
