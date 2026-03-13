@@ -28,7 +28,7 @@
   when: run_benchmarks_gimp_check.rc != 0
 
 - name: Run GIMP startup benchmark
-  ansible.builtin.shell:
+  ansible.builtin.shell: # noqa: command-instead-of-shell
     cmd: >-
       {{ run_benchmarks_hyperfine_bin }}
       --warmup {{ run_benchmarks_gimp_warmup }}
