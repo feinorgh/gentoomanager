@@ -1,0 +1,10 @@
+inventory_generator.py shebang
+scripts/benchmark_dashboard.py shebang
+scripts/collapse_use_flags.py shebang
+scripts/download_benchmark_fixtures.py shebang
+scripts/generate_benchmark_images.py shebang
+scripts/generate_benchmark_report.py shebang
+scripts/generate_multifile_bench.py shebang
+scripts/shellcheck_yaml_blocks.py shebang
+roles/run_benchmarks/files/gen_sortdata.py shebang
+roles/run_benchmarks/files/generate_multifile_bench.py shebang

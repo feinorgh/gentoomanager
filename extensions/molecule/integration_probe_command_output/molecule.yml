@@ -12,7 +12,7 @@ provisioner:
   env:
     # MOLECULE_PROJECT_DIRECTORY is the repo root; point ansible at the
     # repo's ansible.cfg so collections_path resolves local.gentoomanager.
-    ANSIBLE_CONFIG: "${MOLECULE_PROJECT_DIRECTORY}/ansible.cfg"
+    ANSIBLE_CONFIG: "${MOLECULE_SCENARIO_DIRECTORY}/../../../ansible.cfg"
 scenario:
   test_sequence:
     - destroy
