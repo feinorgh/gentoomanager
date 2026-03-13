@@ -61,7 +61,7 @@ Benchmark control:
   --compress-size MB          Compression test data size in MB (default: 64)
   --ffmpeg-duration SEC       FFmpeg test clip duration in seconds (default: 10)
   --extended-codecs           Include non-standard FFmpeg codecs (slow/experimental/
-                              legacy: libaom-av1, librav1e, theora, xvid, mpeg2,
+                              legacy: vp8, libaom-av1, librav1e, theora, xvid, mpeg2,
                               mjpeg, ac3, eac3, wavpack, alac)
 
 Flags:

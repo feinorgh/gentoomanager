@@ -213,7 +213,9 @@ Benchmark control:
   --compress-size MB          Test data size for compression (default: 64)
   --ffmpeg-duration SEC       Test clip duration for FFmpeg (default: 10)
   --extended-codecs           Include non-standard FFmpeg codecs (slow,
-                              experimental, and legacy; see FFmpeg section)
+                              experimental, and legacy; adds vp8, libaom-av1,
+                              librav1e, theora, xvid, mpeg2, mjpeg, ac3, eac3,
+                              wavpack, alac — see FFmpeg section)
 
 Flags:
   --include-windows           Also run benchmarks on Windows VMs
@@ -353,6 +355,13 @@ deleted and regenerated at the start of the next benchmark run.
 The `xz-compress` benchmark passes `-T0` to enable multi-threaded compression,
 exercising multi-core performance in addition to per-core IPC.
 
+The compression category uses its own run/warmup defaults
+(`run_benchmarks_compression_runs=3`, `run_benchmarks_compression_warmup=1`)
+rather than the global values, since bzip2 and xz are deterministic
+single-threaded operations with negligible run-to-run variance — three
+measured runs is statistically sufficient and keeps this category under
+~5 minutes on typical hardware.
+
 The [Canterbury corpus](https://corpus.canterbury.ac.nz/) is also downloaded
 to `benchmarks/fixtures/cantrbry/` for ad-hoc comparison with published
 results, but is not used in the automated benchmark runs.
@@ -451,6 +460,11 @@ configurations:
 | `-O2`        | 12–25 s                  |
 | `-O3`        | 20–35 s                  |
 
+SQLite and multi-file compile benchmarks use `run_benchmarks_large_compile_runs`
+(default `2`) and `run_benchmarks_large_compile_warmup` (default `1`) rather
+than the global run count, since compilation is highly deterministic and 2
+measured runs + 1 warmup is sufficient for accurate timing.
+
 The fixture file `benchmarks/fixtures/sqlite3.c` is downloaded by
 `scripts/download_benchmark_fixtures.py`.
 
@@ -537,7 +551,6 @@ depending on installed libraries and Gentoo USE flags.
 |-----------------|------------|-------------------------|
 | h264-encode     | libx264    | preset medium, CRF 23   |
 | h265-encode     | libx265    | preset medium, CRF 28   |
-| vp8-encode      | libvpx     | CRF 10, 1M bitrate, deadline=realtime |
 | vp9-encode      | libvpx-vp9 | CRF 30, deadline=realtime, cpu-used 8 |
 | av1-svt-encode  | libsvtav1  | CRF 35, preset 8        |
 
@@ -546,6 +559,7 @@ depending on installed libraries and Gentoo USE flags.
 
 | Benchmark       | Library    | Notes                   |
 |-----------------|------------|-------------------------|
+| vp8-encode      | libvpx     | Superseded by VP9/AV1; ~65 s/run on typical hardware |
 | av1-aom-encode  | libaom-av1 | Reference AV1 encoder; very slow (research use) |
 | av1-rav1e-encode| librav1e   | Experimental AV1 encoder |
 | theora-encode   | libtheora  | Legacy Ogg/Theora       |
@@ -1020,8 +1034,10 @@ or in inventory.
 |----------|---------|-------------|
 | `run_benchmarks_runs` | `5` | Hyperfine iterations per benchmark |
 | `run_benchmarks_warmup` | `3` | Warmup runs before measurement |
-| `run_benchmarks_large_compile_runs` | `3` | Hyperfine iterations for large-compile benchmarks (SQLite amalgamation, multi-file) |
+| `run_benchmarks_large_compile_runs` | `2` | Hyperfine iterations for large-compile benchmarks (SQLite amalgamation, multi-file) |
 | `run_benchmarks_large_compile_warmup` | `1` | Warmup runs for large-compile benchmarks |
+| `run_benchmarks_compression_runs` | `3` | Hyperfine iterations for compression benchmarks (bzip2/xz are deterministic; 3 runs is sufficient) |
+| `run_benchmarks_compression_warmup` | `1` | Warmup runs for compression benchmarks |
 | `run_benchmarks_categories` | `[]` (all) | Categories to run |
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |

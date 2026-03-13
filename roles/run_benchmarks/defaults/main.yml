@@ -8,8 +8,15 @@ run_benchmarks_warmup: 3
 # Runs and warmup for large-compile benchmarks (SQLite amalgamation,
 # multi-file project).  Fewer runs keep wall-clock time manageable since
 # each compile takes 5–35 s depending on optimisation level and host speed.
-run_benchmarks_large_compile_runs: 3
+run_benchmarks_large_compile_runs: 2
 run_benchmarks_large_compile_warmup: 1
+
+# Runs and warmup for compression benchmarks.  bzip2 and xz are deterministic
+# single-threaded CPU operations with negligible run-to-run variance; 3 runs
+# + 1 warmup is statistically sufficient and roughly halves wall-clock time
+# compared with the global defaults (5 runs + 3 warmup).
+run_benchmarks_compression_runs: 3
+run_benchmarks_compression_warmup: 1
 
 # GIMP benchmark tuning.
 # GIMP is launched once; all four operations (load, blur, unsharp, pipeline)
@@ -102,10 +109,11 @@ run_benchmarks_ffmpeg_audio_warmup: 1
 run_benchmarks_ffmpeg_include_libaom: false
 # Include non-standard FFmpeg codecs: slow, experimental, legacy, or niche.
 # When false (default), only widely-used production codecs are benchmarked:
-#   Video encode/decode: h264, h265, vp8, vp9, svt-av1
+#   Video encode/decode: h264, h265, vp9, svt-av1
 #   Audio encode/decode: aac, opus, mp3, flac, vorbis
 # When true, adds:
-#   Video: libaom-av1 (reference/research, very slow), librav1e (experimental),
+#   Video: vp8 (superseded by vp9/av1, very slow at quality presets),
+#          libaom-av1 (reference/research, very slow), librav1e (experimental),
 #          theora (legacy Ogg), xvid (legacy MPEG-4), mpeg2 (legacy), mjpeg (niche)
 #   Audio: ac3/eac3 (Dolby, niche on Linux), wavpack (lossless), alac (Apple lossless)
 # Enable with: -e "run_benchmarks_ffmpeg_extended_codecs=true"

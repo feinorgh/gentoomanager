@@ -110,14 +110,16 @@
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null /dev/null)")
       has libx265    && CMDS+=(--command-name "h265-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null /dev/null)")
-      # VP8: deadline=realtime for consistent throughput measurement (good/best is 10x slower)
-      has libvpx     && CMDS+=(--command-name "vp8-encode"
-        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline realtime -an -f null /dev/null)")
       # VP9: cpu-used=8 (fastest) keeps runtime proportional to SVT-AV1
       has libvpx-vp9 && CMDS+=(--command-name "vp9-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -cpu-used 8 -an -f null /dev/null)")
       has libsvtav1  && CMDS+=(--command-name "av1-svt-encode"
         "$(wrap ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null /dev/null)")
+      {% if run_benchmarks_ffmpeg_extended_codecs %}
+      # Extended: VP8 — superseded by VP9/AV1; deadline=realtime still ~65 s/run on typical hosts
+      has libvpx     && CMDS+=(--command-name "vp8-encode"
+        "$(wrap ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline realtime -an -f null /dev/null)")
+      {% endif %}
       {% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
       # Extended: slow/research AV1 encoders
       has libaom-av1 && CMDS+=(--command-name "av1-aom-encode"
@@ -175,9 +177,11 @@
 
       if has libx264;    then ffmpeg -y -i test_raw.avi -c:v libx264 -preset ultrafast -crf 18 -an test_h264.mp4           2>/dev/null || true; fi
       if has libx265;    then ffmpeg -y -i test_raw.avi -c:v libx265 -preset ultrafast -crf 22 -an test_h265.mp4           2>/dev/null || true; fi
-      if has libvpx;     then ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an test_vp8.webm  2>/dev/null || true; fi
       if has libvpx-vp9; then ffmpeg -y -i test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -an test_vp9.webm 2>/dev/null || true; fi
       if has libsvtav1;  then ffmpeg -y -i test_raw.avi -c:v libsvtav1 -crf 45 -preset 12 -an test_av1_svt.mp4            2>/dev/null || true; fi
+      {% if run_benchmarks_ffmpeg_extended_codecs %}
+      if has libvpx;     then ffmpeg -y -i test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an test_vp8.webm  2>/dev/null || true; fi
+      {% endif %}
       {% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
       if has libaom-av1; then ffmpeg -y -i test_raw.avi -c:v libaom-av1 -crf 50 -cpu-used 8 -row-mt 1 -an test_av1_aom.mp4 2>/dev/null || true; fi
       {% endif %}
