@@ -24,14 +24,9 @@ run_benchmarks_large_compile_warmup: 1
 # run_benchmarks_gimp_runs          — measured iterations (hyperfine --runs)
 # run_benchmarks_gimp_warmup        — discarded warmup iterations
 # run_benchmarks_gimp_timeout_sec   — wall-clock timeout for the entire run
-# run_benchmarks_gimp_min_ram_mb    — minimum RAM required to run GIMP 3.x;
-#                                     hosts below this threshold are skipped
-#                                     (GIMP 3.x GEGL init is too slow on low
-#                                     RAM VMs — startup alone exceeds 5 min)
 run_benchmarks_gimp_runs: 3
 run_benchmarks_gimp_warmup: 1
 run_benchmarks_gimp_timeout_sec: 600
-run_benchmarks_gimp_min_ram_mb: 4096
 
 # CPU core(s) to pin benchmark processes to via taskset (empty string = no pinning)
 # Example: "0-3" pins to cores 0-3; leave empty for no affinity constraint

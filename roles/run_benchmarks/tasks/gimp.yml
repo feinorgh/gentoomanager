@@ -1,23 +1,14 @@
 ---
 # GIMP benchmarks — cold-start timing via hyperfine.
 #
-# Measures how long GIMP takes to start up, initialise, and exit cleanly.
-# This is intentionally the simplest possible GIMP benchmark:
+# Measures how long GIMP takes to start up, initialise, and exit cleanly:
 #
 #   hyperfine "gimp -i -n --no-data --no-fonts -b '(gimp-quit 0)'"
-#
-# Rationale: GIMP 3.x uses GEGL/BABL for all image operations and has
-# substantially higher startup and per-operation cost than GIMP 2.x.  On
-# constrained VMs (< 4 GB RAM), GIMP 3.x startup alone can exceed 5 minutes
-# per iteration — making even a startup-only benchmark impractical.  We
-# skip GIMP 3.x on hosts with less than run_benchmarks_gimp_min_ram_mb RAM
-# and emit an informational message so the operator knows why.
 #
 # Tuning variables (see defaults/main.yml):
 #   run_benchmarks_gimp_runs          (default 3)
 #   run_benchmarks_gimp_warmup        (default 1)
 #   run_benchmarks_gimp_timeout_sec   (default 600)
-#   run_benchmarks_gimp_min_ram_mb    (default 4096)
 
 - name: Check GIMP availability
   ansible.builtin.command:
@@ -36,29 +27,6 @@
       -i inventory_generator.py --limit {{ inventory_hostname }}
   when: run_benchmarks_gimp_check.rc != 0
 
-- name: Parse GIMP major version
-  ansible.builtin.set_fact:
-    run_benchmarks_gimp_major: >-
-      {{ run_benchmarks_gimp_check.stdout
-         | regex_search('(\d+)\.\d+', '\1')
-         | default(['2'])
-         | first
-         | int }}
-  when: run_benchmarks_gimp_check.rc == 0
-
-- name: Warn — GIMP 3.x skipped on low-RAM host
-  ansible.builtin.debug:
-    msg: >-
-      [SKIP] {{ inventory_hostname }}: GIMP {{ run_benchmarks_gimp_major }}.x
-      detected with only {{ ansible_memtotal_mb }} MB RAM (minimum
-      {{ run_benchmarks_gimp_min_ram_mb }} MB required).  GIMP 3.x initialises
-      GEGL/BABL at startup and can take >5 min per run on constrained VMs.
-      Skipping gimp benchmark to avoid timeout.
-  when:
-    - run_benchmarks_gimp_check.rc == 0
-    - run_benchmarks_gimp_major | int >= 3
-    - ansible_memtotal_mb | int < run_benchmarks_gimp_min_ram_mb | int
-
 - name: Run GIMP startup benchmark
   ansible.builtin.shell:
     cmd: >-
@@ -72,10 +40,7 @@
   failed_when: false
   async: "{{ run_benchmarks_gimp_timeout_sec }}"
   poll: 15
-  when:
-    - run_benchmarks_gimp_check.rc == 0
-    - (run_benchmarks_gimp_major | int < 3)
-      or (ansible_memtotal_mb | int >= run_benchmarks_gimp_min_ram_mb | int)
+  when: run_benchmarks_gimp_check.rc == 0
 
 - name: Warn on gimp benchmark failure
   ansible.builtin.debug:
