@@ -379,8 +379,20 @@ def main():
                         hostvars["ansible_connection"] = "local"
                     inventory["_meta"]["hostvars"][bm_host] = hostvars
 
+        # Add a 'hypervisors' group containing all hypervisor hosts from hosts_list
+        if hosts_list:
+            inventory["hypervisors"] = {"hosts": []}
+            inventory["all"]["children"].append("hypervisors")
+            for hv in hosts_list:
+                if hv not in inventory["hypervisors"]["hosts"]:
+                    inventory["hypervisors"]["hosts"].append(hv)
+                if hv not in inventory["_meta"]["hostvars"]:
+                    hv_vars: dict = {"ansible_host": hv}
+                    if is_local_host(hv):
+                        hv_vars["ansible_connection"] = "local"
+                    inventory["_meta"]["hostvars"][hv] = hv_vars
+
         print(json.dumps(inventory, indent=2))
-        sys.exit(0)
 
     elif args.host:
         # Required for dynamic inventory script --host <hostname> fallback

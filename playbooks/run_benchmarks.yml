@@ -25,7 +25,7 @@
 
 # ── Play 1: Run benchmarks one VM at a time ──────────────────────────────
 - name: Run benchmarks on VMs (serial)
-  hosts: "{{ 'all' if (run_benchmarks_include_windows | default(false) | bool) else 'all:!mswindows:!win:!win11' }}"
+  hosts: "{{ 'all' if (run_benchmarks_include_windows | default(false) | bool) else 'all:!win:!win10:!win11' }}"
   gather_facts: false
   become: false
   serial: 1
@@ -53,7 +53,7 @@
 
   pre_tasks:
     - name: Check host is reachable
-      ansible.builtin.raw: echo ok
+      ansible.builtin.command: echo ok
       register: _reachable_check
       changed_when: false
       failed_when: false
@@ -394,7 +394,7 @@
 
   pre_tasks:
     - name: Check hypervisor is reachable
-      ansible.builtin.raw: echo ok
+      ansible.builtin.command: echo ok
       register: _hv_reachable
       changed_when: false
       failed_when: false
