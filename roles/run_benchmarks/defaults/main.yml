@@ -11,6 +11,28 @@ run_benchmarks_warmup: 3
 run_benchmarks_large_compile_runs: 3
 run_benchmarks_large_compile_warmup: 1
 
+# GIMP benchmark tuning.
+# GIMP is launched once; all four operations (load, blur, unsharp, pipeline)
+# are timed inside that single Script-Fu session using gettimeofday.
+# This eliminates per-benchmark GIMP startup overhead entirely.
+#
+# A prescaled subset of the Kodak corpus is used so each per-run operation
+# completes quickly while still covering diverse natural images.
+#
+# run_benchmarks_gimp_runs          — measured iterations per operation
+# run_benchmarks_gimp_warmup        — discarded warmup iterations per operation
+# run_benchmarks_gimp_image_count   — images per operation run (max 24,
+#                                     evenly spaced across the 24-image corpus)
+# run_benchmarks_gimp_prescale_pct  — resize percentage applied to source
+#                                     images before benchmarking (100 = full size)
+# run_benchmarks_gimp_timeout_sec   — wall-clock timeout for the entire GIMP
+#                                     session (all ops + warmup)
+run_benchmarks_gimp_runs: 5
+run_benchmarks_gimp_warmup: 2
+run_benchmarks_gimp_image_count: 8
+run_benchmarks_gimp_prescale_pct: 50
+run_benchmarks_gimp_timeout_sec: 600
+
 # CPU core(s) to pin benchmark processes to via taskset (empty string = no pinning)
 # Example: "0-3" pins to cores 0-3; leave empty for no affinity constraint
 run_benchmarks_cpu_affinity: ""

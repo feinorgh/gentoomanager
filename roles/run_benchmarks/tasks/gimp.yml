@@ -1,9 +1,23 @@
 ---
-# GIMP benchmarks — batch-mode image processing on the Kodak natural-scene corpus.
-# Uses Script-Fu batch mode (gimp -i) with --no-data --no-fonts to minimise
-# startup overhead that is unrelated to image-processing performance.
-# All 24 Kodak photographs (768×512 PNG) are processed per benchmark run so
-# the operation time is meaningful relative to GIMP startup.
+# GIMP benchmarks — single-session batch timing on a prescaled Kodak subset.
+#
+# Unlike other benchmark categories, GIMP is started exactly once.  All four
+# operations (load, blur, unsharp-mask, pipeline) are timed inside that single
+# Script-Fu session using (gettimeofday), which eliminates the 5–15 s per-
+# launch GIMP startup overhead that would otherwise dominate hyperfine runs.
+#
+# Workflow:
+#   1. Prescale a subset of the 24 Kodak PNGs to kodak_bench/ (ImageMagick).
+#   2. Deploy gimp_bench.scm — a self-contained Script-Fu library that times
+#      all operations and writes a hyperfine-compatible JSON result file.
+#   3. Run a single: gimp -i -n --no-data --no-fonts -b "(bench-all …)" -b …
+#
+# Tuning variables (see defaults/main.yml):
+#   run_benchmarks_gimp_runs          (default 5)
+#   run_benchmarks_gimp_warmup        (default 2)
+#   run_benchmarks_gimp_image_count   (default 8)
+#   run_benchmarks_gimp_prescale_pct  (default 50)
+#   run_benchmarks_gimp_timeout_sec   (default 600)
 
 - name: Check GIMP availability
   ansible.builtin.command:
@@ -38,54 +52,90 @@
     - not (run_benchmarks_gimp_kodak_stat.stat.exists | default(false))
     - (run_benchmarks_fixture_dir + '/kodak') is directory
 
-- name: Create GIMP Script-Fu benchmark library
+- name: Prepare prescaled GIMP benchmark image subset (kodak_bench/)
+  # Picks run_benchmarks_gimp_image_count images evenly spaced across the
+  # 24-image Kodak corpus, scales each to run_benchmarks_gimp_prescale_pct %
+  # using ImageMagick convert (falls back to cp when convert is unavailable),
+  # and writes them zero-indexed to kodak_bench/kodimNN.png.
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      WORK={{ run_benchmarks_work_dir }}
+      SRC=${WORK}/kodak
+      DST=${WORK}/kodak_bench
+      COUNT={{ run_benchmarks_gimp_image_count }}
+      SCALE={{ run_benchmarks_gimp_prescale_pct }}
+      mkdir -p "${DST}"
+      step=$(( 24 / COUNT ))
+      [ "${step}" -lt 1 ] && step=1
+      n=0
+      i=1
+      while [ "${n}" -lt "${COUNT}" ] && [ "${i}" -le 24 ]; do
+        src="${SRC}/kodim$(printf '%02d' "${i}").png"
+        dst="${DST}/kodim$(printf '%02d' "${n}").png"
+        if [ "${SCALE}" -ne 100 ] && command -v convert >/dev/null 2>&1; then
+          convert "${src}" -resize "${SCALE}%" "${dst}"
+        else
+          cp "${src}" "${dst}"
+        fi
+        n=$(( n + 1 ))
+        i=$(( i + step ))
+      done
+    creates: "{{ run_benchmarks_work_dir }}/kodak_bench/kodim00.png"
+  register: run_benchmarks_gimp_prep
+  when:
+    - run_benchmarks_gimp_check.rc == 0
+    - run_benchmarks_gimp_kodak_stat.stat.exists | default(false)
+
+- name: Deploy GIMP Script-Fu single-session benchmark library
   ansible.builtin.copy:
     dest: "{{ run_benchmarks_work_dir }}/gimp_bench.scm"
     mode: "0644"
     content: |
-      ; GIMP Script-Fu benchmark functions for the Kodak natural-scene corpus.
-      ; Loaded by gimp_bench_run.sh via: gimp -i -n --no-data --no-fonts
-      ;   -b '(load "PATH/gimp_bench.scm")'
-      ;   -b '(bench-OPERATION "KODAK_DIR")'
-      ;   -b '(gimp-quit 0)'
+      ; GIMP Script-Fu single-session benchmark library.
+      ;
+      ; Entry point:
+      ;   (bench-all KODAK-BENCH-DIR OUTPUT-JSON RUNS WARMUP COUNT)
+      ;
+      ; Runs four image-processing operations (load, blur, unsharp, pipeline)
+      ; RUNS times each (after WARMUP discarded warmup iterations) on a COUNT-
+      ; image zero-indexed subset in KODAK-BENCH-DIR.  Timing uses gettimeofday
+      ; so GIMP startup cost is paid exactly once for the whole benchmark suite.
+      ; Results are written as a hyperfine-compatible JSON file to OUTPUT-JSON.
 
-      (define KODAK-COUNT 24)
+      ; ── image iteration ────────────────────────────────────────────────────
 
       (define (kodak-path dir n)
         (string-append dir "/kodim"
                        (if (< n 10) "0" "")
                        (number->string n) ".png"))
 
-      ; Apply PROC to each (image, drawable) pair for all 24 Kodak images.
-      (define (for-each-kodak dir proc)
-        (let loop ((n 1))
-          (when (<= n KODAK-COUNT)
-            (let* ((f (kodak-path dir n))
-                   (image (car (gimp-file-load RUN-NONINTERACTIVE f f)))
-                   (drawable (car (gimp-image-get-active-drawable image))))
-              (proc image drawable)
-              (gimp-image-delete image))
+      (define (for-each-kodak dir count proc)
+        (let loop ((n 0))
+          (when (< n count)
+            (let* ((f  (kodak-path dir n))
+                   (im (car (gimp-file-load RUN-NONINTERACTIVE f f)))
+                   (dr (car (gimp-image-get-active-drawable im))))
+              (proc im dr)
+              (gimp-image-delete im))
             (loop (+ n 1)))))
 
-      ; Load all 24 PNGs and release — measures PNG decode overhead in GIMP
-      (define (bench-load dir)
-        (for-each-kodak dir (lambda (i d) #t)))
+      ; ── operations ─────────────────────────────────────────────────────────
 
-      ; Gaussian blur kernel 21×21 on all 24 images
-      (define (bench-blur dir)
-        (for-each-kodak dir
-          (lambda (i d)
-            (plug-in-gauss RUN-NONINTERACTIVE i d 21 21 0))))
+      (define (op-load dir count)
+        (for-each-kodak dir count (lambda (i d) #t)))
 
-      ; Unsharp mask (radius 3, strength 0.5, threshold 0) on all 24 images
-      (define (bench-unsharp dir)
-        (for-each-kodak dir
+      (define (op-blur dir count)
+        (for-each-kodak dir count
+          (lambda (i d) (plug-in-gauss RUN-NONINTERACTIVE i d 21 21 0))))
+
+      (define (op-unsharp dir count)
+        (for-each-kodak dir count
           (lambda (i d)
             (plug-in-unsharp-mask RUN-NONINTERACTIVE i d 3.0 0.5 0))))
 
-      ; Combined pipeline: brightness-contrast + blur + 2× cubic scale
-      (define (bench-pipeline dir)
-        (for-each-kodak dir
+      (define (op-pipeline dir count)
+        (for-each-kodak dir count
           (lambda (i d)
             (gimp-brightness-contrast d 5 20)
             (plug-in-gauss RUN-NONINTERACTIVE i d 5 5 0)
@@ -93,39 +143,130 @@
               (* 2 (car (gimp-image-width i)))
               (* 2 (car (gimp-image-height i)))
               INTERPOLATION-CUBIC))))
+
+      ; ── timing ─────────────────────────────────────────────────────────────
+
+      (define (elapsed-sec t0 t1)
+        (+ (- (car t1) (car t0))
+           (/ (- (cadr t1) (cadr t0)) 1000000.0)))
+
+      ; Run OP-THUNK WARMUP times (discarded), then RUNS times; return time list.
+      (define (run-timed op-thunk warmup runs)
+        (let warmup-loop ((w 0))
+          (when (< w warmup)
+            (op-thunk)
+            (warmup-loop (+ w 1))))
+        (let measure-loop ((times '()) (i 0))
+          (if (< i runs)
+            (let* ((t0 (gettimeofday))
+                   (_ (op-thunk))
+                   (t1 (gettimeofday)))
+              (measure-loop (cons (elapsed-sec t0 t1) times) (+ i 1)))
+            (reverse times))))
+
+      ; ── statistics ─────────────────────────────────────────────────────────
+
+      (define (list-mean lst)
+        (/ (apply + lst) (length lst)))
+
+      (define (list-stddev lst m)
+        (let ((n (length lst)))
+          (if (<= n 1)
+            0.0
+            (sqrt (/ (apply + (map (lambda (x) (let ((d (- x m))) (* d d))) lst))
+                     (- n 1))))))
+
+      (define (list-insert x sorted)
+        (cond ((null? sorted) (list x))
+              ((<= x (car sorted)) (cons x sorted))
+              (else (cons (car sorted) (list-insert x (cdr sorted))))))
+
+      (define (list-sort lst)
+        (let loop ((rem lst) (acc '()))
+          (if (null? rem)
+            acc
+            (loop (cdr rem) (list-insert (car rem) acc)))))
+
+      (define (list-median lst)
+        (let* ((s   (list-sort lst))
+               (n   (length s))
+               (mid (quotient n 2)))
+          (if (= (remainder n 2) 1)
+            (list-ref s mid)
+            (* 0.5 (+ (list-ref s (- mid 1)) (list-ref s mid))))))
+
+      ; ── JSON serialisation ─────────────────────────────────────────────────
+
+      (define (num->str x) (number->string (* 1.0 x)))
+
+      (define (times->json-array times)
+        (let loop ((ts times) (first #t) (acc "["))
+          (if (null? ts)
+            (string-append acc "]")
+            (loop (cdr ts)
+                  #f
+                  (string-append acc
+                                 (if first "" ", ")
+                                 (num->str (car ts)))))))
+
+      (define (result->json-block name times)
+        (let* ((m   (list-mean   times))
+               (s   (list-stddev times m))
+               (mn  (apply min   times))
+               (mx  (apply max   times))
+               (med (list-median times)))
+          (string-append
+            "    {\n"
+            "      \"command\": \"" name              "\",\n"
+            "      \"mean\": "      (num->str m)      ",\n"
+            "      \"stddev\": "    (num->str s)      ",\n"
+            "      \"median\": "    (num->str med)    ",\n"
+            "      \"user\": "      (num->str m)      ",\n"
+            "      \"system\": 0.0,\n"
+            "      \"min\": "       (num->str mn)     ",\n"
+            "      \"max\": "       (num->str mx)     ",\n"
+            "      \"times\": "     (times->json-array times) "\n"
+            "    }")))
+
+      ; ── entry point ────────────────────────────────────────────────────────
+
+      (define (bench-all kodak-dir output-json runs warmup count)
+        (let* ((ops
+                  (list
+                    (cons (string-append "gimp-load-"     (number->string count))
+                          (lambda () (op-load     kodak-dir count)))
+                    (cons (string-append "gimp-blur-"     (number->string count))
+                          (lambda () (op-blur     kodak-dir count)))
+                    (cons (string-append "gimp-unsharp-"  (number->string count))
+                          (lambda () (op-unsharp  kodak-dir count)))
+                    (cons (string-append "gimp-pipeline-" (number->string count))
+                          (lambda () (op-pipeline kodak-dir count)))))
+               (results
+                  (map (lambda (op)
+                         (cons (car op)
+                               (run-timed (cdr op) warmup runs)))
+                       ops))
+               (port (open-output-file output-json)))
+          (display "{\n  \"results\": [\n" port)
+          (let loop ((items results) (first #t))
+            (when (not (null? items))
+              (unless first (display ",\n" port))
+              (display (result->json-block (caar items) (cdar items)) port)
+              (loop (cdr items) #f)))
+          (display "\n  ]\n}\n" port)
+          (close-output-port port)))
   when: run_benchmarks_gimp_check.rc == 0
 
-- name: Create GIMP benchmark runner script
-  ansible.builtin.copy:
-    dest: "{{ run_benchmarks_work_dir }}/gimp_bench_run.sh"
-    mode: "0755"
-    content: |
-      #!/bin/sh
-      # Usage: gimp_bench_run.sh <work_dir> <operation>
-      # Operations: load  blur  unsharp  pipeline
-      WORK_DIR="$1"
-      OP="$2"
-      exec gimp -i -n --no-data --no-fonts \
-          -b "(load \"${WORK_DIR}/gimp_bench.scm\")" \
-          -b "(bench-${OP} \"${WORK_DIR}/kodak\")" \
-          -b '(gimp-quit 0)'
-  when: run_benchmarks_gimp_check.rc == 0
-
-- name: Run GIMP Kodak corpus benchmarks
+- name: Run GIMP benchmarks (single session, all operations)
   ansible.builtin.shell:
     cmd: |
       set -e
       WORK={{ run_benchmarks_work_dir }}
-      RUN=${WORK}/gimp_bench_run.sh
-      {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
-        --ignore-failure \
-        --export-json ${WORK}/gimp.json \
-        --command-name 'gimp-load-24'     "${RUN} ${WORK} load" \
-        --command-name 'gimp-blur-24'     "${RUN} ${WORK} blur" \
-        --command-name 'gimp-unsharp-24'  "${RUN} ${WORK} unsharp" \
-        --command-name 'gimp-pipeline-24' "${RUN} ${WORK} pipeline"
+      timeout {{ run_benchmarks_gimp_timeout_sec }} \
+        gimp -i -n --no-data --no-fonts \
+          -b "(load \"${WORK}/gimp_bench.scm\")" \
+          -b "(bench-all \"${WORK}/kodak_bench\" \"${WORK}/gimp.json\" {{ run_benchmarks_gimp_runs }} {{ run_benchmarks_gimp_warmup }} {{ run_benchmarks_gimp_image_count }})" \
+          -b "(gimp-quit 0)"
   when:
     - run_benchmarks_gimp_check.rc == 0
     - run_benchmarks_gimp_kodak_stat.stat.exists | default(false)
