@@ -52,6 +52,7 @@ def _run(
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     recorded = args_file.read_text().splitlines() if args_file.exists() else []
     return result, recorded
@@ -74,24 +75,24 @@ def _evars_from_args(recorded: list[str]) -> str:
 class TestHelpFlag:
     def test_help_exits_zero(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
-        result, _ = _run(bin_dir, args_file, ["--help"])
+        result, _args = _run(bin_dir, args_file, ["--help"])
         assert result.returncode == 0
 
     def test_help_shows_usage(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
-        result, _ = _run(bin_dir, args_file, ["--help"])
+        result, _args = _run(bin_dir, args_file, ["--help"])
         assert "Usage:" in result.stdout
 
     def test_short_help_flag(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
-        result, _ = _run(bin_dir, args_file, ["-h"])
+        result, _args = _run(bin_dir, args_file, ["-h"])
         assert result.returncode == 0
 
 
 class TestUnknownFlag:
     def test_unknown_flag_exits_nonzero(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
-        result, _ = _run(bin_dir, args_file, ["--totally-unknown-flag"])
+        result, _args = _run(bin_dir, args_file, ["--totally-unknown-flag"])
         assert result.returncode != 0
 
 
@@ -114,12 +115,12 @@ class TestRunsAndWarmup:
 
     def test_runs_non_integer_exits_nonzero(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
-        result, _ = _run(bin_dir, args_file, ["--runs", "notanumber"])
+        result, _args = _run(bin_dir, args_file, ["--runs", "notanumber"])
         assert result.returncode != 0
 
     def test_warmup_non_integer_exits_nonzero(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
-        result, _ = _run(bin_dir, args_file, ["--warmup", "abc"])
+        result, _args = _run(bin_dir, args_file, ["--warmup", "abc"])
         assert result.returncode != 0
 
 

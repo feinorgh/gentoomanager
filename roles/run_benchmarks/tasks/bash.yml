@@ -31,6 +31,9 @@
 - name: Run bash benchmarks # noqa: command-instead-of-shell
   ansible.builtin.shell:
     cmd: |
+      # shellcheck disable=SC2016
+      # SC2016: benchmark scripts are intentionally single-quoted literals
+      # passed to hyperfine — $() and ${} must not expand in the outer shell.
       set -euo pipefail
       BENCH="{{ run_benchmarks_work_dir }}/bash_bench"
       mkdir -p "$BENCH"

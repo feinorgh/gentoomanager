@@ -54,7 +54,7 @@ class TestBuildDf:
         assert host_os == {}
 
     def test_empty_hosts_has_required_columns(self) -> None:
-        df, _ = build_df({})
+        df, _host_os = build_df({})
         required = {
             "category", "benchmark", "host", "os_family",
             "mean", "stddev", "min", "max", "median",
@@ -65,7 +65,7 @@ class TestBuildDf:
         hosts = {
             "h1": _host({"compression": [_bench("gzip", 1.2, 0.05)]})
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         assert len(df) == 1
         assert df.iloc[0]["benchmark"] == "gzip"
         assert df.iloc[0]["mean"] == pytest.approx(1.2)
@@ -79,7 +79,7 @@ class TestBuildDf:
                 ]
             })
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         assert len(df) == 2
 
     def test_multiple_hosts_rows_include_all_hosts(self) -> None:
@@ -87,7 +87,7 @@ class TestBuildDf:
             "h1": _host({"compression": [_bench("gzip", 1.0, 0.05)]}, hostname="h1"),
             "h2": _host({"compression": [_bench("gzip", 0.9, 0.04)]}, hostname="h2"),
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         assert len(df) == 2
         assert set(df["host"].unique()) == {"h1", "h2"}
 
@@ -98,7 +98,7 @@ class TestBuildDf:
                 "python": [_bench("fibonacci", 2.5, 0.1)],
             })
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         assert len(df) == 2
         assert set(df["category"].unique()) == {"compression", "python"}
 
@@ -107,7 +107,7 @@ class TestBuildDf:
             "h1": _host(os_family="Gentoo", hostname="h1"),
             "h2": _host(os_family="Ubuntu", hostname="h2"),
         }
-        _, host_os = build_df(hosts)
+        _ignored, host_os = build_df(hosts)
         assert host_os == {"h1": "Gentoo", "h2": "Ubuntu"}
 
     def test_missing_metadata_falls_back_to_unknown(self) -> None:
@@ -117,7 +117,7 @@ class TestBuildDf:
                 "benchmarks": {"compression": [_bench("gzip")]},
             }
         }
-        _, host_os = build_df(hosts)
+        _ignored, host_os = build_df(hosts)
         assert host_os["h1"] == "Unknown"
 
     def test_missing_benchmarks_key_produces_empty_df(self) -> None:
@@ -137,14 +137,14 @@ class TestBuildDf:
                 "boot_times": {"available": True, "total_sec": 25.0},
             }
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         assert "boot_times" not in df["category"].values
 
     def test_numeric_columns_are_float(self) -> None:
         hosts = {
             "h1": _host({"compression": [_bench("gzip", 1.23, 0.01)]})
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         for col in ("mean", "stddev", "min", "max", "median"):
             assert df[col].dtype == float, f"{col} should be float"
 
@@ -157,5 +157,5 @@ class TestBuildDf:
             }, hostname=f"h{i}")
             for i in range(3)
         }
-        df, _ = build_df(hosts)
+        df, _host_os = build_df(hosts)
         assert len(df) == 12

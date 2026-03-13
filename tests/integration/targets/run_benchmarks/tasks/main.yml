@@ -6,145 +6,129 @@
 # dependency) and exercises the boot-time task against the real system
 # (systemd-analyze or dmesg depending on the CI environment).
 
-- name: "Integration: run_benchmarks role — boot_time and bash tasks"
-  hosts: localhost
-  gather_facts: true
+# ── Setup ──────────────────────────────────────────────────────────────
+- name: Create isolated work directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: _run_benchmarks_test
+  register: _test_work_dir_reg
 
+- name: Set work dir fact
+  ansible.builtin.set_fact:
+    _test_work_dir: "{{ _test_work_dir_reg.path }}"
+
+- name: Write mock hyperfine binary
+  ansible.builtin.copy:
+    dest: "{{ _test_work_dir }}/mock_hyperfine"
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Minimal mock: finds --export-json <file> in argv and writes valid JSON.
+      json_file=""
+      prev=""
+      for arg in "$@"; do
+        if [[ "$prev" == "--export-json" ]]; then json_file="$arg"; fi
+        prev="$arg"
+      done
+      if [[ -n "$json_file" ]]; then
+        printf '%s\n' \
+          '{"results":[{"command":"mock-bench","mean":0.1,"stddev":0.01,' \
+          '"median":0.1,"min":0.09,"max":0.11,' \
+          '"times":[0.1,0.1],"exit_codes":[0,0]}]}' \
+          > "$json_file"
+      fi
+      exit 0
+
+# ── Test: boot_time.yml ────────────────────────────────────────────────
+- name: Run boot_time tasks
+  ansible.builtin.include_role:
+    name: local.gentoomanager.run_benchmarks
+    tasks_from: boot_time
   vars:
-    _test_work_dir: "/tmp/run_benchmarks_integration_{{ ansible_date_time.epoch }}"
+    run_benchmarks_work_dir: "{{ _test_work_dir }}"
 
-  tasks:
-    # ── Setup ──────────────────────────────────────────────────────────────
-    - name: Create isolated work directory
-      ansible.builtin.file:
-        path: "{{ _test_work_dir }}"
-        state: directory
-        mode: "0755"
+- name: Stat boot_times.json
+  ansible.builtin.stat:
+    path: "{{ _test_work_dir }}/boot_times.json"
+  register: _bt_stat
 
-    - name: Write mock hyperfine binary
-      ansible.builtin.copy:
-        dest: "{{ _test_work_dir }}/mock_hyperfine"
-        mode: "0755"
-        content: |
-          #!/usr/bin/env bash
-          # Minimal mock: finds --export-json <file> in argv and writes valid JSON.
-          json_file=""
-          prev=""
-          for arg in "$@"; do
-            if [[ "$prev" == "--export-json" ]]; then json_file="$arg"; fi
-            prev="$arg"
-          done
-          if [[ -n "$json_file" ]]; then
-            printf '%s\n' \
-              '{"results":[{"command":"mock-bench","mean":0.1,"stddev":0.01,' \
-              '"median":0.1,"min":0.09,"max":0.11,' \
-              '"times":[0.1,0.1],"exit_codes":[0,0]}]}' \
-              > "$json_file"
-          fi
-          exit 0
+- name: Assert boot_times.json was written
+  ansible.builtin.assert:
+    that:
+      - _bt_stat.stat.exists
+    fail_msg: "boot_times.json was not created by boot_time.yml"
 
-    # ── Test: boot_time.yml ────────────────────────────────────────────────
-    - name: Run boot_time tasks
-      ansible.builtin.include_role:
-        name: local.gentoomanager.run_benchmarks
-        tasks_from: boot_time
-      vars:
-        run_benchmarks_work_dir: "{{ _test_work_dir }}"
+- name: Read boot_times.json
+  ansible.builtin.slurp:
+    src: "{{ _test_work_dir }}/boot_times.json"
+  register: _bt_raw
 
-    - name: Stat boot_times.json
-      ansible.builtin.stat:
-        path: "{{ _test_work_dir }}/boot_times.json"
-      register: _bt_stat
+- name: Parse boot_times JSON
+  ansible.builtin.set_fact:
+    _bt: "{{ _bt_raw.content | b64decode | from_json }}"
 
-    - name: Assert boot_times.json was written
-      ansible.builtin.assert:
-        that:
-          - _bt_stat.stat.exists
-        fail_msg: "boot_times.json was not created by boot_time.yml"
+- name: Assert boot_times JSON has required keys
+  ansible.builtin.assert:
+    that:
+      - "'available' in _bt"
+      - "'method' in _bt"
+    fail_msg: "boot_times.json is missing required keys (available, method)"
 
-    - name: Read boot_times.json
-      ansible.builtin.slurp:
-        src: "{{ _test_work_dir }}/boot_times.json"
-      register: _bt_raw
+- name: Assert method is either systemd-analyze or dmesg
+  ansible.builtin.assert:
+    that:
+      - _bt.method in ['systemd-analyze', 'dmesg']
+    fail_msg: "boot_times method '{{ _bt.method }}' is not a recognised value"
+  when: _bt.available | bool
 
-    - name: Parse boot_times JSON
-      ansible.builtin.set_fact:
-        _bt: "{{ _bt_raw.content | b64decode | from_json }}"
+- name: Assert total_sec is a number when available
+  ansible.builtin.assert:
+    that:
+      - _bt.total_sec is number
+      - _bt.total_sec > 0
+    fail_msg: "total_sec should be a positive number when boot times are available"
+  when: _bt.available | bool
 
-    - name: Assert boot_times JSON has required keys
-      ansible.builtin.assert:
-        that:
-          - "'available' in _bt"
-          - "'method' in _bt"
-        fail_msg: "boot_times.json is missing required keys (available, method)"
+# ── Test: bash.yml with mock hyperfine ────────────────────────────────
+- name: Run bash tasks with mock hyperfine
+  ansible.builtin.include_role:
+    name: local.gentoomanager.run_benchmarks
+    tasks_from: bash
+  vars:
+    run_benchmarks_work_dir: "{{ _test_work_dir }}"
+    run_benchmarks_hyperfine_bin: "{{ _test_work_dir }}/mock_hyperfine"
+    run_benchmarks_runs: 1
+    run_benchmarks_warmup: 0
 
-    - name: Assert method is either systemd-analyze or dmesg
-      ansible.builtin.assert:
-        that:
-          - _bt.method in ['systemd-analyze', 'dmesg']
-        fail_msg: "boot_times method '{{ _bt.method }}' is not a recognised value"
-      when: _bt.available | bool
+- name: Stat bash.json
+  ansible.builtin.stat:
+    path: "{{ _test_work_dir }}/bash.json"
+  register: _bash_stat
 
-    - name: Assert total_sec is a number when available
-      ansible.builtin.assert:
-        that:
-          - _bt.total_sec is number
-          - _bt.total_sec > 0
-        fail_msg: "total_sec should be a positive number when boot times are available"
-      when: _bt.available | bool
+- name: Assert bash.json was written
+  ansible.builtin.assert:
+    that:
+      - _bash_stat.stat.exists
+    fail_msg: "bash.json was not created by bash.yml"
 
-    # ── Test: bash.yml with mock hyperfine ────────────────────────────────
-    - name: Run bash tasks with mock hyperfine
-      ansible.builtin.include_role:
-        name: local.gentoomanager.run_benchmarks
-        tasks_from: bash
-      vars:
-        run_benchmarks_work_dir: "{{ _test_work_dir }}"
-        run_benchmarks_hyperfine_bin: "{{ _test_work_dir }}/mock_hyperfine"
-        run_benchmarks_runs: 1
-        run_benchmarks_warmup: 0
+- name: Read bash.json
+  ansible.builtin.slurp:
+    src: "{{ _test_work_dir }}/bash.json"
+  register: _bash_raw
 
-    - name: Stat bash.json
-      ansible.builtin.stat:
-        path: "{{ _test_work_dir }}/bash.json"
-      register: _bash_stat
+- name: Parse bash.json
+  ansible.builtin.set_fact:
+    _bash: "{{ _bash_raw.content | b64decode | from_json }}"
 
-    - name: Assert bash.json was written
-      ansible.builtin.assert:
-        that:
-          - _bash_stat.stat.exists
-        fail_msg: "bash.json was not created by bash.yml"
+- name: Assert bash.json has results array
+  ansible.builtin.assert:
+    that:
+      - "'results' in _bash"
+      - _bash.results | length > 0
+    fail_msg: "bash.json should contain a non-empty results array"
 
-    - name: Read bash.json
-      ansible.builtin.slurp:
-        src: "{{ _test_work_dir }}/bash.json"
-      register: _bash_raw
-
-    - name: Parse bash.json
-      ansible.builtin.set_fact:
-        _bash: "{{ _bash_raw.content | b64decode | from_json }}"
-
-    - name: Assert bash.json has results array
-      ansible.builtin.assert:
-        that:
-          - "'results' in _bash"
-          - _bash.results | length > 0
-        fail_msg: "bash.json should contain a non-empty results array"
-
-    # ── Test: bash.yml skips gracefully when bash absent ─────────────────
-    - name: Create a fake 'bash' that exits with error (simulate absent bash)
-      ansible.builtin.copy:
-        dest: "{{ _test_work_dir }}/fake_no_bash"
-        content: "#!/usr/bin/env bash\nexit 127\n"
-        mode: "0755"
-
-    - name: Remove bash.json before no-bash test
-      ansible.builtin.file:
-        path: "{{ _test_work_dir }}/bash_missing.json"
-        state: absent
-
-    # ── Teardown ───────────────────────────────────────────────────────────
-    - name: Remove work directory
-      ansible.builtin.file:
-        path: "{{ _test_work_dir }}"
-        state: absent
+# ── Teardown ───────────────────────────────────────────────────────────
+- name: Remove work directory
+  ansible.builtin.file:
+    path: "{{ _test_work_dir }}"
+    state: absent
