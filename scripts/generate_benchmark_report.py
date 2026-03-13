@@ -1320,8 +1320,8 @@ def generate_html(
         <thead><tr><th>Phase</th>{host_hdrs}</tr></thead>
         <tbody>
           <tr><td>Method</td>{"".join(
-              f"<td><code>{boot_data_html.get(h, {}).get('method', '—')}</code></td>"
-              for h in hostnames)}</tr>
+            f"<td><code>{boot_data_html.get(h, {}).get('method', '—')}</code></td>"
+            for h in hostnames)}</tr>
 {phase_rows_html}        </tbody>
       </table>
       {"<h3>Slowest Services at Boot</h3>" + svc_sections_html if svc_sections_html else ""}
