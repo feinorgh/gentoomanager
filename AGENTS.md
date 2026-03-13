@@ -127,3 +127,6 @@ Valid section keys: `major_changes`, `minor_changes`, `bugfixes`,
 - Do **not** modify `inventory_generator.py` to hard-code hosts or credentials.
 - `host_vars/` and `group_vars/` contain machine-specific data — treat changes
   there carefully and never commit real IP addresses or passwords.
+- The benchmark shall be verified not to produce any permanent changes on the
+  systems where they are run. Temporary files and fixtures shall be removed
+  from the benchmarked hosts when the set of benchmarks is finished.
