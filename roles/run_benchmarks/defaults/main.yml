@@ -70,9 +70,19 @@ run_benchmarks_ffmpeg_duration_sec: 10
 run_benchmarks_ffmpeg_cmd_timeout_sec: 120
 
 # Per-category runs/warmup overrides for slow categories.
-# FFmpeg video encode: 3 runs suffice — encoding variance is low.
+# FFmpeg video encode: 3 runs, 1 warmup — encoding variance is low (<0.5%),
+# and 4 total rounds keep the video encode section under ~5 minutes.
 run_benchmarks_ffmpeg_video_runs: 3
-run_benchmarks_ffmpeg_video_warmup: 2
+run_benchmarks_ffmpeg_video_warmup: 1
+# FFmpeg audio encode/decode: audio codecs are fast but there are many of
+# them; 3 runs + 1 warmup keeps audio under ~8 minutes total.
+run_benchmarks_ffmpeg_audio_runs: 3
+run_benchmarks_ffmpeg_audio_warmup: 1
+# Whether to include libaom-av1 in video encode/decode benchmarks.
+# libaom is the AV1 reference encoder and can take 5–10 min per benchmark
+# run. Disabled by default; SVT-AV1 (libsvtav1) is always included and is
+# the production AV1 encoder. Enable this only for deep AV1 comparisons.
+run_benchmarks_ffmpeg_include_libaom: false
 # Application startup: 3 runs are enough — variance comes from page-cache
 # state, not measurement noise; extra runs don't reduce uncertainty further.
 run_benchmarks_startup_runs: 3
@@ -80,8 +90,8 @@ run_benchmarks_startup_warmup: 2
 
 # Ansible task timeout for the full FFmpeg video encode hyperfine run (seconds).
 # Must be larger than runs * warmup * ffmpeg_cmd_timeout_sec.  Default covers
-# 9 codecs × 5 (runs+warmup) × 120 s = 5400 s with a safety margin.
-run_benchmarks_ffmpeg_task_timeout_sec: 7200
+# 9 codecs × 4 (runs+warmup) × 120 s = 4320 s with a safety margin.
+run_benchmarks_ffmpeg_task_timeout_sec: 5400
 
 # Hyperfine binary name
 run_benchmarks_hyperfine_bin: hyperfine
