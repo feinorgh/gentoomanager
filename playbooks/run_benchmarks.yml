@@ -29,6 +29,10 @@
   gather_facts: false
   become: false
   serial: 1
+  # When a VM goes UNREACHABLE mid-benchmark (e.g. SSH ControlMaster timeout
+  # during a large file copy), treat it as a regular failure so that the
+  # always: cleanup block still runs and can restore RAM / shut the VM down.
+  ignore_unreachable: true
   environment:
     LANG: C
     LC_ALL: C
