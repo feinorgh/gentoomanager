@@ -423,6 +423,7 @@
             state: absent
           become: false
           failed_when: false
+          ignore_unreachable: true
           when: ansible_os_family | default('') != 'Windows'
 
         - name: Remove benchmark work directory from host (Windows)
@@ -430,6 +431,7 @@
             path: "{{ run_benchmarks_effective_work_dir | default(run_benchmarks_work_dir_win) }}"
             state: absent
           failed_when: false
+          ignore_unreachable: true
           when: ansible_os_family | default('') == 'Windows'
 
         - name: Read configured minimal RAM from persistent XML
