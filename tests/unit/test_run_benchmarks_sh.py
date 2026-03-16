@@ -174,6 +174,49 @@ class TestSkipComplete:
         assert "true" in evars
 
 
+class TestSkipExisting:
+    def test_skip_existing_sets_flag(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, ["--skip-existing"])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_skip_existing" in evars
+        assert "true" in evars
+
+    def test_skip_existing_combined_with_skip_complete(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, ["--skip-existing", "--skip-complete"])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_skip_existing" in evars
+        assert "run_benchmarks_skip_complete" in evars
+
+
+class TestManagePower:
+    def test_manage_power_sets_flag(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, ["--manage-power"])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_manage_power" in evars
+        assert "true" in evars
+
+    def test_manage_power_combined_with_skip_existing(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, ["--manage-power", "--skip-existing"])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_manage_power" in evars
+        assert "run_benchmarks_skip_existing" in evars
+
+    def test_manage_power_not_set_by_default(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, [])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_manage_power" not in evars
+
+
 class TestCombinedFlags:
     def test_runs_warmup_category_combined(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin

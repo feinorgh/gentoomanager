@@ -220,6 +220,10 @@ Benchmark control:
 Flags:
   --include-windows           Also run benchmarks on Windows VMs
   --no-ram-scale              Skip temporary RAM scaling
+  --skip-complete             Skip hosts that already have a full set of results
+  --skip-existing             Skip individual categories whose result file already exists
+  --manage-power              Boot VMs that are off; shut them down after benchmarking
+                              (only VMs started by this run are shut down afterwards)
   --no-report                 Skip report generation after benchmarks
   --verbose, -v               Enable verbose Ansible output (repeat for -vvv)
   --dry-run, -C               Check mode — no changes applied
@@ -304,7 +308,7 @@ Pass an empty list `[]` (the default) to run all categories.
 When resuming an interrupted run, pass `--skip-complete` to skip hosts that
 already have a full set of result files in `benchmarks/results/<hostname>/`.
 A host is considered complete if every active category's primary result JSON
-file is present on the controller.
+file is present and non-empty on the controller.
 
 ```bash
 # Only run benchmarks on hosts that don't yet have results
@@ -321,6 +325,59 @@ Alternatively, pass the variable directly to `ansible-playbook`:
 ansible-playbook playbooks/run_benchmarks.yml \
   -e run_benchmarks_skip_complete=true
 ```
+
+### Resuming a Partial Run (per-category)
+
+`--skip-existing` is more granular than `--skip-complete`: it resumes at the
+individual category level rather than the host level.  Before each category
+runs, the playbook checks whether the primary JSON result file already exists
+and is non-empty on the controller.  If it does, that category is skipped for
+that host.  This makes it safe to interrupt and restart a benchmark run without
+re-running completed categories.
+
+```bash
+# Resume an interrupted run — skip categories that already have results
+./scripts/run_benchmarks.sh --skip-existing
+
+# Combine with --skip-complete to skip fully-done hosts entirely
+./scripts/run_benchmarks.sh --skip-complete --skip-existing
+```
+
+### VM Power Management
+
+When `--manage-power` is passed, the playbook will boot VMs that are currently
+shut off and shut them down again once benchmarking is complete.  This makes it
+possible to run the full benchmark suite without first manually starting every
+VM.
+
+**How it works:**
+
+1. Before attempting SSH, the playbook queries the VM's power state on its
+   hypervisor via `virsh domstate`.
+2. If the domain is not running, `virsh start` is issued and the playbook waits
+   up to `run_benchmarks_boot_timeout_sec` seconds (default: 180) for SSH to
+   become available.
+3. After benchmarks finish, work-dir cleanup and RAM restoration complete, the
+   VM is gracefully shut down with `virsh shutdown`.
+4. **Only VMs that were started by this run are ever shut down.**  VMs that were
+   already running when the play started are left running.
+
+```bash
+# Boot off VMs, benchmark them, then shut them down again
+./scripts/run_benchmarks.sh --manage-power
+
+# Combine with --skip-existing to resume partial runs on powered-off hosts
+./scripts/run_benchmarks.sh --manage-power --skip-existing
+
+# Use a longer boot timeout (seconds) for slow-booting VMs
+ansible-playbook playbooks/run_benchmarks.yml \
+  -e run_benchmarks_manage_power=true \
+  -e run_benchmarks_boot_timeout_sec=300
+```
+
+> **Requirements:** `hypervisor_host` must be set in each VM's inventory
+> (populated automatically by `inventory_generator.py`) and the controller
+> must be able to SSH to the hypervisor and run `virsh`.
 
 ## Benchmark Categories
 
@@ -1058,6 +1115,9 @@ or in inventory.
 | `run_benchmarks_hyperfine_bin` | `hyperfine` | Path or name of the hyperfine binary |
 | `run_benchmarks_include_windows` | `false` | Include Windows hosts |
 | `run_benchmarks_skip_complete` | `false` | Skip hosts that already have a full result set |
+| `run_benchmarks_skip_existing` | `false` | Skip individual categories whose result file already exists (non-empty) on the controller |
+| `run_benchmarks_manage_power` | `false` | Boot shut-off VMs before benchmarking; shut them down afterwards |
+| `run_benchmarks_boot_timeout_sec` | `180` | Seconds to wait for a VM to become reachable after `virsh start` |
 | `run_benchmarks_is_hypervisor` | `false` | Set to `true` for hypervisor hosts |
 | `run_benchmarks_gentoo_min_build_secs` | `300` | Minimum build time to include (s) |
 | `run_benchmarks_gentoo_max_builds` | `3` | Recent builds to collect per package |
@@ -1101,6 +1161,16 @@ ansible -m ping <hostname>
 - Verify `hypervisor_host` is set in the VM's inventory
 - Verify the controller can SSH to the hypervisor and `virsh` is available
 - Disable scaling: `./scripts/run_benchmarks.sh --no-ram-scale`
+
+### VM does not boot with `--manage-power`
+
+- Verify `hypervisor_host` is set in the VM's inventory (populated by
+  `inventory_generator.py`)
+- Verify the controller can SSH to the hypervisor and that `virsh` is in PATH
+- Check the VM name matches the `inventory_hostname` exactly:
+  `virsh --connect qemu:///system domstate <hostname>`
+- If the VM takes longer than 180 s to boot, increase the timeout:
+  `-e run_benchmarks_boot_timeout_sec=300`
 
 ### Benchmark fails for a specific category
 
