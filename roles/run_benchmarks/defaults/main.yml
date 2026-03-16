@@ -58,6 +58,7 @@ run_benchmarks_windows_categories:
   - linker
   - startup
   - ffmpeg
+  - imagemagick
 
 # Local directory for collected results
 run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"

@@ -1225,6 +1225,7 @@ The following categories have Windows-specific task variants (`*_win.yml`):
 | `linker` | Link time for 400-file synthetic project (gcc/ld or MSVC link.exe) |
 | `startup` | Interpreter and shell startup latency (Python, Node, PowerShell, cmd.exe) |
 | `ffmpeg` | Video/audio encode+decode across available codecs (installed via Chocolatey) |
+| `imagemagick` | Resize, effects, format encode/decode (Kodak suite + 4K fixture) |
 
 ```bash
 ./scripts/run_benchmarks.sh --include-windows
@@ -1238,7 +1239,7 @@ Normalization on Windows:
 - Disables automatic page-file management during the run
 
 Categories not available on Windows: `memory`, `disk`, `bash`, `boot_time`,
-`gentoo_build_times`, `imagemagick`, `opencv`, `gimp`, `inkscape`.
+`gentoo_build_times`, `opencv`, `gimp`, `inkscape`.
 
 ## Configuration Reference
 

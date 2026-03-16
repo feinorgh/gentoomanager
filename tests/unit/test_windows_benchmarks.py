@@ -22,6 +22,7 @@ WINDOWS_TASK_FILES = [
     "linker_win.yml",
     "startup_win.yml",
     "ffmpeg_win.yml",
+    "imagemagick_win.yml",
     "setup_win.yml",
     "normalize_win.yml",
     "denormalize_win.yml",
@@ -39,6 +40,7 @@ EXPECTED_WINDOWS_CATEGORIES = [
     "linker",
     "startup",
     "ffmpeg",
+    "imagemagick",
 ]
 
 

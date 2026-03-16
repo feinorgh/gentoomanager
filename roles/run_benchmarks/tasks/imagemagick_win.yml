@@ -1,0 +1,257 @@
+---
+# ImageMagick image processing benchmarks for Windows — mirrors imagemagick.yml
+# using Windows modules and PowerShell throughout.
+# ImageMagick's null: output sink works on Windows; NUL is used for OS-level
+# redirects (JPEG:NUL, PNG:NUL, etc.).
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check ImageMagick availability (Windows)
+  ansible.windows.win_shell: magick -version
+  register: run_benchmarks_im_win_check
+  changed_when: false
+  failed_when: false
+
+# ── Detect format support ─────────────────────────────────────────────────
+
+- name: Detect ImageMagick format support (Windows)
+  ansible.windows.win_shell: |
+    $fmts = magick -list format 2>&1 | Out-String
+    $has_webp = [int]($fmts -match '(?mi)^\s*WEBP\b.*W')
+    $has_avif = [int]($fmts -match '(?mi)^\s*AVIF\b.*W')
+    Write-Output "::has_webp::$has_webp"
+    Write-Output "::has_avif::$has_avif"
+  register: run_benchmarks_im_win_detect
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_im_win_check.rc == 0
+
+- name: Parse ImageMagick capabilities (Windows)
+  ansible.builtin.set_fact:
+    run_benchmarks_im_win_has_webp: >-
+      {{ (run_benchmarks_im_win_detect.stdout_lines
+          | select('match', '^::has_webp::')
+          | first
+          | regex_replace('^::has_webp::', '')) | trim == '1' }}
+    run_benchmarks_im_win_has_avif: >-
+      {{ (run_benchmarks_im_win_detect.stdout_lines
+          | select('match', '^::has_avif::')
+          | first
+          | regex_replace('^::has_avif::', '')) | trim == '1' }}
+  when:
+    - run_benchmarks_im_win_check.rc == 0
+    - run_benchmarks_im_win_detect is not skipped
+
+# ── Copy fixture images ───────────────────────────────────────────────────
+
+- name: Generate deterministic benchmark fixture images on controller
+  ansible.builtin.command:
+    cmd: >-
+      python3 {{ playbook_dir | dirname }}/scripts/generate_benchmark_images.py
+      {{ run_benchmarks_fixture_dir }}
+    creates: "{{ run_benchmarks_fixture_dir }}/im_4k.png"
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy benchmark PNG source image to host (Windows)
+  ansible.windows.win_copy:
+    src: "{{ run_benchmarks_fixture_dir }}/im_4k.png"
+    dest: "{{ run_benchmarks_work_dir_win }}\\im_4k.png"
+  when: run_benchmarks_im_win_check.rc == 0
+
+- name: Copy benchmark JPEG source image to host (Windows)
+  ansible.windows.win_copy:
+    src: "{{ run_benchmarks_fixture_dir }}/im_4k_q90.jpg"
+    dest: "{{ run_benchmarks_work_dir_win }}\\im_4k_q90.jpg"
+  when: run_benchmarks_im_win_check.rc == 0
+
+- name: Copy benchmark WebP source image to host (Windows)
+  ansible.windows.win_copy:
+    src: "{{ run_benchmarks_fixture_dir }}/im_4k.webp"
+    dest: "{{ run_benchmarks_work_dir_win }}\\im_4k.webp"
+  when:
+    - run_benchmarks_im_win_check.rc == 0
+    - run_benchmarks_im_win_has_webp | default(false) | bool
+    - (run_benchmarks_fixture_dir + '/im_4k.webp') is file
+
+# ── Kodak Lossless True Color Image Suite ────────────────────────────────
+
+- name: Check whether Kodak reference images are present on host (Windows)
+  ansible.windows.win_stat:
+    path: "{{ run_benchmarks_work_dir_win }}\\kodak\\kodim01.png"
+  register: run_benchmarks_kodak_win_stat
+  when: run_benchmarks_im_win_check.rc == 0
+
+- name: Copy Kodak Lossless True Color Image Suite to host (Windows)
+  ansible.windows.win_copy:
+    src: "{{ run_benchmarks_fixture_dir }}/kodak/"
+    dest: "{{ run_benchmarks_work_dir_win }}\\kodak\\"
+  when:
+    - run_benchmarks_im_win_check.rc == 0
+    - not run_benchmarks_kodak_win_stat.stat.exists | default(true)
+    - (run_benchmarks_fixture_dir + '/kodak') is directory
+
+- name: Run ImageMagick Kodak JPEG-Q90 encoding benchmark (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $kodak = Get-ChildItem "$wd\kodak\kodim*.png" -ErrorAction SilentlyContinue
+    if ($kodak.Count -eq 0) { Write-Output 'No Kodak images found; skipping.'; exit 0 }
+
+    & hyperfine `
+      --runs {{ run_benchmarks_runs }} `
+      --warmup {{ run_benchmarks_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\imagemagick_kodak_encode.json" `
+      --command-name 'kodak-24-jpeg-q90' `
+        "foreach (`$img in Get-ChildItem $wd\kodak\kodim*.png) { magick `$img -quality 90 JPEG:NUL }" `
+      --command-name 'kodak-24-png-z6' `
+        "foreach (`$img in Get-ChildItem $wd\kodak\kodim*.png) { magick `$img -define png:compression-level=6 PNG:NUL }"
+  when:
+    - run_benchmarks_im_win_check.rc == 0
+    - run_benchmarks_kodak_win_stat.stat.exists | default(false)
+  register: run_benchmarks_im_win_kodak_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on imagemagick_kodak_encode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_kodak_encode benchmark exited
+      rc={{ run_benchmarks_im_win_kodak_result.rc }}.
+      {{ run_benchmarks_im_win_kodak_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_im_win_kodak_result is not skipped
+    - run_benchmarks_im_win_kodak_result.rc | default(0) != 0
+
+# ── Resize benchmarks ─────────────────────────────────────────────────────
+
+- name: Run ImageMagick resize benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    & hyperfine `
+      --runs {{ run_benchmarks_runs }} `
+      --warmup {{ run_benchmarks_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\imagemagick_resize.json" `
+      --command-name 'lanczos-4k-1080p'  "magick $wd\im_4k.png -filter Lanczos  -resize 1920x1080 null:" `
+      --command-name 'mitchell-4k-1080p' "magick $wd\im_4k.png -filter Mitchell -resize 1920x1080 null:" `
+      --command-name 'box-4k-1080p'      "magick $wd\im_4k.png -filter Box      -resize 1920x1080 null:" `
+      --command-name 'lanczos-4k-thumb'  "magick $wd\im_4k.png -filter Lanczos  -resize 256x256   null:" `
+      --command-name 'mitchell-4k-thumb' "magick $wd\im_4k.png -filter Mitchell -resize 256x256   null:"
+  when: run_benchmarks_im_win_check.rc == 0
+  register: run_benchmarks_im_win_resize_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on imagemagick_resize benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_resize benchmark exited
+      rc={{ run_benchmarks_im_win_resize_result.rc }}.
+      {{ run_benchmarks_im_win_resize_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_im_win_resize_result is not skipped
+    - run_benchmarks_im_win_resize_result.rc | default(0) != 0
+
+# ── Effects benchmarks ────────────────────────────────────────────────────
+
+- name: Run ImageMagick effects benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    & hyperfine `
+      --runs {{ run_benchmarks_runs }} `
+      --warmup {{ run_benchmarks_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\imagemagick_effects.json" `
+      --command-name 'gaussian-blur-r8' "magick $wd\im_4k.png -blur 0x8 null:" `
+      --command-name 'unsharp-mask'     "magick $wd\im_4k.png -unsharp 0x1+1+0.05 null:" `
+      --command-name 'grayscale'        "magick $wd\im_4k.png -colorspace Gray null:" `
+      --command-name 'emboss'           "magick $wd\im_4k.png -emboss 2 null:" `
+      --command-name 'rotate-45'        "magick $wd\im_4k.png -background black -rotate 45 null:"
+  when: run_benchmarks_im_win_check.rc == 0
+  register: run_benchmarks_im_win_effects_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on imagemagick_effects benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_effects benchmark exited
+      rc={{ run_benchmarks_im_win_effects_result.rc }}.
+      {{ run_benchmarks_im_win_effects_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_im_win_effects_result is not skipped
+    - run_benchmarks_im_win_effects_result.rc | default(0) != 0
+
+# ── Format encode benchmarks ──────────────────────────────────────────────
+
+- name: Run ImageMagick format encode benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd   = "{{ run_benchmarks_work_dir_win }}"
+    $fmts = magick -list format 2>&1 | Out-String
+    $cmds = @(
+      '--command-name', 'jpeg-q90', "magick $wd\im_4k.png   -quality 90 JPEG:NUL",
+      '--command-name', 'jpeg-q50', "magick $wd\im_4k.png   -quality 50 JPEG:NUL",
+      '--command-name', 'png-z6',   "magick $wd\im_4k_q90.jpg -define png:compression-level=6 PNG:NUL",
+      '--command-name', 'png-z1',   "magick $wd\im_4k_q90.jpg -define png:compression-level=1 PNG:NUL"
+    )
+    if ($fmts -match '(?mi)^\s*WEBP\b.*W') {
+      $cmds += '--command-name', 'webp-lossy',    "magick $wd\im_4k.png -quality 90 WEBP:NUL"
+      $cmds += '--command-name', 'webp-lossless', "magick $wd\im_4k.png -define webp:lossless=true WEBP:NUL"
+    }
+    if ($fmts -match '(?mi)^\s*AVIF\b.*W') {
+      $cmds += '--command-name', 'avif-q60', "magick $wd\im_4k.png -quality 60 AVIF:NUL"
+    }
+    & hyperfine `
+      --runs {{ run_benchmarks_runs }} `
+      --warmup {{ run_benchmarks_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\imagemagick_encode.json" `
+      @cmds
+  when: run_benchmarks_im_win_check.rc == 0
+  register: run_benchmarks_im_win_encode_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on imagemagick_encode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_encode benchmark exited
+      rc={{ run_benchmarks_im_win_encode_result.rc }}.
+      {{ run_benchmarks_im_win_encode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_im_win_encode_result is not skipped
+    - run_benchmarks_im_win_encode_result.rc | default(0) != 0
+
+# ── Format decode benchmarks ─────────────────────────────────────────────
+
+- name: Run ImageMagick format decode benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd   = "{{ run_benchmarks_work_dir_win }}"
+    $cmds = @(
+      '--command-name', 'jpeg-decode', "magick $wd\im_4k_q90.jpg null:",
+      '--command-name', 'png-decode',  "magick $wd\im_4k.png     null:"
+    )
+    if (Test-Path "$wd\im_4k.webp") {
+      $cmds += '--command-name', 'webp-decode', "magick $wd\im_4k.webp null:"
+    }
+    & hyperfine `
+      --runs {{ run_benchmarks_runs }} `
+      --warmup {{ run_benchmarks_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\imagemagick_decode.json" `
+      @cmds
+  when: run_benchmarks_im_win_check.rc == 0
+  register: run_benchmarks_im_win_decode_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on imagemagick_decode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: imagemagick_decode benchmark exited
+      rc={{ run_benchmarks_im_win_decode_result.rc }}.
+      {{ run_benchmarks_im_win_decode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_im_win_decode_result is not skipped
+    - run_benchmarks_im_win_decode_result.rc | default(0) != 0
