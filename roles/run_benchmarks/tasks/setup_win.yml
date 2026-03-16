@@ -11,9 +11,38 @@
     }
   changed_when: false
 
-- name: Install hyperfine via Chocolatey
-  ansible.windows.win_shell: choco install hyperfine -y --no-progress
-  changed_when: true
+- name: Install benchmark dependencies via Chocolatey
+  # mingw provides gcc/g++/ld on Windows (required for compiler, numeric, process, linker benchmarks).
+  # python, openssl, 7zip are needed for their respective benchmark categories.
+  # git and nodejs are optional but enable extra coreutils/startup benchmark sub-cases.
+  chocolatey.chocolatey.win_chocolatey:
+    name:
+      - hyperfine
+      - mingw
+      - python
+      - openssl
+      - 7zip
+      - git
+      - nodejs
+    state: present
+  register: run_benchmarks_choco_result
+  # Chocolatey exits 0 on success and 1641/3010 for reboot-required; treat both as OK.
+  failed_when: >-
+    run_benchmarks_choco_result.rc is defined and
+    run_benchmarks_choco_result.rc not in [0, 1641, 3010]
+
+- name: Install numpy for Python numeric benchmarks
+  ansible.windows.win_shell: python -m pip install --quiet numpy
+  changed_when: false
+  failed_when: false
+
+- name: Refresh PATH after Chocolatey installs
+  # New shims written by Chocolatey are not visible in the current shell session.
+  ansible.windows.win_shell: |
+    $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                [System.Environment]::GetEnvironmentVariable('Path', 'User')
+    [System.Environment]::SetEnvironmentVariable('Path', $env:Path, 'Process')
+  changed_when: false
 
 - name: Create benchmark working directory
   ansible.windows.win_file:

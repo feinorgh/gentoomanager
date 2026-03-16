@@ -6,3 +6,5 @@ collections:
   - name: community.general
   # Required by roles using ansible.windows.* modules
   - name: ansible.windows
+  # Required for Windows package management (setup_win.yml dependency installation)
+  - name: chocolatey.chocolatey

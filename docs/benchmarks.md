@@ -151,8 +151,8 @@ Add-Content -Path $authorizedKeysFile -Value '<paste controller public key here>
 icacls $authorizedKeysFile /inheritance:r /grant 'SYSTEM:(F)' /grant 'ADMINISTRATORS:(F)'
 ```
 
-Then configure `group_vars/win/connection.yml` on the controller
-(copy from `group_vars.example/win/connection.yml` as a starting point):
+Then configure `group_vars/mswindows/connection.yml` on the controller
+(copy from `group_vars.example/mswindows/connection.yml` as a starting point):
 
 ```yaml
 ansible_connection: ssh
@@ -192,8 +192,8 @@ New-NetFirewallRule -Name 'WinRM-HTTP' -DisplayName 'WinRM HTTP' `
 > certificate, see the Microsoft docs for `New-SelfSignedCertificate` and
 > `winrm create winrm/config/Listener?Address=*+Transport=HTTPS`.
 
-Then configure `group_vars/win/connection.yml` on the controller
-(copy from `group_vars.example/win/connection.yml` as a starting point):
+Then configure `group_vars/mswindows/connection.yml` on the controller
+(copy from `group_vars.example/mswindows/connection.yml` as a starting point):
 
 ```yaml
 ansible_connection: winrm
@@ -207,11 +207,37 @@ ansible_user: ansible
 **Verify connectivity** (either option):
 
 ```bash
-ansible win,win10,win11 -m ansible.windows.win_ping
+ansible mswindows -m ansible.windows.win_ping
 ```
 
-**Collections:** `ansible.windows` is already in `requirements.yml` and
-installed by `ansible-galaxy collection install -r requirements.yml`.
+> **Dedicated `ansible` user (recommended):** Create a local Windows user named
+> `ansible` (or any ASCII name) with Administrator privileges rather than using
+> a personal account.  Usernames with non-ASCII characters (e.g. `Pär`) cause
+> path and SSH problems.  In an elevated PowerShell:
+> ```powershell
+> $pass = ConvertTo-SecureString "ChangeMe123!" -AsPlainText -Force
+> New-LocalUser "ansible" -Password $pass -FullName "Ansible" `
+>     -Description "Ansible automation account" -PasswordNeverExpires
+> Add-LocalGroupMember -Group "Administrators" -Member "ansible"
+> ```
+
+**Benchmark software is installed automatically** during the first run of the
+benchmark suite.  The setup step installs the following via
+[Chocolatey](https://chocolatey.org/):
+
+| Package | Purpose |
+|---------|---------|
+| `hyperfine` | Benchmark harness (required) |
+| `mingw` | gcc / g++ / ld compiler toolchain |
+| `python` | Python benchmarks + helper scripts |
+| `openssl` | Crypto benchmarks |
+| `7zip` | Compression benchmarks |
+| `git` | Optional: git-based coreutils sub-cases |
+| `nodejs` | Optional: Node.js startup benchmark |
+
+NumPy is also installed via `pip` for the numeric benchmark category.
+The `chocolatey.chocolatey` Ansible collection is required and is included in
+`requirements.yml`.
 
 > **RHEL 7 / RHEL 8:** These ship Python 3.6, which is too old for
 > Ansible 2.17+.  Bootstrap Python 3.8 before provisioning:
