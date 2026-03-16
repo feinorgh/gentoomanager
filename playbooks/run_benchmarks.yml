@@ -421,7 +421,7 @@
           ansible.builtin.file:
             path: "{{ run_benchmarks_effective_work_dir | default(run_benchmarks_work_dir) }}"
             state: absent
-          become: true
+          become: false
           failed_when: false
           when: ansible_os_family | default('') != 'Windows'
 

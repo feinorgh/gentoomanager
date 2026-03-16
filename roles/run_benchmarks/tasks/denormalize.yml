@@ -15,6 +15,7 @@
     executable: /bin/bash
   become: true
   changed_when: true
+  failed_when: false
   when: >-
     ansible_system | default('Linux') == 'Linux' and
     run_benchmarks_orig_aslr is defined and
@@ -26,6 +27,7 @@
       sysctl kern.elf64.aslr.enable={{ run_benchmarks_orig_aslr_bsd.stdout | default('1') | trim }}
   become: true
   changed_when: true
+  failed_when: false
   when: >-
     ansible_system | default('Linux') == 'FreeBSD' and
     run_benchmarks_orig_aslr_bsd is defined and
@@ -72,6 +74,7 @@
       done
   become: true
   changed_when: true
+  failed_when: false
   when: >-
     ansible_system | default('Linux') == 'Linux' and
     run_benchmarks_orig_iosched is defined and
@@ -95,6 +98,7 @@
     cmd: swapon -a
   become: true
   changed_when: true
+  failed_when: false
   when:
     - ansible_system | default('Linux') == 'Linux'
     - not (run_benchmarks_is_hypervisor | default(false) | bool)
@@ -119,6 +123,7 @@
     cmd: echo 3 > /proc/sys/vm/drop_caches
   become: true
   changed_when: true
+  failed_when: false
   when: ansible_system | default('Linux') == 'Linux'
 
 # ── CPU boost ────────────────────────────────────────────────────────────
