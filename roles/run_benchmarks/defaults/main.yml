@@ -57,6 +57,7 @@ run_benchmarks_windows_categories:
   - process
   - linker
   - startup
+  - ffmpeg
 
 # Local directory for collected results
 run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"

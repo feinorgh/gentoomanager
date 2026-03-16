@@ -1207,7 +1207,7 @@ Windows benchmarks are opt-in.  Before running them, complete the
 above, then verify with:
 
 ```bash
-ansible win,win10,win11 -m ansible.windows.win_ping
+ansible mswindows -m ansible.windows.win_ping
 ```
 
 The following categories have Windows-specific task variants (`*_win.yml`):
@@ -1224,6 +1224,7 @@ The following categories have Windows-specific task variants (`*_win.yml`):
 | `process` | Process creation overhead (cmd.exe, PowerShell, trivial exe) |
 | `linker` | Link time for 400-file synthetic project (gcc/ld or MSVC link.exe) |
 | `startup` | Interpreter and shell startup latency (Python, Node, PowerShell, cmd.exe) |
+| `ffmpeg` | Video/audio encode+decode across available codecs (installed via Chocolatey) |
 
 ```bash
 ./scripts/run_benchmarks.sh --include-windows
@@ -1237,7 +1238,7 @@ Normalization on Windows:
 - Disables automatic page-file management during the run
 
 Categories not available on Windows: `memory`, `disk`, `bash`, `boot_time`,
-`gentoo_build_times`, `ffmpeg`, `imagemagick`, `opencv`, `gimp`, `inkscape`.
+`gentoo_build_times`, `imagemagick`, `opencv`, `gimp`, `inkscape`.
 
 ## Configuration Reference
 

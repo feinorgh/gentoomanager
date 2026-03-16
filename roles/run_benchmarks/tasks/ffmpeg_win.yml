@@ -1,0 +1,343 @@
+---
+# FFmpeg encode/decode benchmarks for Windows — mirrors ffmpeg.yml using
+# Windows modules and PowerShell throughout.
+
+- name: Check FFmpeg availability (Windows)
+  ansible.windows.win_shell: ffmpeg -version
+  register: run_benchmarks_ffmpeg_win_check
+  changed_when: false
+  failed_when: false
+
+- name: Discover available FFmpeg codecs (Windows)
+  ansible.windows.win_shell: |
+    $video_enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*V[\.\w]{5}\s+(\S+)' } |
+      ForEach-Object { ($_ -split '\s+')[2] }
+    $audio_enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*A[\.\w]{5}\s+(\S+)' } |
+      ForEach-Object { ($_ -split '\s+')[2] }
+    $video_dec = (ffmpeg -decoders 2>&1) | Where-Object { $_ -match '^\s*V[\.\w]{5}\s+(\S+)' } |
+      ForEach-Object { ($_ -split '\s+')[2] }
+    $audio_dec = (ffmpeg -decoders 2>&1) | Where-Object { $_ -match '^\s*A[\.\w]{5}\s+(\S+)' } |
+      ForEach-Object { ($_ -split '\s+')[2] }
+    [pscustomobject]@{
+      video_encoders = $video_enc
+      audio_encoders = $audio_enc
+      video_decoders = $video_dec
+      audio_decoders = $audio_dec
+    } | ConvertTo-Json -Depth 3
+  register: run_benchmarks_ffmpeg_win_codecs_raw
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Write FFmpeg codec list to JSON (Windows)
+  ansible.windows.win_copy:
+    content: "{{ run_benchmarks_ffmpeg_win_codecs_raw.stdout }}"
+    dest: "{{ run_benchmarks_work_dir_win }}\\ffmpeg_codecs.json"
+  when:
+    - run_benchmarks_ffmpeg_win_check.rc == 0
+    - run_benchmarks_ffmpeg_win_codecs_raw is not skipped
+
+# ── Test media (BBB fixture or synthetic fallback) ────────────────────────
+
+- name: Check whether BBB video fixture is already present on host (Windows)
+  ansible.windows.win_stat:
+    path: "{{ run_benchmarks_work_dir_win }}\\test_raw.avi"
+  register: run_benchmarks_video_src_win_stat
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+
+- name: Copy Big Buck Bunny FFV1 video source from controller to host (Windows)
+  ansible.windows.win_copy:
+    src: "{{ run_benchmarks_fixture_dir }}/bbb_1080p_30s.mkv"
+    dest: "{{ run_benchmarks_work_dir_win }}\\test_raw.avi"
+  when:
+    - run_benchmarks_ffmpeg_win_check.rc == 0
+    - not run_benchmarks_video_src_win_stat.stat.exists | default(true)
+    - (run_benchmarks_fixture_dir + '/bbb_1080p_30s.mkv') is file
+
+- name: Generate synthetic 1080p FFV1 video source (Windows fallback)
+  ansible.windows.win_shell: |
+    $dst = "{{ run_benchmarks_work_dir_win }}\test_raw.avi"
+    if (-not (Test-Path $dst)) {
+      ffmpeg -y -f lavfi `
+        -i "testsrc2=duration={{ run_benchmarks_ffmpeg_duration_sec }}:size=1280x720:rate=30" `
+        -c:v ffv1 -level 3 -threads 0 -an $dst
+    }
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Check whether BBB audio fixture is already present on host (Windows)
+  ansible.windows.win_stat:
+    path: "{{ run_benchmarks_work_dir_win }}\\test_raw.wav"
+  register: run_benchmarks_audio_src_win_stat
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+
+- name: Copy Big Buck Bunny PCM audio source from controller to host (Windows)
+  ansible.windows.win_copy:
+    src: "{{ run_benchmarks_fixture_dir }}/bbb_audio_60s.wav"
+    dest: "{{ run_benchmarks_work_dir_win }}\\test_raw.wav"
+  when:
+    - run_benchmarks_ffmpeg_win_check.rc == 0
+    - not run_benchmarks_audio_src_win_stat.stat.exists | default(true)
+    - (run_benchmarks_fixture_dir + '/bbb_audio_60s.wav') is file
+
+- name: Generate synthetic PCM audio source (Windows fallback)
+  ansible.windows.win_shell: |
+    $dst = "{{ run_benchmarks_work_dir_win }}\test_raw.wav"
+    if (-not (Test-Path $dst)) {
+      ffmpeg -y -f lavfi `
+        -i "sine=frequency=440:duration={{ run_benchmarks_ffmpeg_duration_sec * 6 }}" `
+        -c:a pcm_s16le $dst
+    }
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  changed_when: false
+  failed_when: false
+
+# ── Video encoding ────────────────────────────────────────────────────────
+
+- name: Run FFmpeg video encoding benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd  = "{{ run_benchmarks_work_dir_win }}"
+    $enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*V' } |
+             ForEach-Object { ($_ -split '\s+')[2] }
+    $has = { param($c) $enc -contains $c }
+    $T   = {{ run_benchmarks_ffmpeg_cmd_timeout_sec | int }}
+
+    function wrap($cmd) {
+      if ($T -gt 0) { "cmd /c `"$cmd`" & exit 0" } else { $cmd }
+    }
+
+    $cmds = @()
+    if (& $has 'libx264')    { $cmds += '--command-name'; $cmds += 'h264-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null NUL") }
+    if (& $has 'libx265')    { $cmds += '--command-name'; $cmds += 'h265-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null NUL") }
+    if (& $has 'libvpx-vp9') { $cmds += '--command-name'; $cmds += 'vp9-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -cpu-used 8 -an -f null NUL") }
+    if (& $has 'libsvtav1')  { $cmds += '--command-name'; $cmds += 'av1-svt-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null NUL") }
+    {% if run_benchmarks_ffmpeg_extended_codecs %}
+    if (& $has 'libvpx')     { $cmds += '--command-name'; $cmds += 'vp8-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline realtime -an -f null NUL") }
+    {% endif %}
+    {% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
+    if (& $has 'libaom-av1') { $cmds += '--command-name'; $cmds += 'av1-aom-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null NUL") }
+    {% endif %}
+    {% if run_benchmarks_ffmpeg_extended_codecs %}
+    if (& $has 'librav1e')   { $cmds += '--command-name'; $cmds += 'av1-rav1e-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null NUL") }
+    if (& $has 'libtheora')  { $cmds += '--command-name'; $cmds += 'theora-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libtheora -q:v 7 -an -f null NUL") }
+    if (& $has 'libxvid')    { $cmds += '--command-name'; $cmds += 'xvid-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libxvid -q:v 5 -an -f null NUL") }
+    if (& $has 'mpeg2video') { $cmds += '--command-name'; $cmds += 'mpeg2-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v mpeg2video -b:v 5M -an -f null NUL") }
+    if (& $has 'mjpeg')      { $cmds += '--command-name'; $cmds += 'mjpeg-encode';
+      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v mjpeg -q:v 5 -an -f null NUL") }
+    {% endif %}
+
+    if ($cmds.Count -eq 0) { Write-Output 'No supported video encoders found; skipping.'; exit 0 }
+    & hyperfine `
+      --runs {{ run_benchmarks_ffmpeg_video_runs }} `
+      --warmup {{ run_benchmarks_ffmpeg_video_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\ffmpeg_video_encode.json" `
+      @cmds
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  register: run_benchmarks_ffmpeg_win_video_encode_result
+  changed_when: false
+  failed_when: false
+  async: "{{ run_benchmarks_ffmpeg_task_timeout_sec | int }}"
+  poll: 30
+
+- name: Warn on ffmpeg_video_encode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: ffmpeg_video_encode benchmark exited
+      rc={{ run_benchmarks_ffmpeg_win_video_encode_result.rc }}.
+      {{ run_benchmarks_ffmpeg_win_video_encode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_ffmpeg_win_video_encode_result is not skipped
+    - run_benchmarks_ffmpeg_win_video_encode_result.rc | default(0) != 0
+
+# ── Video decoding ────────────────────────────────────────────────────────
+
+- name: Prepare encoded video files for decode benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd  = "{{ run_benchmarks_work_dir_win }}"
+    $enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*V' } |
+             ForEach-Object { ($_ -split '\s+')[2] }
+    $has = { param($c) $enc -contains $c }
+
+    if (& $has 'libx264')    { ffmpeg -y -i $wd\test_raw.avi -c:v libx264 -preset ultrafast -crf 18 -an $wd\test_h264.mp4 2>$null }
+    if (& $has 'libx265')    { ffmpeg -y -i $wd\test_raw.avi -c:v libx265 -preset ultrafast -crf 22 -an $wd\test_h265.mp4 2>$null }
+    if (& $has 'libvpx-vp9') { ffmpeg -y -i $wd\test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -an $wd\test_vp9.webm 2>$null }
+    if (& $has 'libsvtav1')  { ffmpeg -y -i $wd\test_raw.avi -c:v libsvtav1 -crf 45 -preset 12 -an $wd\test_av1_svt.mp4 2>$null }
+    {% if run_benchmarks_ffmpeg_extended_codecs %}
+    if (& $has 'libvpx')     { ffmpeg -y -i $wd\test_raw.avi -c:v libvpx -crf 10 -b:v 2M -deadline realtime -an $wd\test_vp8.webm 2>$null }
+    {% endif %}
+    {% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
+    if (& $has 'libaom-av1') { ffmpeg -y -i $wd\test_raw.avi -c:v libaom-av1 -crf 50 -cpu-used 8 -row-mt 1 -an $wd\test_av1_aom.mp4 2>$null }
+    {% endif %}
+    {% if run_benchmarks_ffmpeg_extended_codecs %}
+    if (& $has 'librav1e')   { ffmpeg -y -i $wd\test_raw.avi -c:v librav1e -qp 200 -speed 10 -an $wd\test_av1_rav1e.mp4 2>$null }
+    if (& $has 'libtheora')  { ffmpeg -y -i $wd\test_raw.avi -c:v libtheora -q:v 5 -an $wd\test_theora.mkv 2>$null }
+    if (& $has 'libxvid')    { ffmpeg -y -i $wd\test_raw.avi -c:v libxvid -q:v 8 -an $wd\test_xvid.avi 2>$null }
+    if (& $has 'mpeg2video') { ffmpeg -y -i $wd\test_raw.avi -c:v mpeg2video -b:v 8M -an $wd\test_mpeg2.mpg 2>$null }
+    if (& $has 'mjpeg')      { ffmpeg -y -i $wd\test_raw.avi -c:v mjpeg -q:v 10 -an $wd\test_mjpeg.avi 2>$null }
+    {% endif %}
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  changed_when: true
+  failed_when: false
+
+- name: Run FFmpeg video decoding benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd   = "{{ run_benchmarks_work_dir_win }}"
+    $cmds = @()
+    if (Test-Path "$wd\test_h264.mp4")      { $cmds += '--command-name'; $cmds += 'h264-decode';      $cmds += "ffmpeg -y -i $wd\test_h264.mp4 -f null NUL" }
+    if (Test-Path "$wd\test_h265.mp4")      { $cmds += '--command-name'; $cmds += 'h265-decode';      $cmds += "ffmpeg -y -i $wd\test_h265.mp4 -f null NUL" }
+    if (Test-Path "$wd\test_vp8.webm")      { $cmds += '--command-name'; $cmds += 'vp8-decode';       $cmds += "ffmpeg -y -i $wd\test_vp8.webm -f null NUL" }
+    if (Test-Path "$wd\test_vp9.webm")      { $cmds += '--command-name'; $cmds += 'vp9-decode';       $cmds += "ffmpeg -y -i $wd\test_vp9.webm -f null NUL" }
+    if (Test-Path "$wd\test_av1_svt.mp4")   { $cmds += '--command-name'; $cmds += 'av1-svt-decode';   $cmds += "ffmpeg -y -i $wd\test_av1_svt.mp4 -f null NUL" }
+    if (Test-Path "$wd\test_av1_aom.mp4")   { $cmds += '--command-name'; $cmds += 'av1-aom-decode';   $cmds += "ffmpeg -y -i $wd\test_av1_aom.mp4 -f null NUL" }
+    if (Test-Path "$wd\test_av1_rave1.mp4") { $cmds += '--command-name'; $cmds += 'av1-rav1e-decode'; $cmds += "ffmpeg -y -i $wd\test_av1_rave1.mp4 -f null NUL" }
+    if (Test-Path "$wd\test_theora.mkv")    { $cmds += '--command-name'; $cmds += 'theora-decode';    $cmds += "ffmpeg -y -i $wd\test_theora.mkv -f null NUL" }
+    if (Test-Path "$wd\test_xvid.avi")      { $cmds += '--command-name'; $cmds += 'xvid-decode';      $cmds += "ffmpeg -y -i $wd\test_xvid.avi -f null NUL" }
+    if (Test-Path "$wd\test_mpeg2.mpg")     { $cmds += '--command-name'; $cmds += 'mpeg2-decode';     $cmds += "ffmpeg -y -i $wd\test_mpeg2.mpg -f null NUL" }
+    if (Test-Path "$wd\test_mjpeg.avi")     { $cmds += '--command-name'; $cmds += 'mjpeg-decode';     $cmds += "ffmpeg -y -i $wd\test_mjpeg.avi -f null NUL" }
+
+    if ($cmds.Count -eq 0) { Write-Output 'No encoded video files found; skipping.'; exit 0 }
+    & hyperfine `
+      --runs {{ run_benchmarks_ffmpeg_video_runs }} `
+      --warmup {{ run_benchmarks_ffmpeg_video_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\ffmpeg_video_decode.json" `
+      @cmds
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  register: run_benchmarks_ffmpeg_win_video_decode_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on ffmpeg_video_decode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: ffmpeg_video_decode benchmark exited
+      rc={{ run_benchmarks_ffmpeg_win_video_decode_result.rc }}.
+      {{ run_benchmarks_ffmpeg_win_video_decode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_ffmpeg_win_video_decode_result is not skipped
+    - run_benchmarks_ffmpeg_win_video_decode_result.rc | default(0) != 0
+
+# ── Audio encoding ────────────────────────────────────────────────────────
+
+- name: Run FFmpeg audio encoding benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd  = "{{ run_benchmarks_work_dir_win }}"
+    $enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*A' } |
+             ForEach-Object { ($_ -split '\s+')[2] }
+    $has = { param($c) $enc -contains $c }
+    $cmds = @()
+
+    if (& $has 'aac')        { $cmds += '--command-name'; $cmds += 'aac-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a aac -b:a 192k -f null NUL" }
+    if (& $has 'libopus')    { $cmds += '--command-name'; $cmds += 'opus-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a libopus -b:a 128k -f null NUL" }
+    if (& $has 'libmp3lame') { $cmds += '--command-name'; $cmds += 'mp3-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a libmp3lame -b:a 192k -f null NUL" }
+    if (& $has 'flac')       { $cmds += '--command-name'; $cmds += 'flac-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a flac -f null NUL" }
+    if (& $has 'libvorbis')  { $cmds += '--command-name'; $cmds += 'vorbis-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a libvorbis -q:a 4 -f null NUL" }
+    {% if run_benchmarks_ffmpeg_extended_codecs %}
+    if (& $has 'ac3')        { $cmds += '--command-name'; $cmds += 'ac3-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a ac3 -b:a 384k -f null NUL" }
+    if (& $has 'eac3')       { $cmds += '--command-name'; $cmds += 'eac3-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a eac3 -b:a 384k -f null NUL" }
+    if (& $has 'wavpack')    { $cmds += '--command-name'; $cmds += 'wavpack-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a wavpack -f null NUL" }
+    if (& $has 'alac')       { $cmds += '--command-name'; $cmds += 'alac-encode';
+      $cmds += "ffmpeg -y -i $wd\test_raw.wav -c:a alac -f null NUL" }
+    {% endif %}
+
+    if ($cmds.Count -eq 0) { Write-Output 'No supported audio encoders found; skipping.'; exit 0 }
+    & hyperfine `
+      --runs {{ run_benchmarks_ffmpeg_audio_runs }} `
+      --warmup {{ run_benchmarks_ffmpeg_audio_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\ffmpeg_audio_encode.json" `
+      @cmds
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  register: run_benchmarks_ffmpeg_win_audio_encode_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on ffmpeg_audio_encode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: ffmpeg_audio_encode benchmark exited
+      rc={{ run_benchmarks_ffmpeg_win_audio_encode_result.rc }}.
+      {{ run_benchmarks_ffmpeg_win_audio_encode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_ffmpeg_win_audio_encode_result is not skipped
+    - run_benchmarks_ffmpeg_win_audio_encode_result.rc | default(0) != 0
+
+# ── Audio decoding ────────────────────────────────────────────────────────
+
+- name: Prepare encoded audio files for decode benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd  = "{{ run_benchmarks_work_dir_win }}"
+    $enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*A' } |
+             ForEach-Object { ($_ -split '\s+')[2] }
+    $has = { param($c) $enc -contains $c }
+
+    if (& $has 'aac')        { ffmpeg -y -i $wd\test_raw.wav -c:a aac -b:a 192k $wd\test_enc_aac.m4a 2>$null }
+    if (& $has 'libopus')    { ffmpeg -y -i $wd\test_raw.wav -c:a libopus -b:a 128k $wd\test_enc_opus.opus 2>$null }
+    if (& $has 'libmp3lame') { ffmpeg -y -i $wd\test_raw.wav -c:a libmp3lame -b:a 192k $wd\test_enc_mp3.mp3 2>$null }
+    if (& $has 'flac')       { ffmpeg -y -i $wd\test_raw.wav -c:a flac $wd\test_enc_flac.flac 2>$null }
+    if (& $has 'libvorbis')  { ffmpeg -y -i $wd\test_raw.wav -c:a libvorbis -q:a 4 $wd\test_enc_vorbis.ogg 2>$null }
+    {% if run_benchmarks_ffmpeg_extended_codecs %}
+    if (& $has 'ac3')        { ffmpeg -y -i $wd\test_raw.wav -c:a ac3 -b:a 384k $wd\test_enc_ac3.ac3 2>$null }
+    if (& $has 'eac3')       { ffmpeg -y -i $wd\test_raw.wav -c:a eac3 -b:a 384k $wd\test_enc_eac3.eac3 2>$null }
+    if (& $has 'wavpack')    { ffmpeg -y -i $wd\test_raw.wav -c:a wavpack $wd\test_enc_wavpack.wv 2>$null }
+    if (& $has 'alac')       { ffmpeg -y -i $wd\test_raw.wav -c:a alac $wd\test_enc_alac.m4a 2>$null }
+    {% endif %}
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  changed_when: true
+  failed_when: false
+
+- name: Run FFmpeg audio decoding benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd   = "{{ run_benchmarks_work_dir_win }}"
+    $cmds = @()
+    if (Test-Path "$wd\test_enc_aac.m4a")      { $cmds += '--command-name'; $cmds += 'aac-decode';     $cmds += "ffmpeg -y -i $wd\test_enc_aac.m4a -f null NUL" }
+    if (Test-Path "$wd\test_enc_opus.opus")    { $cmds += '--command-name'; $cmds += 'opus-decode';    $cmds += "ffmpeg -y -i $wd\test_enc_opus.opus -f null NUL" }
+    if (Test-Path "$wd\test_enc_mp3.mp3")      { $cmds += '--command-name'; $cmds += 'mp3-decode';     $cmds += "ffmpeg -y -i $wd\test_enc_mp3.mp3 -f null NUL" }
+    if (Test-Path "$wd\test_enc_flac.flac")    { $cmds += '--command-name'; $cmds += 'flac-decode';    $cmds += "ffmpeg -y -i $wd\test_enc_flac.flac -f null NUL" }
+    if (Test-Path "$wd\test_enc_vorbis.ogg")   { $cmds += '--command-name'; $cmds += 'vorbis-decode';  $cmds += "ffmpeg -y -i $wd\test_enc_vorbis.ogg -f null NUL" }
+    if (Test-Path "$wd\test_enc_ac3.ac3")      { $cmds += '--command-name'; $cmds += 'ac3-decode';     $cmds += "ffmpeg -y -i $wd\test_enc_ac3.ac3 -f null NUL" }
+    if (Test-Path "$wd\test_enc_eac3.eac3")    { $cmds += '--command-name'; $cmds += 'eac3-decode';    $cmds += "ffmpeg -y -i $wd\test_enc_eac3.eac3 -f null NUL" }
+    if (Test-Path "$wd\test_enc_wavpack.wv")   { $cmds += '--command-name'; $cmds += 'wavpack-decode'; $cmds += "ffmpeg -y -i $wd\test_enc_wavpack.wv -f null NUL" }
+    if (Test-Path "$wd\test_enc_alac.m4a")     { $cmds += '--command-name'; $cmds += 'alac-decode';    $cmds += "ffmpeg -y -i $wd\test_enc_alac.m4a -f null NUL" }
+
+    if ($cmds.Count -eq 0) { Write-Output 'No encoded audio files found; skipping.'; exit 0 }
+    & hyperfine `
+      --runs {{ run_benchmarks_ffmpeg_audio_runs }} `
+      --warmup {{ run_benchmarks_ffmpeg_audio_warmup }} `
+      --ignore-failure `
+      --export-json "$wd\ffmpeg_audio_decode.json" `
+      @cmds
+  when: run_benchmarks_ffmpeg_win_check.rc == 0
+  register: run_benchmarks_ffmpeg_win_audio_decode_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on ffmpeg_audio_decode benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: ffmpeg_audio_decode benchmark exited
+      rc={{ run_benchmarks_ffmpeg_win_audio_decode_result.rc }}.
+      {{ run_benchmarks_ffmpeg_win_audio_decode_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_ffmpeg_win_audio_decode_result is not skipped
+    - run_benchmarks_ffmpeg_win_audio_decode_result.rc | default(0) != 0

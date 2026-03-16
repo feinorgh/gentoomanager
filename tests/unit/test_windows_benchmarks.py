@@ -21,6 +21,7 @@ WINDOWS_TASK_FILES = [
     "process_win.yml",
     "linker_win.yml",
     "startup_win.yml",
+    "ffmpeg_win.yml",
     "setup_win.yml",
     "normalize_win.yml",
     "denormalize_win.yml",
@@ -37,6 +38,7 @@ EXPECTED_WINDOWS_CATEGORIES = [
     "process",
     "linker",
     "startup",
+    "ffmpeg",
 ]
 
 

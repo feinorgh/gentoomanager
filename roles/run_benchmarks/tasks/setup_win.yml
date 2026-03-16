@@ -24,6 +24,7 @@
       - 7zip
       - git
       - nodejs
+      - ffmpeg
     state: present
   register: run_benchmarks_choco_result
   # Chocolatey exits 0 on success and 1641/3010 for reboot-required; treat both as OK.
