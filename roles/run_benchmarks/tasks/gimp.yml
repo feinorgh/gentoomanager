@@ -3,12 +3,21 @@
 #
 # Measures how long GIMP takes to start up, initialise, and exit cleanly:
 #
-#   hyperfine "gimp -i -n --no-data --no-fonts -b '(gimp-quit 0)'"
+#   hyperfine "gimp -i -n --no-data --no-fonts --quit"
+#
+# Note: GIMP 3.x daemonises itself when launched with -b '(gimp-quit 0)'.
+# The parent process exits immediately (RC=0) while a background process
+# continues loading.  Subsequent hyperfine iterations then either connect
+# to the still-loading daemon via IPC (sending it quit commands) or hang
+# indefinitely — resulting in a timeout and an empty gimp.json.
+# Using --quit prevents daemonisation: GIMP runs in the foreground until
+# fully initialised, then exits.  Each iteration correctly measures the
+# full cold-start time (~60 s on GIMP 3.x with GEGL/BABL).
 #
 # Tuning variables (see defaults/main.yml):
 #   run_benchmarks_gimp_runs          (default 3)
 #   run_benchmarks_gimp_warmup        (default 1)
-#   run_benchmarks_gimp_timeout_sec   (default 600)
+#   run_benchmarks_gimp_timeout_sec   (default 900)
 
 - name: Check GIMP availability
   ansible.builtin.command:
@@ -34,7 +43,7 @@
       --warmup {{ run_benchmarks_gimp_warmup }}
       --runs {{ run_benchmarks_gimp_runs }}
       --export-json {{ run_benchmarks_work_dir }}/gimp.json
-      "gimp -i -n --no-data --no-fonts -b '(gimp-quit 0)'"
+      "gimp -i -n --no-data --no-fonts --quit"
   register: run_benchmarks_gimp_result
   changed_when: false
   failed_when: false

@@ -33,7 +33,7 @@ run_benchmarks_compression_warmup: 1
 # run_benchmarks_gimp_timeout_sec   — wall-clock timeout for the entire run
 run_benchmarks_gimp_runs: 3
 run_benchmarks_gimp_warmup: 1
-run_benchmarks_gimp_timeout_sec: 600
+run_benchmarks_gimp_timeout_sec: 900
 
 # CPU core(s) to pin benchmark processes to via taskset (empty string = no pinning)
 # Example: "0-3" pins to cores 0-3; leave empty for no affinity constraint
