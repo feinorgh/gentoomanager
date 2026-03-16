@@ -9,8 +9,60 @@
 #   ansible-playbook playbooks/provision_benchmarks.yml
 #   ansible-playbook playbooks/provision_benchmarks.yml --limit hypervisor_hv2
 #   ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
+#   ansible-playbook playbooks/provision_benchmarks.yml -e provision_manage_power=true
+#
+# --manage-power:
+#   When provision_manage_power=true, each VM that is powered off when the
+#   playbook starts is booted, provisioned, then shut down again.  VMs that
+#   were already running are left running after provisioning.
 
-# ── Play 1: gather facts in parallel, create OS-family dynamic groups ────
+# ── Play 0: Boot powered-off VMs (--manage-power) ────────────────────────
+- name: Boot powered-off VMs before provisioning
+  hosts: "all:!win:!win11:!win10"
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  vars:
+    provision_manage_power: false
+    provision_boot_timeout_sec: 180
+  tasks:
+    - name: Check VM power state via hypervisor
+      ansible.builtin.command:
+        cmd: virsh --connect qemu:///system domstate '{{ inventory_hostname }}'
+      delegate_to: "{{ hypervisor_host }}"
+      register: _provision_vm_domstate
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when:
+        - provision_manage_power | default(false) | bool
+        - hypervisor_host is defined
+        - hypervisor_host | length > 0
+
+    - name: Record whether this VM needs to be booted
+      ansible.builtin.set_fact:
+        _provision_vm_was_off: >-
+          {{
+            provision_manage_power | default(false) | bool and
+            hypervisor_host is defined and hypervisor_host | length > 0 and
+            _provision_vm_domstate is not skipped and
+            _provision_vm_domstate.stdout | default('') | trim != 'running'
+          }}
+
+    - name: Boot VM via hypervisor
+      ansible.builtin.command:
+        cmd: virsh --connect qemu:///system start '{{ inventory_hostname }}'
+      delegate_to: "{{ hypervisor_host }}"
+      changed_when: true
+      when: _provision_vm_was_off | default(false) | bool
+
+    - name: Wait for VM to become reachable after boot
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ provision_boot_timeout_sec | int }}"
+        sleep: 5
+        connect_timeout: 10
+      when: _provision_vm_was_off | default(false) | bool
+
 - name: Gather facts and group hosts by OS family
   hosts: "all:!win:!win11:!win10"
   gather_facts: true
@@ -204,3 +256,44 @@
       ansible.builtin.include_role:
         name: provision_benchmarks
         tasks_from: os/solus.yml
+
+# ── Play 11: Shut down VMs that were booted by this run (--manage-power) ─
+- name: Shut down VMs booted by this provisioning run
+  hosts: "all:!win:!win11:!win10"
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  vars:
+    provision_manage_power: false
+  tasks:
+    - name: Shut down VM gracefully after provisioning
+      ansible.builtin.command:
+        cmd: virsh --connect qemu:///system shutdown '{{ inventory_hostname }}'
+      delegate_to: "{{ hypervisor_host }}"
+      changed_when: true
+      failed_when: false
+      when:
+        - provision_manage_power | default(false) | bool
+        - _provision_vm_was_off | default(false) | bool
+        - hypervisor_host is defined
+        - hypervisor_host | length > 0
+
+    - name: Wait for VM to reach shut-off state
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          for i in $(seq 1 30); do
+            state=$(virsh --connect qemu:///system domstate '{{ inventory_hostname }}' 2>/dev/null | tr -d ' \n')
+            [ "$state" = "shut off" ] && exit 0
+            sleep 5
+          done
+          exit 1
+        executable: /bin/bash
+      delegate_to: "{{ hypervisor_host }}"
+      changed_when: false
+      failed_when: false
+      when:
+        - provision_manage_power | default(false) | bool
+        - _provision_vm_was_off | default(false) | bool
+        - hypervisor_host is defined
+        - hypervisor_host | length > 0
