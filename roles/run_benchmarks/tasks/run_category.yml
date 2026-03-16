@@ -10,7 +10,7 @@
     executable: /bin/bash
   become: true
   changed_when: false
-  failed_when: false
+  ignore_errors: true
   when: ansible_system | default('Linux') == 'Linux'
 
 - name: Include benchmark category tasks

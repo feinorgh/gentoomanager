@@ -39,6 +39,8 @@
     cmd: |
       set -eo pipefail
       TESTFILE="{{ run_benchmarks_work_dir }}/disk_bench.bin"
+      # Drop caches if sudo is available; fall back to sync-only otherwise
+      DROP_CMD="sync; sudo -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || sync"
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup 1 \
@@ -47,11 +49,10 @@
         --prepare "rm -f ${TESTFILE}" \
         --command-name "seq-write-256m" \
           "dd if=/dev/zero of=${TESTFILE} bs=64M count=4 oflag=sync 2>&1" \
-        --prepare "sync && echo 3 > /proc/sys/vm/drop_caches" \
+        --prepare "${DROP_CMD}" \
         --command-name "seq-read-256m" \
           "dd if=${TESTFILE} of=/dev/null bs=64M count=4 2>&1"
     executable: /bin/bash
-  become: true
   register: run_benchmarks_disk_result
   changed_when: false
   failed_when: false
