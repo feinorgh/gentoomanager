@@ -7,24 +7,21 @@
   ansible.builtin.set_fact:
     run_benchmarks_is_gentoo: "{{ ansible_distribution | default('') == 'Gentoo' }}"
 
-- name: Skip non-Gentoo hosts
-  ansible.builtin.meta: end_host
-  when: not run_benchmarks_is_gentoo
-
 - name: Verify qlop is available
   ansible.builtin.command:
     cmd: qlop --version
   register: run_benchmarks_qlop_check
   changed_when: false
   failed_when: false
+  when: run_benchmarks_is_gentoo
 
 - name: Skip if qlop is not available
   ansible.builtin.debug:
     msg: "qlop not found — skipping build time analysis"
-  when: run_benchmarks_qlop_check.rc != 0
+  when: run_benchmarks_is_gentoo and run_benchmarks_qlop_check.rc != 0
 
 - name: Collect build time data
-  when: run_benchmarks_qlop_check.rc == 0
+  when: run_benchmarks_is_gentoo and run_benchmarks_qlop_check.rc == 0
   block:
     - name: Get all merge times (machine-readable)
       ansible.builtin.shell:
