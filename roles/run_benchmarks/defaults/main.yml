@@ -52,6 +52,11 @@ run_benchmarks_windows_categories:
   - compiler
   - python
   - coreutils
+  - sqlite
+  - numeric
+  - process
+  - linker
+  - startup
 
 # Local directory for collected results
 run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"

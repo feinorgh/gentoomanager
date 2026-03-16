@@ -1,0 +1,155 @@
+---
+# Linker benchmarks on Windows: measure link time for a synthetic 400-file
+# project.  Tests gcc/ld (MinGW) and MSVC link.exe.
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check gcc availability for linker benchmark (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command gcc -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_linker_gcc_check
+  changed_when: false
+  failed_when: false
+
+- name: Check MSVC cl.exe availability for linker benchmark (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command cl -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_linker_cl_check
+  changed_when: false
+  failed_when: false
+
+- name: Set linker compiler fact (Windows)
+  ansible.builtin.set_fact:
+    run_benchmarks_win_linker_compiler: >-
+      {{ 'gcc' if 'ok' in run_benchmarks_win_linker_gcc_check.stdout
+         else ('cl' if 'ok' in run_benchmarks_win_linker_cl_check.stdout else '') }}
+
+# ── Generate synthetic multi-object project ───────────────────────────────
+
+- name: Count existing linker source files (Windows)
+  ansible.windows.win_shell: |
+    $dir = '{{ run_benchmarks_work_dir_win }}\linker_src'
+    if (Test-Path $dir) {
+      (Get-ChildItem $dir -Filter 'unit_*.c').Count
+    } else { 0 }
+  register: run_benchmarks_win_linker_src_count
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_linker_compiler != ''
+
+- name: Remove undersized linker project (Windows)
+  ansible.windows.win_file:
+    path: "{{ run_benchmarks_work_dir_win }}\\linker_src"
+    state: absent
+  when:
+    - run_benchmarks_win_linker_compiler != ''
+    - run_benchmarks_win_linker_src_count.stdout | trim | int < 350
+
+- name: Write linker project generator script (Windows)
+  ansible.windows.win_copy:
+    content: |
+      import os, sys
+      outdir = sys.argv[1]
+      os.makedirs(outdir, exist_ok=True)
+      with open(os.path.join(outdir, 'bench_link.h'), 'w') as f:
+          for i in range(400):
+              for j in range(10):
+                  f.write('double fn_%d_%d(double x);\n' % (i, j))
+      for i in range(400):
+          with open(os.path.join(outdir, 'unit_%03d.c' % i), 'w') as f:
+              f.write('#include "bench_link.h"\n')
+              for j in range(10):
+                  f.write('double fn_%d_%d(double x) { return x * %d.%d + %d.%d; }\n' % (i, j, i, j, j, i))
+      with open(os.path.join(outdir, 'main.c'), 'w') as f:
+          f.write('#include "bench_link.h"\n#include <stdio.h>\n')
+          f.write('int main(void) {\n  double s = 0.0;\n')
+          for i in range(400):
+              for j in range(10):
+                  f.write('  s += fn_%d_%d((double)%d);\n' % (i, j, i*j))
+          f.write('  printf("%.3f\\n", s);\n  return 0;\n}\n')
+    dest: "{{ run_benchmarks_work_dir_win }}\\gen_linker_src.py"
+  when:
+    - run_benchmarks_win_linker_compiler != ''
+    - run_benchmarks_win_linker_src_count.stdout | trim | int < 350
+
+- name: Generate synthetic C source files for linker benchmark (Windows)
+  ansible.windows.win_shell: >-
+    python "{{ run_benchmarks_work_dir_win }}\gen_linker_src.py"
+    "{{ run_benchmarks_work_dir_win }}\linker_src"
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_win_linker_compiler != ''
+    - run_benchmarks_win_linker_src_count.stdout | trim | int < 350
+
+- name: Pre-compile object files for linker benchmark with gcc (Windows)
+  ansible.windows.win_shell: |
+    $dir = '{{ run_benchmarks_work_dir_win }}\linker_src'
+    Push-Location $dir
+    Get-ChildItem -Filter '*.c' | ForEach-Object {
+      $obj = $_.BaseName + '.o'
+      if (-not (Test-Path $obj)) {
+        gcc -O2 -c -o $obj $_.Name
+      }
+    }
+    Pop-Location
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_linker_compiler == 'gcc'
+
+- name: Pre-compile object files for linker benchmark with MSVC (Windows)
+  ansible.windows.win_shell: |
+    $dir = '{{ run_benchmarks_work_dir_win }}\linker_src'
+    Push-Location $dir
+    Get-ChildItem -Filter '*.c' | ForEach-Object {
+      $obj = $_.BaseName + '.obj'
+      if (-not (Test-Path $obj)) {
+        cl /O2 /c /Fo:$obj $_.Name >$null 2>&1
+      }
+    }
+    Pop-Location
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_linker_compiler == 'cl'
+
+# ── Linker benchmarks ─────────────────────────────────────────────────────
+
+- name: Run linker benchmarks with gcc/ld (Windows)
+  ansible.windows.win_shell: |
+    $dir = '{{ run_benchmarks_work_dir_win }}\linker_src'
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $objs = (Get-ChildItem $dir -Filter '*.o' | ForEach-Object { $_.FullName }) -join ' '
+    $linkCmd = "gcc -o NUL $objs -lm 2>`$null"
+    hyperfine --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\linker.json" `
+      --command-name 'ld-gcc' $linkCmd
+  register: run_benchmarks_win_linker_gcc_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_linker_compiler == 'gcc'
+
+- name: Run linker benchmarks with MSVC link.exe (Windows)
+  ansible.windows.win_shell: |
+    $dir = '{{ run_benchmarks_work_dir_win }}\linker_src'
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $objs = (Get-ChildItem $dir -Filter '*.obj' | ForEach-Object { $_.FullName }) -join ' '
+    $linkCmd = "link.exe /NOLOGO /OUT:NUL $objs >NUL 2>&1"
+    hyperfine --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\linker.json" `
+      --command-name 'msvc-link' $linkCmd
+  register: run_benchmarks_win_linker_cl_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_linker_compiler == 'cl'
+
+- name: Warn if linker benchmarks failed (Windows)
+  ansible.builtin.debug:
+    msg: "[WARN] {{ inventory_hostname }}: linker benchmark failed or timed out"
+  when:
+    - run_benchmarks_win_linker_compiler != ''
+    - (run_benchmarks_win_linker_gcc_result is not skipped and run_benchmarks_win_linker_gcc_result.rc | default(0) != 0)
+      or (run_benchmarks_win_linker_cl_result is not skipped and run_benchmarks_win_linker_cl_result.rc | default(0) != 0)

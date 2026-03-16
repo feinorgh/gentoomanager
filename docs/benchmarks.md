@@ -1072,13 +1072,35 @@ playbook knows which hypervisor to delegate `virsh` commands to.
 
 ## Windows Support
 
-Windows benchmarks are opt-in and require WinRM connectivity.  A subset of
-categories has Windows task variants: `compression`, `crypto`, `compiler`,
-`python`, `coreutils`.
+Windows benchmarks are opt-in and require WinRM connectivity.  The following
+categories have Windows-specific task variants (`*_win.yml`):
+
+| Category | What it measures |
+|----------|-----------------|
+| `compression` | Archive compress/decompress (7-Zip, tar) |
+| `crypto` | Hash and cipher throughput (certutil, OpenSSL) |
+| `compiler` | C/Rust/Go compile time (MSVC, gcc/MinGW, rustc, go) |
+| `python` | Python stdlib workloads (fibonacci, JSON, regex, sort) |
+| `coreutils` | Sort, grep, find, archive, git operations (PowerShell) |
+| `sqlite` | Bulk INSERT, indexed SELECT, ORDER BY (Python sqlite3) |
+| `numeric` | Compiled FP workloads: n-body, Mandelbrot, spectral norm; numpy matmul/FFT/sort |
+| `process` | Process creation overhead (cmd.exe, PowerShell, trivial exe) |
+| `linker` | Link time for 400-file synthetic project (gcc/ld or MSVC link.exe) |
+| `startup` | Interpreter and shell startup latency (Python, Node, PowerShell, cmd.exe) |
 
 ```bash
 ./scripts/run_benchmarks.sh --include-windows
+./scripts/run_benchmarks.sh --include-windows --manage-power --skip-existing
 ```
+
+Normalization on Windows:
+- Switches the power plan to **High Performance**
+- Disables Windows Defender real-time protection temporarily
+- Stops background services (SysMain, WSearch, wuauserv, DiagTrack, etc.)
+- Disables automatic page-file management during the run
+
+Categories not available on Windows: `memory`, `disk`, `bash`, `boot_time`,
+`gentoo_build_times`, `ffmpeg`, `imagemagick`, `opencv`, `gimp`, `inkscape`.
 
 ## Configuration Reference
 

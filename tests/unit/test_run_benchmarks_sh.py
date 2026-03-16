@@ -246,3 +246,28 @@ class TestPlaybookInvocation:
         result, recorded = _run(bin_dir, args_file, [])
         assert result.returncode == 0
         assert "-i" in recorded
+
+
+class TestIncludeWindows:
+    def test_include_windows_sets_flag(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, ["--include-windows"])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_include_windows" in evars
+        assert "true" in evars
+
+    def test_include_windows_not_set_by_default(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, [])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_include_windows" not in evars
+
+    def test_include_windows_combined_with_manage_power(self, mock_bin) -> None:
+        bin_dir, args_file = mock_bin
+        result, recorded = _run(bin_dir, args_file, ["--include-windows", "--manage-power"])
+        assert result.returncode == 0
+        evars = _evars_from_args(recorded)
+        assert "run_benchmarks_include_windows" in evars
+        assert "run_benchmarks_manage_power" in evars

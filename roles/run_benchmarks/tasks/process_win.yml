@@ -1,0 +1,86 @@
+---
+# Process creation benchmarks on Windows: measure CreateProcess/spawn overhead.
+# Windows has no fork(); instead we measure:
+#   - Spawning cmd.exe (analogous to /bin/true)
+#   - Spawning PowerShell -Command exit
+#   - Python interpreter startup (import overhead)
+#   - A compiled trivial C executable (if gcc/MSVC available)
+
+# ── Availability checks ───────────────────────────────────────────────────
+
+- name: Check gcc availability for process benchmark (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command gcc -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_process_gcc_check
+  changed_when: false
+  failed_when: false
+
+- name: Check MSVC cl.exe availability for process benchmark (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command cl -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_process_cl_check
+  changed_when: false
+  failed_when: false
+
+# ── Compile trivial exit benchmark ────────────────────────────────────────
+
+- name: Create trivial C exit program source (Windows)
+  ansible.windows.win_copy:
+    content: |
+      int main(void) { return 0; }
+    dest: "{{ run_benchmarks_work_dir_win }}\\bench_exit.c"
+  when: >-
+    'ok' in run_benchmarks_win_process_gcc_check.stdout or
+    'ok' in run_benchmarks_win_process_cl_check.stdout
+
+- name: Compile trivial exit program with gcc (Windows)
+  ansible.windows.win_shell: >-
+    gcc -O2 -o "{{ run_benchmarks_work_dir_win }}\bench_exit.exe"
+        "{{ run_benchmarks_work_dir_win }}\bench_exit.c"
+  changed_when: false
+  failed_when: false
+  when: "'ok' in run_benchmarks_win_process_gcc_check.stdout"
+
+- name: Compile trivial exit program with MSVC (Windows)
+  ansible.windows.win_shell: >-
+    cl /O2 /Fe:"{{ run_benchmarks_work_dir_win }}\bench_exit.exe"
+       "{{ run_benchmarks_work_dir_win }}\bench_exit.c" >$null 2>&1
+  changed_when: false
+  failed_when: false
+  when:
+    - "'ok' not in run_benchmarks_win_process_gcc_check.stdout"
+    - "'ok' in run_benchmarks_win_process_cl_check.stdout"
+
+# ── Process creation benchmarks ───────────────────────────────────────────
+
+- name: Check trivial exit binary was compiled (Windows)
+  ansible.windows.win_stat:
+    path: "{{ run_benchmarks_work_dir_win }}\\bench_exit.exe"
+  register: run_benchmarks_win_process_exit_stat
+
+- name: Run process creation benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $cmds = @(
+      '--command-name', 'cmd-exit',
+        'cmd.exe /c exit',
+      '--command-name', 'powershell-exit',
+        'powershell.exe -NoProfile -NonInteractive -Command exit',
+      '--command-name', 'python-startup',
+        'python -c "import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools"'
+    )
+    if (Test-Path "$wd\bench_exit.exe") {
+      $cmds += @('--command-name', 'trivial-exe', "$wd\bench_exit.exe")
+    }
+    & hyperfine --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\process.json" @cmds
+  register: run_benchmarks_win_process_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn if process benchmarks failed (Windows)
+  ansible.builtin.debug:
+    msg: "[WARN] {{ inventory_hostname }}: process benchmark failed or timed out"
+  when: run_benchmarks_win_process_result.rc | default(0) != 0

@@ -1,0 +1,64 @@
+---
+# Application and interpreter startup benchmarks on Windows.
+# Measures cold/warm launch latency of built-in Windows binaries and
+# interpreter startup overhead — a proxy for OS loader and DLL init cost.
+
+# ── Check available interpreters ─────────────────────────────────────────
+
+- name: Check Python availability for startup benchmark (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command python -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_startup_py_check
+  changed_when: false
+  failed_when: false
+
+- name: Check Node.js availability for startup benchmark (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command node -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_startup_node_check
+  changed_when: false
+  failed_when: false
+
+# ── Startup benchmarks ────────────────────────────────────────────────────
+
+- name: Run startup benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_startup_runs }}
+    $warmup = {{ run_benchmarks_startup_warmup }}
+
+    $cmds = @(
+      '--command-name', 'cmd-startup',
+        'cmd.exe /c exit',
+      '--command-name', 'powershell-startup',
+        'powershell.exe -NoProfile -NonInteractive -Command exit',
+      '--command-name', 'notepad-open-close',
+        'powershell.exe -NoProfile -NonInteractive -Command "Start-Process notepad.exe; Start-Sleep -Milliseconds 500; Stop-Process -Name notepad -ErrorAction SilentlyContinue"'
+    )
+
+    if ('{{ run_benchmarks_win_startup_py_check.stdout | trim }}' -eq 'ok') {
+      $cmds += @(
+        '--command-name', 'python-startup',
+          'python -c "import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools"'
+      )
+    }
+    if ('{{ run_benchmarks_win_startup_node_check.stdout | trim }}' -eq 'ok') {
+      $cmds += @(
+        '--command-name', 'node-startup',
+          'node -e ""'
+      )
+    }
+
+    & hyperfine --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\startup.json" @cmds
+  register: run_benchmarks_win_startup_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on startup benchmark failure (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: startup benchmark exited
+      rc={{ run_benchmarks_win_startup_result.rc }}.
+      {{ run_benchmarks_win_startup_result.stderr | default('') | truncate(300) | trim }}
+  when: run_benchmarks_win_startup_result.rc | default(0) != 0

@@ -1,0 +1,158 @@
+---
+# SQLite benchmarks on Windows: bulk INSERT, indexed SELECT, full-table scan.
+# Uses Python's built-in sqlite3 module (always available) for DB operations,
+# and sqlite3.exe (if installed via Chocolatey) for CLI-based read benchmarks.
+
+# ── Availability check ────────────────────────────────────────────────────
+
+- name: Check Python availability for SQLite benchmark (Windows)
+  ansible.windows.win_shell: python --version 2>&1
+  register: run_benchmarks_win_sqlite_py_check
+  changed_when: false
+  failed_when: false
+
+- name: Check sqlite3 CLI availability (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command sqlite3 -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_sqlite_cli_check
+  changed_when: false
+  failed_when: false
+
+# ── Setup: build 1M-row template database ────────────────────────────────
+
+- name: Check SQLite template database size (Windows)
+  ansible.windows.win_stat:
+    path: "{{ run_benchmarks_work_dir_win }}\\sqlite_template.db"
+  register: run_benchmarks_win_sqlite_template_stat
+  when: run_benchmarks_win_sqlite_py_check.rc == 0
+
+- name: Remove invalid or undersized SQLite template database (Windows)
+  ansible.windows.win_file:
+    path: "{{ run_benchmarks_work_dir_win }}\\sqlite_template.db"
+    state: absent
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - run_benchmarks_win_sqlite_template_stat.stat.exists | default(false)
+    - run_benchmarks_win_sqlite_template_stat.stat.size | default(1) < 10485760
+
+- name: Write SQLite template database creation script (Windows)
+  ansible.windows.win_copy:
+    content: |
+      import sqlite3, random
+      random.seed(42)
+      import sys
+      db = sys.argv[1]
+      conn = sqlite3.connect(db)
+      conn.execute('PRAGMA synchronous = OFF')
+      conn.execute('PRAGMA journal_mode = WAL')
+      conn.execute('CREATE TABLE bench(id INTEGER PRIMARY KEY, val REAL, str TEXT)')
+      conn.execute('CREATE INDEX idx_val ON bench(val)')
+      conn.executemany(
+          'INSERT INTO bench VALUES(?,?,?)',
+          ((i, random.random(), '%08x' % i) for i in range(1000000))
+      )
+      conn.commit()
+      conn.close()
+    dest: "{{ run_benchmarks_work_dir_win }}\\make_sqlite_db.py"
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - not (run_benchmarks_win_sqlite_template_stat.stat.exists | default(false))
+      or (run_benchmarks_win_sqlite_template_stat.stat.size | default(1) < 10485760)
+
+- name: Create SQLite template database (1 000 000 rows) (Windows)
+  ansible.windows.win_shell: >-
+    python "{{ run_benchmarks_work_dir_win }}\make_sqlite_db.py"
+    "{{ run_benchmarks_work_dir_win }}\sqlite_template.db"
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - not (run_benchmarks_win_sqlite_template_stat.stat.exists | default(false))
+      or (run_benchmarks_win_sqlite_template_stat.stat.size | default(1) < 10485760)
+
+# ── Write benchmarks ──────────────────────────────────────────────────────
+
+- name: Run SQLite write benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $db = "$wd\sqlite_template.db"
+    $tmp = "$wd\sqlite_bench_upd.db"
+    hyperfine `
+      --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\sqlite_write.json" `
+      --command-name 'insert-100k' `
+        "python -c ""import sqlite3,random; r=random.Random(42); c=sqlite3.connect(':memory:'); c.execute('CREATE TABLE bench(id INTEGER PRIMARY KEY, val REAL, str TEXT)'); c.execute('CREATE INDEX idx_val ON bench(val)'); c.executemany('INSERT INTO bench VALUES(?,?,?)', ((i,r.random(),'%08x'%i) for i in range(100000))); c.commit()"" " `
+      --prepare "Copy-Item '$db' '$tmp' -Force" `
+      --command-name 'update-500k' `
+        "python -c ""import sqlite3; c=sqlite3.connect(r'$tmp'); c.execute('UPDATE bench SET val=1.0-val WHERE id%2=0'); c.commit()"" "
+  register: run_benchmarks_win_sqlite_write_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_sqlite_py_check.rc == 0
+
+- name: Warn if SQLite write benchmarks failed (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: sqlite_write benchmark failed
+      (rc={{ run_benchmarks_win_sqlite_write_result.rc }}).
+      {{ run_benchmarks_win_sqlite_write_result.stderr | default('') | truncate(400) | trim }}
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - run_benchmarks_win_sqlite_write_result.rc != 0
+
+# ── Read benchmarks ───────────────────────────────────────────────────────
+
+- name: Run SQLite read benchmarks via CLI (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $db = "$wd\sqlite_template.db"
+    hyperfine `
+      --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\sqlite_read.json" `
+      --command-name 'full-scan-agg' `
+        "sqlite3 $db 'SELECT COUNT(*), AVG(val) FROM bench WHERE id % 7 = 0'" `
+      --command-name 'indexed-range-sum' `
+        "sqlite3 $db 'SELECT COUNT(*), SUM(val) FROM bench WHERE val BETWEEN 0.25 AND 0.75'" `
+      --command-name 'order-top-100k' `
+        "sqlite3 $db 'SELECT id, val FROM bench ORDER BY val LIMIT 100000'"
+  register: run_benchmarks_win_sqlite_read_result
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - "'ok' in run_benchmarks_win_sqlite_cli_check.stdout"
+
+- name: Run SQLite read benchmarks via Python (Windows, no sqlite3 CLI)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    $db = "$wd\sqlite_template.db"
+    hyperfine `
+      --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\sqlite_read.json" `
+      --command-name 'full-scan-agg' `
+        "python -c ""import sqlite3; c=sqlite3.connect(r'$db'); print(c.execute('SELECT COUNT(*), AVG(val) FROM bench WHERE id % 7 = 0').fetchone())"" " `
+      --command-name 'indexed-range-sum' `
+        "python -c ""import sqlite3; c=sqlite3.connect(r'$db'); print(c.execute('SELECT COUNT(*), SUM(val) FROM bench WHERE val BETWEEN 0.25 AND 0.75').fetchone())"" " `
+      --command-name 'order-top-100k' `
+        "python -c ""import sqlite3; c=sqlite3.connect(r'$db'); r=c.execute('SELECT id, val FROM bench ORDER BY val LIMIT 100000').fetchall(); print(len(r))"" "
+  register: run_benchmarks_win_sqlite_read_py_result
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - "'ok' not in run_benchmarks_win_sqlite_cli_check.stdout"
+
+- name: Warn if SQLite read benchmarks failed (Windows)
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: sqlite_read benchmark failed.
+  when:
+    - run_benchmarks_win_sqlite_py_check.rc == 0
+    - (run_benchmarks_win_sqlite_read_result is not skipped and run_benchmarks_win_sqlite_read_result.rc | default(0) != 0)
+      or (run_benchmarks_win_sqlite_read_py_result is not skipped and run_benchmarks_win_sqlite_read_py_result.rc | default(0) != 0)

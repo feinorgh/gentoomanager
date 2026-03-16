@@ -1,0 +1,119 @@
+---
+# Numeric floating-point benchmarks on Windows: compiled C (nbody, mandelbrot,
+# spectral norm) and numpy (matmul, FFT, sort).
+# Compiles with gcc (MinGW) if available, falls back to MSVC cl.exe.
+
+# ── Availability checks ───────────────────────────────────────────────────
+
+- name: Check gcc availability for numeric benchmarks (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command gcc -ErrorAction SilentlyContinue) { (gcc --version 2>&1)[0] } else { "missing" }
+  register: run_benchmarks_win_numeric_gcc_check
+  changed_when: false
+  failed_when: false
+
+- name: Check MSVC cl.exe availability for numeric benchmarks (Windows)
+  ansible.windows.win_shell: |
+    if (Get-Command cl -ErrorAction SilentlyContinue) { "ok" } else { "missing" }
+  register: run_benchmarks_win_numeric_cl_check
+  changed_when: false
+  failed_when: false
+
+- name: Check numpy availability (Windows)
+  ansible.windows.win_shell: python -c "import numpy; print('ok')"
+  register: run_benchmarks_win_numeric_numpy_check
+  changed_when: false
+  failed_when: false
+
+- name: Set numeric compiler fact (Windows)
+  ansible.builtin.set_fact:
+    run_benchmarks_win_numeric_compiler: >-
+      {{ 'gcc' if 'missing' not in run_benchmarks_win_numeric_gcc_check.stdout
+         else ('cl' if 'ok' in run_benchmarks_win_numeric_cl_check.stdout else '') }}
+
+# ── C source setup ────────────────────────────────────────────────────────
+
+- name: Copy numeric C benchmark sources to work directory (Windows)
+  ansible.windows.win_copy:
+    src: "{{ item }}"
+    dest: "{{ run_benchmarks_work_dir_win }}\\{{ item }}"
+  loop:
+    - bench_nbody.c
+    - bench_mandelbrot.c
+    - bench_spectral_norm.c
+  when: run_benchmarks_win_numeric_compiler != ''
+
+- name: Compile numeric benchmarks with gcc (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    gcc -O3 -march=native -ffast-math -lm -o "$wd\bench_nbody.exe"        "$wd\bench_nbody.c"
+    gcc -O3 -march=native -ffast-math         -o "$wd\bench_mandelbrot.exe" "$wd\bench_mandelbrot.c"
+    gcc -O3 -march=native -ffast-math -lm -o "$wd\bench_spectral_norm.exe" "$wd\bench_spectral_norm.c"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_numeric_compiler == 'gcc'
+
+- name: Compile numeric benchmarks with MSVC (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    Push-Location $wd
+    cl /O2 /Fe:bench_nbody.exe        bench_nbody.c        >$null 2>&1
+    cl /O2 /Fe:bench_mandelbrot.exe   bench_mandelbrot.c   >$null 2>&1
+    cl /O2 /Fe:bench_spectral_norm.exe bench_spectral_norm.c >$null 2>&1
+    Pop-Location
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_numeric_compiler == 'cl'
+
+# ── Compiled C benchmarks ─────────────────────────────────────────────────
+
+- name: Run compiled numeric benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    hyperfine `
+      --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\numeric_compiled.json" `
+      --command-name 'nbody-30m'          "$wd\bench_nbody.exe 30000000" `
+      --command-name 'mandelbrot-6000'    "$wd\bench_mandelbrot.exe 6000" `
+      --command-name 'spectral-norm-1000' "$wd\bench_spectral_norm.exe 1000"
+  register: run_benchmarks_win_numeric_c_result
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_numeric_compiler != ''
+
+- name: Warn if compiled numeric benchmarks failed (Windows)
+  ansible.builtin.debug:
+    msg: "[WARN] {{ inventory_hostname }}: numeric_compiled benchmark failed or timed out"
+  when:
+    - run_benchmarks_win_numeric_compiler != ''
+    - run_benchmarks_win_numeric_c_result.rc | default(0) != 0
+
+# ── NumPy benchmarks ──────────────────────────────────────────────────────
+
+- name: Run numpy numeric benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = '{{ run_benchmarks_work_dir_win }}'
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+    hyperfine `
+      --runs $runs --warmup $warmup --ignore-failure `
+      --export-json "$wd\numeric_numpy.json" `
+      --command-name 'numpy-matmul-2000' `
+        "python -c ""import numpy as np; a=np.random.rand(2000,2000); np.matmul(a,a)"" " `
+      --command-name 'numpy-fft2-2048' `
+        "python -c ""import numpy as np; a=np.random.rand(2048,2048); np.fft.fft2(a)"" " `
+      --command-name 'numpy-sort-10m' `
+        "python -c ""import numpy as np; a=np.random.rand(10000000); np.sort(a)"" "
+  register: run_benchmarks_win_numeric_numpy_result
+  changed_when: false
+  failed_when: false
+  when: "'ok' in run_benchmarks_win_numeric_numpy_check.stdout"
+
+- name: Warn if numpy benchmarks failed (Windows)
+  ansible.builtin.debug:
+    msg: "[WARN] {{ inventory_hostname }}: numeric_numpy benchmark failed or timed out"
+  when:
+    - "'ok' in run_benchmarks_win_numeric_numpy_check.stdout"
+    - run_benchmarks_win_numeric_numpy_result.rc | default(0) != 0
