@@ -76,6 +76,7 @@
         --command-name "nbody-30m"          "{{ run_benchmarks_work_dir }}/bench_nbody 30000000" \
         --command-name "mandelbrot-6000"    "{{ run_benchmarks_work_dir }}/bench_mandelbrot 6000" \
         --command-name "spectral-norm-1000" "{{ run_benchmarks_work_dir }}/bench_spectral_norm 1000"
+    executable: /bin/bash
   register: run_benchmarks_numeric_c_result
   changed_when: false
   failed_when: false
@@ -105,6 +106,7 @@
           "python3 -c \"import numpy as np; a=np.random.rand(2048,2048); np.fft.fft2(a)\"" \
         --command-name "numpy-sort-10m" \
           "python3 -c \"import numpy as np; a=np.random.rand(10_000_000); np.sort(a)\""
+    executable: /bin/bash
   register: run_benchmarks_numeric_numpy_result
   changed_when: false
   failed_when: false

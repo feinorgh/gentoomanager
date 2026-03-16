@@ -94,6 +94,7 @@
           real=$(readlink -f "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
+    executable: /bin/bash
   register: run_benchmarks_cc_versions
   changed_when: false
   failed_when: false
@@ -124,6 +125,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   register: run_benchmarks_compiler_c_result
@@ -170,6 +172,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   register: run_benchmarks_compiler_c_runtime_result
@@ -378,6 +381,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_sqlite.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   when:
@@ -443,6 +447,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_multifile.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   when:

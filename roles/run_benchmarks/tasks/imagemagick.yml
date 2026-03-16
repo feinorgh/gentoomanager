@@ -25,6 +25,7 @@
       FMTS=$(${BIN} -list format 2>/dev/null)
       echo "$FMTS" | grep -qi '^ *WEBP.*W' && echo '::has_webp::1' || echo '::has_webp::0'
       echo "$FMTS" | grep -qi '^ *AVIF.*W' && echo '::has_avif::1' || echo '::has_avif::0'
+    executable: /bin/bash
   register: run_benchmarks_im_detect
   changed_when: false
   failed_when: false
@@ -130,6 +131,7 @@
           "for img in kodak/kodim*.png; do ${IM} \"\$img\" -quality 90 JPEG:/dev/null; done" \
         --command-name "kodak-24-png-z6" \
           "for img in kodak/kodim*.png; do ${IM} \"\$img\" -define png:compression-level=6 PNG:/dev/null; done"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   register: run_benchmarks_kodak_encode_result
@@ -168,6 +170,7 @@
         --command-name "box-4k-1080p"      "${IM} im_4k.png -filter Box      -resize 1920x1080 null:" \
         --command-name "lanczos-4k-thumb"  "${IM} im_4k.png -filter Lanczos  -resize 256x256   null:" \
         --command-name "mitchell-4k-thumb" "${IM} im_4k.png -filter Mitchell -resize 256x256   null:"
+    executable: /bin/bash
   register: run_benchmarks_imagemagick_resize_result
   changed_when: false
   failed_when: false
@@ -202,6 +205,7 @@
         --command-name "grayscale"         "${IM} im_4k.png -colorspace Gray null:" \
         --command-name "emboss"            "${IM} im_4k.png -emboss 2 null:" \
         --command-name "rotate-45"         "${IM} im_4k.png -background black -rotate 45 null:"
+    executable: /bin/bash
   register: run_benchmarks_imagemagick_effects_result
   changed_when: false
   failed_when: false
@@ -244,6 +248,7 @@
         --ignore-failure \
         --export-json imagemagick_encode.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   register: run_benchmarks_imagemagick_encode_result
@@ -282,6 +287,7 @@
         --ignore-failure \
         --export-json imagemagick_decode.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   args:
     executable: /bin/bash
   register: run_benchmarks_imagemagick_decode_result

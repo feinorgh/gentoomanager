@@ -12,6 +12,7 @@
     cmd: |
       set -o pipefail
       find {{ run_benchmarks_work_dir }}/findtree -type f 2>/dev/null | wc -l || echo 0
+    executable: /bin/bash
   register: run_benchmarks_findtree_count
   changed_when: false
   failed_when: false
@@ -42,6 +43,7 @@
                   with open(os.path.join(d, "file_%02d.dat" % j), "w") as f:
                       f.write("bench dir=%03d sub=%s n=%02d\n" % (i, sub, j) + "y" * 256 + "\n")
       PYEOF
+    executable: /bin/bash
     creates: "{{ run_benchmarks_work_dir }}/findtree"
   changed_when: false
   failed_when: false
@@ -109,6 +111,7 @@
         done
         git checkout main 2>/dev/null || git checkout master
       fi
+    executable: /bin/bash
     creates: "{{ run_benchmarks_work_dir }}/gitrepo/.git"
 
 - name: Run git benchmarks

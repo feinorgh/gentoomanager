@@ -111,6 +111,7 @@
       echo "::ffmpeg::$(ffmpeg -version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::openssl::$(openssl version 2>/dev/null || echo 'not installed')"
       echo "::kernel::$(uname -r)"
+    executable: /bin/bash
   register: run_benchmarks_versions_raw
   changed_when: false
 
@@ -125,6 +126,7 @@
       else
         echo '0'
       fi
+    executable: /bin/bash
   register: run_benchmarks_cpu_freq_raw
   changed_when: false
   when: ansible_system | default('') == 'Linux'
@@ -188,6 +190,7 @@
       fi
       echo "${CFLAGS}"
       echo "${LDFLAGS}"
+    executable: /bin/bash
   register: run_benchmarks_distro_flags_raw
   changed_when: false
   when: ansible_distribution | default('') != 'Gentoo'
@@ -215,6 +218,7 @@
       set -eo pipefail
       gcc -march=native -Q --help=target 2>/dev/null |
         grep -m1 '^\s*-march=' | awk '{print $2}' || echo ''
+    executable: /bin/bash
   register: run_benchmarks_march_native_raw
   changed_when: false
   failed_when: false
@@ -247,6 +251,7 @@
         fi
       fi
       printf '%s\n%s\n' "$variant" "$version"
+    executable: /bin/bash
   register: run_benchmarks_libc_raw
   changed_when: false
   failed_when: false
@@ -272,6 +277,7 @@
       if echo "$cfg" | grep -q 'enable-link-mutex';           then echo 'link-mutex=yes';       fi
       if echo "$cfg" | grep -q 'enable-lto';                  then echo 'lto-support=yes';      else echo 'lto-support=no'; fi
       if echo "$cfg" | grep -q 'with-build-config=bootstrap-lto'; then echo 'bootstrap-lto=yes'; fi
+    executable: /bin/bash
   register: run_benchmarks_gcc_config_raw
   changed_when: false
   failed_when: false
@@ -332,6 +338,7 @@
                       | sed 's/^[A-Z_]*=[[:space:]]*//' | tr -d '"' || true)
       fi
       printf '%s\n%s\n%s\n' "$CXXFLAGS" "$MAKEFLAGS" "$RUSTFLAGS"
+    executable: /bin/bash
   register: run_benchmarks_extended_flags_raw
   changed_when: false
   failed_when: false
@@ -362,6 +369,7 @@
           echo 'CFS'
         fi
       fi
+    executable: /bin/bash
   register: run_benchmarks_scheduler_raw
   changed_when: false
   failed_when: false
@@ -372,6 +380,7 @@
     cmd: |
       set -eo pipefail
       df -T {{ run_benchmarks_work_dir }} 2>/dev/null | awk 'NR==2{print $2}' || echo 'unknown'
+    executable: /bin/bash
   register: run_benchmarks_filesystem_raw
   changed_when: false
   failed_when: false
@@ -384,6 +393,7 @@
       fstype=$(df -T {{ run_benchmarks_work_dir }} 2>/dev/null | awk 'NR==2{print $2}')
       [ -z "$fstype" ] && fstype='unknown'
       echo "$fstype"
+    executable: /bin/bash
   register: run_benchmarks_filesystem_bsd_raw
   changed_when: false
   failed_when: false
@@ -400,6 +410,7 @@
       else
         echo 'disabled'
       fi
+    executable: /bin/bash
   register: run_benchmarks_swap_raw
   changed_when: false
   failed_when: false
@@ -452,6 +463,7 @@
     cmd: |
       set -o pipefail
       lscpu 2>/dev/null | awk -F':[[:space:]]+' '/^L3 cache/{print $2; exit}'
+    executable: /bin/bash
   register: run_benchmarks_l3_cache_raw
   changed_when: false
   failed_when: false
@@ -475,6 +487,7 @@
           | grep -E '^CONFIG_PREEMPT' | head -8
         break
       done
+    executable: /bin/bash
   register: run_benchmarks_preempt_raw
   changed_when: false
   failed_when: false
@@ -492,6 +505,7 @@
       else
         echo 'unknown'
       fi
+    executable: /bin/bash
   register: run_benchmarks_io_scheduler_raw
   changed_when: false
   failed_when: false
@@ -502,6 +516,7 @@
     cmd: |
       set -o pipefail
       lscpu 2>/dev/null | awk -F':[[:space:]]+' '/^NUMA node\(s\)/{print $2; exit}' || echo '1'
+    executable: /bin/bash
   register: run_benchmarks_numa_raw
   changed_when: false
   failed_when: false
@@ -513,6 +528,7 @@
       set -o pipefail
       (sudo -n dmidecode -t 17 2>/dev/null || true) \
         | awk -F': ' '/^\s+Speed:/ && !/Unknown/{gsub(/^ +/,"",$2); print $2; exit}'
+    executable: /bin/bash
   register: run_benchmarks_mem_speed_raw
   changed_when: false
   failed_when: false
@@ -523,6 +539,7 @@
     cmd: |
       set -o pipefail
       eselect profile show 2>/dev/null | awk 'NR==2{gsub(/^ +/,""); print}' || echo ''
+    executable: /bin/bash
   register: run_benchmarks_profile_raw
   changed_when: false
   failed_when: false

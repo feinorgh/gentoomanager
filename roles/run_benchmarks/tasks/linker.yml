@@ -20,6 +20,7 @@
     cmd: |
       set -o pipefail
       find {{ run_benchmarks_work_dir }}/linker_src -name "unit_*.c" 2>/dev/null | wc -l || echo 0
+    executable: /bin/bash
   register: run_benchmarks_linker_src_count
   changed_when: false
   failed_when: false
@@ -65,6 +66,7 @@
                   f.write("  s += fn_%d_%d((double)%d);\n" % (i, j, i*j))
           f.write('  printf("%.3f\\n", s);\n  return 0;\n}\n')
       PYEOF
+    executable: /bin/bash
     creates: "{{ run_benchmarks_work_dir }}/linker_src/main.c"
   changed_when: false
   failed_when: false
@@ -80,6 +82,7 @@
         obj="${src%.c}.o"
         [ -f "$obj" ] || gcc -O2 -c -o "$obj" "$src"
       done
+    executable: /bin/bash
   changed_when: false
   failed_when: false
   when: run_benchmarks_linker_gcc_check.rc == 0
@@ -110,6 +113,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/linker.json \
         "${CMDS[@]}"
+    executable: /bin/bash
   register: run_benchmarks_linker_result
   changed_when: false
   failed_when: false

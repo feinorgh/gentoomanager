@@ -28,6 +28,7 @@
         cmd: |
           set -eo pipefail
           qlop -t -M -v 2>/dev/null
+        executable: /bin/bash
       register: run_benchmarks_qlop_all
       changed_when: false
 
@@ -44,6 +45,7 @@
           qlop -t -M -v sys-kernel/gentoo-kernel sys-kernel/gentoo-kernel-bin \
             sys-kernel/gentoo-sources sys-kernel/vanilla-kernel \
             sys-kernel/vanilla-kernel-bin 2>/dev/null || true
+        executable: /bin/bash
       register: run_benchmarks_kernel_history
       changed_when: false
 
@@ -74,6 +76,7 @@
             fi
             echo "${cat_pn}|${bt}|${cc}|${cflags}|${kv}"
           done
+        executable: /bin/bash
       register: run_benchmarks_pkg_metadata
       changed_when: false
 
