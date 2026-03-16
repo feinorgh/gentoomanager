@@ -18,6 +18,13 @@
 - name: Normalize VM state
   ansible.builtin.include_tasks:
     file: "normalize{{ '_win' if run_benchmarks_is_windows else '' }}.yml"
+    apply:
+      # Normalization tasks improve benchmark consistency but are not required
+      # for benchmarks to run.  On hosts without passwordless sudo, privilege
+      # escalation failures are connection-level fatals that bypass
+      # failed_when.  Applying ignore_errors at the include level lets all
+      # tasks in normalize.yml silently continue when become fails.
+      ignore_errors: true
   tags: [benchmark, normalize]
 
 # ── Benchmark categories ───────────────────────────────────────────────────
@@ -113,4 +120,6 @@
 - name: Restore VM to original state
   ansible.builtin.include_tasks:
     file: "denormalize{{ '_win' if run_benchmarks_is_windows else '' }}.yml"
+    apply:
+      ignore_errors: true
   tags: [benchmark, denormalize]
