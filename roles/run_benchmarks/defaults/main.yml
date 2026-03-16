@@ -139,6 +139,13 @@ run_benchmarks_include_windows: false
 # Enable with: -e run_benchmarks_skip_complete=true
 run_benchmarks_skip_complete: false
 
+# Skip individual benchmark categories whose primary result file already
+# exists and is non-empty in the local results directory.  More granular
+# than run_benchmarks_skip_complete: partial results are honoured and only
+# missing categories are executed.
+# Enable with: -e run_benchmarks_skip_existing=true
+run_benchmarks_skip_existing: false
+
 # Gentoo build time analysis: minimum build duration to include (seconds)
 run_benchmarks_gentoo_min_build_secs: 300
 

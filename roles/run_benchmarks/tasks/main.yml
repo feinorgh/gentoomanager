@@ -43,6 +43,60 @@
       }}
   tags: [benchmark]
 
+# ── Skip-existing: remove categories whose primary result file already ────
+# exists (non-empty) on the Ansible controller.  Only active when
+# run_benchmarks_skip_existing is true; a separate find is used here so
+# that setup/normalize always run regardless of existing results.
+- name: Find non-empty result files for skip-existing check
+  ansible.builtin.find:
+    paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
+    patterns: "*.json"
+    size: 1
+  delegate_to: localhost
+  become: false
+  register: _skip_existing_found
+  when: run_benchmarks_skip_existing | default(false) | bool
+
+- name: Filter already-complete categories from active list
+  ansible.builtin.set_fact:
+    run_benchmarks_active_categories: >-
+      {%- set primary = {
+            'compression':        'compression.json',
+            'crypto':             'crypto_symmetric.json',
+            'compiler':           'compiler_c_compile.json',
+            'python':             'python.json',
+            'numeric':            'numeric_compiled.json',
+            'sqlite':             'sqlite_write.json',
+            'ffmpeg':             'ffmpeg_video_encode.json',
+            'imagemagick':        'imagemagick_resize.json',
+            'coreutils':          'coreutils.json',
+            'memory':             'memory_bandwidth.json',
+            'process':            'process.json',
+            'disk':               'disk.json',
+            'linker':             'linker.json',
+            'opencv':             'opencv.json',
+            'gimp':               'gimp.json',
+            'inkscape':           'inkscape.json',
+            'startup':            'startup.json',
+            'boot_time':          'boot_times.json',
+            'bash':               'bash.json',
+            'gentoo_build_times': 'gentoo_build_times.json'
+          } -%}
+      {%- set existing = _skip_existing_found.files
+                         | default([])
+                         | map(attribute='path')
+                         | map('basename')
+                         | list -%}
+      {%- set filtered = [] -%}
+      {%- for cat in run_benchmarks_active_categories -%}
+        {%- set f = primary.get(cat, '') -%}
+        {%- if not f or f not in existing -%}
+          {%- set _ = filtered.append(cat) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ filtered }}
+  when: run_benchmarks_skip_existing | default(false) | bool
+
 - name: Run benchmark category
   ansible.builtin.include_tasks:
     file: run_category.yml

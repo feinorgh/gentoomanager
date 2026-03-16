@@ -74,6 +74,7 @@
       ansible.builtin.find:
         paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
         patterns: "*.json"
+        size: 1
       delegate_to: localhost
       become: false
       register: _existing_results
