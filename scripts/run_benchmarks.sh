@@ -70,6 +70,8 @@ Flags:
   --skip-complete             Skip hosts that already have a full set of results
   --skip-existing             Skip individual categories whose result file already exists
   --no-report                 Skip report generation after benchmarks
+  --manage-power              Boot VMs that are off, shut them down after benchmarking
+                              (only VMs started by this run are shut down afterwards)
   --verbose, -v               Pass -v to ansible-playbook (repeat for more: -vvv)
   --dry-run, -C               Pass --check to ansible-playbook (no changes)
   --ask-become-pass, -K       Prompt for sudo/become password
@@ -120,6 +122,7 @@ INCLUDE_WINDOWS=0
 NO_RAM_SCALE=0
 SKIP_COMPLETE=0
 SKIP_EXISTING=0
+MANAGE_POWER=0
 NO_REPORT=0
 DRY_RUN=0
 EXTENDED_CODECS=0
@@ -174,6 +177,8 @@ while [[ $# -gt 0 ]]; do
             SKIP_COMPLETE=1; shift ;;
         --skip-existing)
             SKIP_EXISTING=1; shift ;;
+        --manage-power)
+            MANAGE_POWER=1; shift ;;
         --no-report)
             NO_REPORT=1; shift ;;
         --verbose|-v)
@@ -246,6 +251,7 @@ fi
 [[ "${NO_RAM_SCALE}" -eq 1 ]]    && EVARS[run_benchmarks_scale_ram]="false"
 [[ "${SKIP_COMPLETE}" -eq 1 ]]   && EVARS[run_benchmarks_skip_complete]="true"
 [[ "${SKIP_EXISTING}" -eq 1 ]]   && EVARS[run_benchmarks_skip_existing]="true"
+[[ "${MANAGE_POWER}" -eq 1 ]]    && EVARS[run_benchmarks_manage_power]="true"
 
 # Build -e JSON string from EVARS
 if [[ "${#EVARS[@]}" -gt 0 ]]; then

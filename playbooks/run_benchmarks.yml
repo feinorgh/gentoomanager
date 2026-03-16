@@ -50,8 +50,56 @@
     run_benchmarks_max_load_factor: 2.0
     run_benchmarks_min_free_mem_mb: 1024
     run_benchmarks_max_swap_used_pct: 90
+    # Power management — boot VMs that are off, shut them down after benchmarking.
+    # Only VMs that were booted by this playbook are shut down afterwards;
+    # VMs already running when the play starts are left running.
+    # Requires hypervisor_host to be set (KVM/libvirt VMs only).
+    run_benchmarks_manage_power: false
+    run_benchmarks_boot_timeout_sec: 180
 
   pre_tasks:
+    # ── Power management: boot VM if it is off ────────────────────────────
+    # When run_benchmarks_manage_power is true, check the VM's current state
+    # via virsh before attempting SSH.  If the domain is not running, start it
+    # and wait for SSH to become available.  We record whether we started the
+    # VM so the always: block can shut it down again afterwards.
+    - name: Check VM power state via hypervisor
+      ansible.builtin.command:
+        cmd: virsh --connect qemu:///system domstate '{{ inventory_hostname }}'
+      delegate_to: "{{ hypervisor_host }}"
+      register: _bench_vm_domstate
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when:
+        - run_benchmarks_manage_power | default(false) | bool
+        - hypervisor_host != ''
+
+    - name: Record whether we need to boot this VM
+      ansible.builtin.set_fact:
+        run_benchmarks_vm_was_off: >-
+          {{
+            run_benchmarks_manage_power | default(false) | bool and
+            hypervisor_host != '' and
+            _bench_vm_domstate is not skipped and
+            _bench_vm_domstate.stdout | default('') | trim != 'running'
+          }}
+
+    - name: Boot VM via hypervisor
+      ansible.builtin.command:
+        cmd: virsh --connect qemu:///system start '{{ inventory_hostname }}'
+      delegate_to: "{{ hypervisor_host }}"
+      changed_when: true
+      when: run_benchmarks_vm_was_off | default(false) | bool
+
+    - name: Wait for VM to become reachable after boot
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ run_benchmarks_boot_timeout_sec | int }}"
+        sleep: 5
+        connect_timeout: 10
+      when: run_benchmarks_vm_was_off | default(false) | bool
+
+    # ── Reachability guard for VMs that were already running ──────────────
     - name: Check host is reachable
       ansible.builtin.command: echo ok
       register: _reachable_check
@@ -59,13 +107,15 @@
       failed_when: false
       check_mode: false
       ignore_unreachable: true
+      when: not (run_benchmarks_vm_was_off | default(false) | bool)
 
     - name: Skip unreachable hosts
       ansible.builtin.meta: end_host
       when: >-
-        _reachable_check is unreachable or
-        _reachable_check is failed or
-        _reachable_check.rc | default(1) != 0
+        not (run_benchmarks_vm_was_off | default(false) | bool) and
+        (_reachable_check is unreachable or
+         _reachable_check is failed or
+         _reachable_check.rc | default(1) != 0)
 
     # ── Skip host if results are already complete (optional) ────────────
     # These tasks only read local files on the controller — no remote facts
@@ -407,6 +457,38 @@
             run_benchmarks_scale_ram | bool and
             _bench_minimal_ram.stdout is defined and
             _bench_minimal_ram.stdout | trim | length > 0
+
+        # ── Shut down VM if we booted it ─────────────────────────────────
+        # Runs after RAM is restored so the VM shuts down at its baseline
+        # memory allocation rather than the benchmark's inflated value.
+        - name: Shut down VM gracefully after benchmarking
+          ansible.builtin.command:
+            cmd: virsh --connect qemu:///system shutdown '{{ inventory_hostname }}'
+          delegate_to: "{{ hypervisor_host }}"
+          changed_when: true
+          failed_when: false
+          when:
+            - run_benchmarks_vm_was_off | default(false) | bool
+            - hypervisor_host != ''
+
+        - name: Wait for VM to reach shut-off state
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              for i in $(seq 1 30); do
+                state=$(virsh --connect qemu:///system domstate '{{ inventory_hostname }}' 2>/dev/null | tr -d ' \n')
+                [ "$state" = "shut off" ] && exit 0
+                sleep 5
+              done
+              exit 1
+            executable: /bin/bash
+          delegate_to: "{{ hypervisor_host }}"
+          register: _bench_shutdown_wait
+          changed_when: false
+          failed_when: false
+          when:
+            - run_benchmarks_vm_was_off | default(false) | bool
+            - hypervisor_host != ''
 
 # ── Play 2: Provision and benchmark hypervisors (bare-metal reference) ───
 - name: Benchmark hypervisors as bare-metal reference

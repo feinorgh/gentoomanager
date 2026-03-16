@@ -146,6 +146,13 @@ run_benchmarks_skip_complete: false
 # Enable with: -e run_benchmarks_skip_existing=true
 run_benchmarks_skip_existing: false
 
+# When true, VMs that are shut off are started before benchmarking and shut
+# down again afterwards (gracefully via virsh).  VMs that were already running
+# when the play started are NOT shut down.
+# Enable with: -e run_benchmarks_manage_power=true (or --manage-power flag)
+run_benchmarks_manage_power: false
+run_benchmarks_boot_timeout_sec: 180
+
 # Gentoo build time analysis: minimum build duration to include (seconds)
 run_benchmarks_gentoo_min_build_secs: 300
 
