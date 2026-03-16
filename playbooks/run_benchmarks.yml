@@ -361,6 +361,27 @@
 
       # ── Always restore RAM, even on failure ─────────────────────────
       always:
+        # Remove all fixture and result files from the remote work directory
+        # BEFORE shrinking RAM.  The work directory is typically on tmpfs
+        # (/tmp), which is backed by RAM; leaving large files there while
+        # reducing the VM's memory allocation causes RAM starvation and a
+        # kernel OOM crash.  This runs even when the benchmark failed so that
+        # a partial run never leaves the VM in a degraded state.
+        - name: Remove benchmark work directory from host (pre-RAM-shrink cleanup)
+          ansible.builtin.file:
+            path: "{{ run_benchmarks_effective_work_dir | default(run_benchmarks_work_dir) }}"
+            state: absent
+          become: true
+          failed_when: false
+          when: ansible_os_family | default('') != 'Windows'
+
+        - name: Remove benchmark work directory from host (Windows)
+          ansible.windows.win_file:
+            path: "{{ run_benchmarks_effective_work_dir | default(run_benchmarks_work_dir_win) }}"
+            state: absent
+          failed_when: false
+          when: ansible_os_family | default('') == 'Windows'
+
         - name: Read configured minimal RAM from persistent XML
           ansible.builtin.shell:
             cmd: |
