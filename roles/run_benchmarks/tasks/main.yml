@@ -54,7 +54,7 @@
     size: 1
   delegate_to: localhost
   become: false
-  register: _skip_existing_found
+  register: run_benchmarks_skip_existing_found
   when: run_benchmarks_skip_existing | default(false) | bool
 
 - name: Filter already-complete categories from active list
@@ -82,7 +82,7 @@
             'bash':               'bash.json',
             'gentoo_build_times': 'gentoo_build_times.json'
           } -%}
-      {%- set existing = _skip_existing_found.files
+      {%- set existing = run_benchmarks_skip_existing_found.files
                          | default([])
                          | map(attribute='path')
                          | map('basename')
