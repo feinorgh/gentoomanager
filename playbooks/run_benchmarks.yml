@@ -88,8 +88,10 @@
                       ['compression', 'crypto', 'compiler', 'python', 'numeric',
                        'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
                        'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
-                       'startup',
-                       'gentoo_build_times'])
+                       'startup', 'boot_time', 'bash']
+                      + (['gentoo_build_times']
+                         if inventory_hostname in (groups['gentoo'] | default([]))
+                         else []))
           }}
       when: run_benchmarks_skip_complete | default(false) | bool
 
@@ -119,6 +121,8 @@
             'gimp':               'gimp.json',
             'inkscape':           'inkscape.json',
             'startup':            'startup.json',
+            'boot_time':          'boot_times.json',
+            'bash':               'bash.json',
             'gentoo_build_times': 'gentoo_build_times.json'
           } -%}
           {%- set missing = [] -%}
