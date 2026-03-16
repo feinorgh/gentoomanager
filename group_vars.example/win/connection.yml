@@ -1,0 +1,31 @@
+# Example group_vars for Windows hosts
+#
+# Copy this directory to group_vars/win/ to activate Windows connectivity:
+#   cp -r group_vars.example/win group_vars/win
+#
+# Then uncomment the appropriate connection block for your setup.
+# See docs/benchmarks.md "Prerequisites — Windows Hosts" for full setup steps.
+
+---
+# ── Option A: OpenSSH (Recommended, Windows 10 1809+ / Server 2019+) ─────
+# Works through the same SSH ProxyJump as all other hosts.
+# No extra controller dependencies required.
+#
+# ansible_connection: ssh
+# ansible_shell_type: powershell
+# ansible_shell_executable: powershell.exe
+
+# ── Option B: WinRM (Fallback, all Windows versions) ─────────────────────
+# Requires pywinrm on the controller: pip install pywinrm
+#
+# ansible_connection: winrm
+# ansible_winrm_transport: ntlm          # or: basic, kerberos, credssp
+# ansible_winrm_port: 5985               # HTTP; use 5986 for HTTPS
+# ansible_winrm_scheme: http             # or: https
+# ansible_winrm_server_cert_validation: ignore   # for self-signed certs
+
+# ── Common settings ───────────────────────────────────────────────────────
+ansible_user: ansible
+# ansible_password: !vault |             # Use ansible-vault for passwords
+#   $ANSIBLE_VAULT;1.1;AES256
+#   ...

@@ -102,12 +102,116 @@ even if benchmarks fail.
 
 ## Prerequisites
 
+### Linux / Unix / macOS Hosts
+
 - **Ansible** 2.17+ on the controller
 - **Python 3.10+** on the controller
 - **Python 3.8+** on managed nodes
 - **SSH access** to all target hosts (key-based recommended)
 - **libvirt/virsh** on hypervisors (for RAM scaling; optional)
 - **Collections:** `ansible-galaxy collection install -r requirements.yml`
+
+### Windows Hosts
+
+Windows hosts require remote management to be enabled before Ansible can
+reach them.  Two options are supported; OpenSSH is recommended for modern
+Windows because it integrates seamlessly with the existing SSH proxy
+infrastructure.
+
+**Option A — OpenSSH (Recommended, Windows 10 1809+ / Server 2019+)**
+
+No extra controller dependencies.  Works through the same `ProxyJump`
+as all other hosts.
+
+Run the following in an **elevated PowerShell** on each Windows VM:
+
+```powershell
+# 1. Install the OpenSSH Server feature
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+
+# 2. Start the service and set it to start automatically
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+
+# 3. Allow SSH through Windows Firewall (usually done automatically)
+New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server' `
+    -Enabled True -Direction Inbound -Protocol TCP `
+    -Action Allow -LocalPort 22
+
+# 4. Set PowerShell as the default shell for Ansible
+New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' `
+    -Name DefaultShell `
+    -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' `
+    -PropertyType String -Force
+
+# 5. Authorise the controller's SSH public key
+$authorizedKeysFile = "$env:ProgramData\ssh\administrators_authorized_keys"
+Add-Content -Path $authorizedKeysFile -Value '<paste controller public key here>'
+# Fix permissions (required by OpenSSH):
+icacls $authorizedKeysFile /inheritance:r /grant 'SYSTEM:(F)' /grant 'ADMINISTRATORS:(F)'
+```
+
+Then configure `group_vars/win/connection.yml` on the controller
+(copy from `group_vars.example/win/connection.yml` as a starting point):
+
+```yaml
+ansible_connection: ssh
+ansible_shell_type: powershell
+ansible_shell_executable: powershell.exe
+ansible_user: ansible        # Windows user to connect as
+```
+
+**Option B — WinRM (Fallback, all Windows versions)**
+
+Requires `pywinrm` on the controller:
+
+```bash
+pip install pywinrm
+```
+
+Run the following in an **elevated PowerShell** on each Windows VM:
+
+```powershell
+# 1. Enable WinRM with HTTP (port 5985)
+winrm quickconfig -q
+
+# 2. Allow unencrypted auth (required for Basic/NTLM over HTTP in a lab)
+winrm set winrm/config/service '@{AllowUnencrypted="true"}'
+winrm set winrm/config/service/auth '@{Basic="true"}'
+
+# 3. Set the WinRM service to start automatically
+Set-Service -Name WinRM -StartupType Automatic
+
+# 4. Open firewall port
+New-NetFirewallRule -Name 'WinRM-HTTP' -DisplayName 'WinRM HTTP' `
+    -Enabled True -Direction Inbound -Protocol TCP `
+    -Action Allow -LocalPort 5985
+```
+
+> **HTTPS / production:** For HTTPS (port 5986) with a self-signed
+> certificate, see the Microsoft docs for `New-SelfSignedCertificate` and
+> `winrm create winrm/config/Listener?Address=*+Transport=HTTPS`.
+
+Then configure `group_vars/win/connection.yml` on the controller
+(copy from `group_vars.example/win/connection.yml` as a starting point):
+
+```yaml
+ansible_connection: winrm
+ansible_winrm_transport: ntlm     # or: basic, kerberos, credssp
+ansible_winrm_port: 5985
+ansible_winrm_scheme: http
+ansible_winrm_server_cert_validation: ignore   # for self-signed certs
+ansible_user: ansible
+```
+
+**Verify connectivity** (either option):
+
+```bash
+ansible win,win10,win11 -m ansible.windows.win_ping
+```
+
+**Collections:** `ansible.windows` is already in `requirements.yml` and
+installed by `ansible-galaxy collection install -r requirements.yml`.
 
 > **RHEL 7 / RHEL 8:** These ship Python 3.6, which is too old for
 > Ansible 2.17+.  Bootstrap Python 3.8 before provisioning:
@@ -1072,8 +1176,15 @@ playbook knows which hypervisor to delegate `virsh` commands to.
 
 ## Windows Support
 
-Windows benchmarks are opt-in and require WinRM connectivity.  The following
-categories have Windows-specific task variants (`*_win.yml`):
+Windows benchmarks are opt-in.  Before running them, complete the
+**[Windows connectivity setup](#windows-hosts)** in the Prerequisites section
+above, then verify with:
+
+```bash
+ansible win,win10,win11 -m ansible.windows.win_ping
+```
+
+The following categories have Windows-specific task variants (`*_win.yml`):
 
 | Category | What it measures |
 |----------|-----------------|

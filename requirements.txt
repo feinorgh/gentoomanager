@@ -1,1 +1,7 @@
-# TO-DO: add python packages that are required for this collection
+# Required Python packages for the controller
+#
+# Install with: pip install -r requirements.txt
+
+# Optional: required only when using WinRM to connect to Windows hosts
+# (not needed if using OpenSSH for Windows — see docs/benchmarks.md)
+# pywinrm
