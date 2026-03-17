@@ -19,11 +19,11 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
-
-_UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+_UTC = UTC
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -291,8 +291,7 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
                         raw = f.read()
                     data = json.JSONDecoder().raw_decode(raw)[0]
                     print(
-                        f"  WARNING: {json_file.name} contains multiple JSON objects; "
-                        "using first",
+                        f"  WARNING: {json_file.name} contains multiple JSON objects; using first",
                         file=sys.stderr,
                     )
                 except Exception:
@@ -967,7 +966,14 @@ def generate_markdown(
         )
         lines.append("")
         bth_headers = [
-            "Host", "Method", "Firmware", "Loader", "Kernel", "Userspace", "Graphical", "Total"
+            "Host",
+            "Method",
+            "Firmware",
+            "Loader",
+            "Kernel",
+            "Userspace",
+            "Graphical",
+            "Total",
         ]
         bth_rows: list[list[str]] = []
         boot_totals = {
@@ -1019,6 +1025,8 @@ def generate_markdown(
                 lines.append("")
 
     return "\n".join(lines)
+
+
 # HTML report
 # ---------------------------------------------------------------------------
 
@@ -1258,7 +1266,7 @@ def generate_html(
             for h, d in boot_data_html.items()
             if d.get("available") and d.get("total_sec") is not None
         }
-        fastest_boot_html = (
+        fastest_boot_html = (  # noqa: F841  retained for potential future use
             min(boot_totals_html, key=boot_totals_html.__getitem__) if boot_totals_html else None
         )
         phase_rows_html = ""
@@ -1276,16 +1284,14 @@ def generate_html(
                 for h, d in boot_data_html.items()
                 if d.get("available") and d.get(phase_key) is not None
             }
-            fastest_phase = (
-                min(phase_vals, key=phase_vals.__getitem__) if phase_vals else None
-            )
+            fastest_phase = min(phase_vals, key=phase_vals.__getitem__) if phase_vals else None
             for hostname in hostnames:
                 d = boot_data_html.get(hostname)
                 val = d.get(phase_key) if d and d.get("available") else None
                 if val is None:
                     cells += "<td>—</td>"
                 elif hostname == fastest_phase:
-                    cells += f'<td><strong>{val:.3f}</strong></td>'
+                    cells += f"<td><strong>{val:.3f}</strong></td>"
                 else:
                     cells += f"<td>{val:.3f}</td>"
             phase_rows_html += f"<tr><td>{phase_label}</td>{cells}</tr>\n"
@@ -1319,9 +1325,12 @@ def generate_html(
       <table>
         <thead><tr><th>Phase</th>{host_hdrs}</tr></thead>
         <tbody>
-          <tr><td>Method</td>{"".join(
-            f"<td><code>{boot_data_html.get(h, {}).get('method', '—')}</code></td>"
-            for h in hostnames)}</tr>
+          <tr><td>Method</td>{
+            "".join(
+                f"<td><code>{boot_data_html.get(h, {}).get('method', '—')}</code></td>"
+                for h in hostnames
+            )
+        }</tr>
 {phase_rows_html}        </tbody>
       </table>
       {"<h3>Slowest Services at Boot</h3>" + svc_sections_html if svc_sections_html else ""}

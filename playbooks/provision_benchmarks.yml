@@ -19,17 +19,18 @@
 # ── Play 0: Boot powered-off VMs (--manage-power) ────────────────────────
 - name: Boot powered-off VMs before provisioning
   hosts: "all:!win:!win11:!win10"
+  serial: 1
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
   vars:
     provision_manage_power: false
-    provision_boot_timeout_sec: 180
+    provision_boot_timeout_sec: 120
   tasks:
     - name: Check VM power state via hypervisor
       ansible.builtin.command:
         cmd: virsh --connect qemu:///system domstate '{{ inventory_hostname }}'
-      delegate_to: "{{ hypervisor_host }}"
+      delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
       register: _provision_vm_domstate
       changed_when: false
       failed_when: false
@@ -52,19 +53,54 @@
     - name: Boot VM via hypervisor
       ansible.builtin.command:
         cmd: virsh --connect qemu:///system start '{{ inventory_hostname }}'
-      delegate_to: "{{ hypervisor_host }}"
+      delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
       changed_when: true
       when: _provision_vm_was_off | default(false) | bool
 
-    - name: Wait for VM to become reachable after boot
-      ansible.builtin.wait_for_connection:
-        timeout: "{{ provision_boot_timeout_sec | int }}"
-        sleep: 5
-        connect_timeout: 10
-      when: _provision_vm_was_off | default(false) | bool
+    - name: Wait for SSH port 22 to open on VM (via hypervisor)
+      ansible.builtin.shell:
+        cmd: |
+          set -eo pipefail
+          end=$(( $(date +%s) + {{ provision_boot_timeout_sec | int }} ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            vm_addr=$(virsh --connect qemu:///system domifaddr '{{ inventory_hostname }}' \
+              --source arp 2>/dev/null \
+              | awk '/ipv4/{ gsub("/[0-9]+$", "", $4); print $4; exit }')
+            if [ -n "$vm_addr" ] && nc -z -w 2 "$vm_addr" 22 2>/dev/null; then
+              sleep 10
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1
+        executable: /bin/bash
+      delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
+      changed_when: false
+      ignore_errors: true
+      when:
+        - _provision_vm_was_off | default(false) | bool
+        - hypervisor_host is defined
+        - hypervisor_host | length > 0
+
+    - name: Remove stale SSH ControlMaster socket after VM reboot
+      ansible.builtin.shell:
+        cmd: |
+          socket="${HOME}/.ansible/cp/ssh-{{ ansible_user | default('pk') }}@{{ ansible_host }}:22"
+          if [ -S "$socket" ]; then
+            ssh -O exit -o "ControlPath=$socket" \
+              "{{ ansible_host }}" 2>/dev/null || true
+            rm -f "$socket" 2>/dev/null || true
+          fi
+        executable: /bin/bash
+      delegate_to: localhost
+      changed_when: false
+      ignore_errors: true
+      when:
+        - _provision_vm_was_off | default(false) | bool
 
 - name: Gather facts and group hosts by OS family
   hosts: "all:!win:!win11:!win10"
+  serial: "100%"
   gather_facts: true
   ignore_unreachable: true
   any_errors_fatal: false
@@ -88,7 +124,7 @@
 # ── Play 2: Gentoo – serial to avoid compile-time noise on shared CPUs ──
 - name: Provision Gentoo hosts
   hosts: provision_os_gentoo
-  serial: 1
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -164,6 +200,7 @@
 # ── Play 3: Red Hat family – Fedora, RHEL, CentOS, Oracle Linux ─────────
 - name: Provision Red Hat family hosts
   hosts: provision_os_redhat
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -176,6 +213,7 @@
 # ── Play 4: Debian family – Ubuntu, Debian, Mint, elementary OS ─────────
 - name: Provision Debian family hosts
   hosts: provision_os_debian
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -188,6 +226,7 @@
 # ── Play 5: Arch Linux family – Arch, Manjaro, CachyOS ──────────────────
 - name: Provision Arch Linux family hosts
   hosts: provision_os_archlinux
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -200,6 +239,7 @@
 # ── Play 6: SUSE family – openSUSE Tumbleweed, Leap ─────────────────────
 - name: Provision SUSE family hosts
   hosts: provision_os_suse
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -212,6 +252,7 @@
 # ── Play 7: FreeBSD ──────────────────────────────────────────────────────
 - name: Provision FreeBSD hosts
   hosts: provision_os_freebsd
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -224,6 +265,7 @@
 # ── Play 8: Void Linux ───────────────────────────────────────────────────
 - name: Provision Void Linux hosts
   hosts: provision_os_void
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -236,6 +278,7 @@
 # ── Play 9: NixOS ────────────────────────────────────────────────────────
 - name: Provision NixOS hosts
   hosts: provision_os_nixos
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -248,6 +291,7 @@
 # ── Play 10: Solus ───────────────────────────────────────────────────────
 - name: Provision Solus hosts
   hosts: provision_os_solus
+  serial: "{{ provision_serial | default('100%') }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -260,6 +304,7 @@
 # ── Play 11: Shut down VMs that were booted by this run (--manage-power) ─
 - name: Shut down VMs booted by this provisioning run
   hosts: "all:!win:!win11:!win10"
+  serial: "100%"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -269,7 +314,7 @@
     - name: Shut down VM gracefully after provisioning
       ansible.builtin.command:
         cmd: virsh --connect qemu:///system shutdown '{{ inventory_hostname }}'
-      delegate_to: "{{ hypervisor_host }}"
+      delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
       changed_when: true
       failed_when: false
       when:
@@ -289,7 +334,7 @@
           done
           exit 1
         executable: /bin/bash
-      delegate_to: "{{ hypervisor_host }}"
+      delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
       changed_when: false
       failed_when: false
       when:

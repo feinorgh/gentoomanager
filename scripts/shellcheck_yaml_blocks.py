@@ -129,9 +129,7 @@ _SUPPRESS = ["SC2154"]
 
 
 def run_shellcheck(script: str, shell: str = "bash") -> subprocess.CompletedProcess:
-    with tempfile.NamedTemporaryFile(
-        suffix=".sh", mode="w", encoding="utf-8", delete=False
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".sh", mode="w", encoding="utf-8", delete=False) as tmp:
         tmp.write(f"#!/usr/{shell}\n")
         tmp.write(script)
         tmp_path = tmp.name
@@ -221,10 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                 output = re.sub(r"/tmp/tmp\S+\.sh", f"{rel}:<task>", result.stdout)
                 print(output, end="")
 
-    print(
-        f"\nshellcheck-yaml: {total_blocks} blocks checked, "
-        f"{failed_blocks} with findings."
-    )
+    print(f"\nshellcheck-yaml: {total_blocks} blocks checked, {failed_blocks} with findings.")
     return 1 if failed_blocks else 0
 
 

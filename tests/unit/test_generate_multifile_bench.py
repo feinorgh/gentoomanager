@@ -155,9 +155,7 @@ class TestMainC:
         for n in range(3):
             # The generator uses mod{n}_run() naming (zero-padded file names, bare index in symbols)
             pattern = f"mod{n}_run|mod_{n:02d}_run|module_{n}"
-            assert re.search(pattern, content), (
-                f"main.c does not reference module {n}"
-            )
+            assert re.search(pattern, content), f"main.c does not reference module {n}"
 
     def test_includes_stdio(self, small_bench_dir: Path) -> None:
         content = (small_bench_dir / "main.c").read_text()
@@ -173,9 +171,9 @@ class TestModuleFiles:
     def test_each_module_has_function(self, small_bench_dir: Path) -> None:
         for path in sorted(small_bench_dir.glob("mod_*.c")):
             content = path.read_text()
-            assert re.search(
-                r"\w[\w\s\*]+\s+\w+\s*\([^)]*\)\s*\{", content
-            ), f"No function definition found in {path.name}"
+            assert re.search(r"\w[\w\s\*]+\s+\w+\s*\([^)]*\)\s*\{", content), (
+                f"No function definition found in {path.name}"
+            )
 
     def test_modules_are_non_trivial(self, bench_dir: Path) -> None:
         """Each module file should be substantially sized (>50 lines)."""

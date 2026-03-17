@@ -19,7 +19,6 @@ PIL = pytest.importorskip("PIL", reason="Pillow not installed")
 
 import generate_benchmark_images as gbi  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # generate_image
 # ---------------------------------------------------------------------------
@@ -37,12 +36,14 @@ class TestGenerateImage:
     def test_png_has_correct_dimensions(self, tmp_path: Path) -> None:
         gbi.generate_image(tmp_path, size=64, seed=42)
         from PIL import Image
+
         img = Image.open(tmp_path / "im_4k.png")
         assert img.size == (64, 64)
 
     def test_png_is_rgb(self, tmp_path: Path) -> None:
         gbi.generate_image(tmp_path, size=64, seed=42)
         from PIL import Image
+
         img = Image.open(tmp_path / "im_4k.png")
         assert img.mode == "RGB"
 
@@ -71,6 +72,7 @@ class TestGenerateImage:
         gbi.generate_image(tmp_path, size=32, seed=1)
         mtime_before = (tmp_path / "im_4k.png").stat().st_mtime_ns
         import time
+
         time.sleep(0.05)
         gbi.generate_image(tmp_path, size=32, seed=1, force=True)
         mtime_after = (tmp_path / "im_4k.png").stat().st_mtime_ns
@@ -84,6 +86,7 @@ class TestGenerateImage:
     def test_custom_size_respected(self, tmp_path: Path) -> None:
         gbi.generate_image(tmp_path, size=128, seed=42)
         from PIL import Image
+
         img = Image.open(tmp_path / "im_4k.png")
         assert img.size == (128, 128)
 

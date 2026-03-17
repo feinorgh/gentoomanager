@@ -13,7 +13,6 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import shellcheck_yaml_blocks as syb  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # _preprocess_for_yaml
 # ---------------------------------------------------------------------------

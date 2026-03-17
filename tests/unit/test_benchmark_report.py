@@ -671,13 +671,21 @@ class TestSkipCompleteMapConsistency:
     that the benchmark report knows about.  This is a regression guard to ensure
     new categories are added to both the report *and* the playbook."""
 
-    _PLAYBOOK = (
-        Path(__file__).resolve().parents[2] / "playbooks" / "run_benchmarks.yml"
-    )
+    _PLAYBOOK = Path(__file__).resolve().parents[2] / "playbooks" / "run_benchmarks.yml"
     _REPORT_CATEGORIES = {
-        "compression", "crypto", "compiler", "python", "ffmpeg",
-        "coreutils", "opencv", "sqlite", "imagemagick",
-        "linker", "process", "gimp", "inkscape",
+        "compression",
+        "crypto",
+        "compiler",
+        "python",
+        "ffmpeg",
+        "coreutils",
+        "opencv",
+        "sqlite",
+        "imagemagick",
+        "linker",
+        "process",
+        "gimp",
+        "inkscape",
     }
 
     def test_playbook_exists(self) -> None:
@@ -715,7 +723,8 @@ def _make_boot_times_systemd(
         "userspace_sec": userspace,
         "graphical_sec": graphical,
         "total_sec": total,
-        "top_services": services or [
+        "top_services": services
+        or [
             {"name": "NetworkManager-wait-online.service", "time_sec": 5.123},
             {"name": "systemd-journal-flush.service", "time_sec": 1.234},
         ],
@@ -751,9 +760,7 @@ def _results_with_boot_times(tmp_path: Path, boot_data: dict[str, dict]) -> Path
     for hostname, bt_data in boot_data.items():
         host_dir = results / hostname
         host_dir.mkdir(parents=True)
-        (host_dir / "metadata.json").write_text(
-            json.dumps(_make_metadata(hostname))
-        )
+        (host_dir / "metadata.json").write_text(json.dumps(_make_metadata(hostname)))
         (host_dir / "boot_times.json").write_text(json.dumps(bt_data))
     return tmp_path
 
@@ -817,24 +824,18 @@ class TestBootTimes:
 
     # ── generate_markdown ────────────────────────────────────────────────────
 
-    def _md_with_boot(
-        self, tmp_path: Path, boot_data: dict[str, dict]
-    ) -> str:
+    def _md_with_boot(self, tmp_path: Path, boot_data: dict[str, dict]) -> str:
         base = _results_with_boot_times(tmp_path, boot_data)
         hosts = load_results(base)
         table = build_comparison_table(hosts)
         return generate_markdown(hosts, table)
 
     def test_markdown_contains_boot_times_heading(self, tmp_path: Path) -> None:
-        md = self._md_with_boot(
-            tmp_path, {"h1": _make_boot_times_systemd("h1")}
-        )
+        md = self._md_with_boot(tmp_path, {"h1": _make_boot_times_systemd("h1")})
         assert "## System Boot Times" in md
 
     def test_markdown_contains_method_column(self, tmp_path: Path) -> None:
-        md = self._md_with_boot(
-            tmp_path, {"h1": _make_boot_times_systemd("h1")}
-        )
+        md = self._md_with_boot(tmp_path, {"h1": _make_boot_times_systemd("h1")})
         assert "Method" in md
 
     def test_markdown_fastest_host_bolded(self, tmp_path: Path) -> None:
@@ -851,9 +852,7 @@ class TestBootTimes:
         assert "**60" not in md
 
     def test_markdown_dmesg_host_null_phases_show_dash(self, tmp_path: Path) -> None:
-        md = self._md_with_boot(
-            tmp_path, {"h1": _make_boot_times_dmesg("h1")}
-        )
+        md = self._md_with_boot(tmp_path, {"h1": _make_boot_times_dmesg("h1")})
         # firmware, loader, graphical are None → rendered as "—"
         assert "—" in md
 
@@ -865,25 +864,19 @@ class TestBootTimes:
         assert "1.100" in md  # firmware_sec
 
     def test_markdown_services_section_when_services_present(self, tmp_path: Path) -> None:
-        md = self._md_with_boot(
-            tmp_path, {"h1": _make_boot_times_systemd("h1")}
-        )
+        md = self._md_with_boot(tmp_path, {"h1": _make_boot_times_systemd("h1")})
         assert "### Slowest Services at Boot" in md
         assert "NetworkManager-wait-online.service" in md
 
     def test_markdown_no_services_section_for_dmesg(self, tmp_path: Path) -> None:
-        md = self._md_with_boot(
-            tmp_path, {"h1": _make_boot_times_dmesg("h1")}
-        )
+        md = self._md_with_boot(tmp_path, {"h1": _make_boot_times_dmesg("h1")})
         assert "### Slowest Services" not in md
 
     def test_markdown_no_boot_section_when_no_data(self, tmp_path: Path) -> None:
         """When no boot_times.json exists, the section must be absent."""
         results = tmp_path / "results" / "host-a"
         results.mkdir(parents=True)
-        (results / "metadata.json").write_text(
-            json.dumps(_make_metadata("host-a"))
-        )
+        (results / "metadata.json").write_text(json.dumps(_make_metadata("host-a")))
         hosts = load_results(tmp_path)
         table = build_comparison_table(hosts)
         md = generate_markdown(hosts, table)
@@ -891,12 +884,12 @@ class TestBootTimes:
 
     def test_markdown_unavailable_host_shows_all_dashes(self, tmp_path: Path) -> None:
         """When available=false the section still renders; the host row is all dashes."""
-        md = self._md_with_boot(
-            tmp_path, {"h1": _make_boot_times_unavailable()}
-        )
+        md = self._md_with_boot(tmp_path, {"h1": _make_boot_times_unavailable()})
         assert "## System Boot Times" in md
         # Every data cell should be the dash placeholder
-        dashes_row = "| h1   | —      | —        | —      | —      | —         | —         | —     |"  # noqa: E501
+        dashes_row = (
+            "| h1   | —      | —        | —      | —      | —         | —         | —     |"  # noqa: E501
+        )
         assert dashes_row in md
 
     def test_markdown_mixed_fleet_both_methods(self, tmp_path: Path) -> None:
@@ -914,38 +907,28 @@ class TestBootTimes:
 
     # ── generate_html ────────────────────────────────────────────────────────
 
-    def _html_with_boot(
-        self, tmp_path: Path, boot_data: dict[str, dict]
-    ) -> str:
+    def _html_with_boot(self, tmp_path: Path, boot_data: dict[str, dict]) -> str:
         base = _results_with_boot_times(tmp_path, boot_data)
         hosts = load_results(base)
         table = build_comparison_table(hosts)
         return generate_html(hosts, table)
 
     def test_html_contains_boot_times_section(self, tmp_path: Path) -> None:
-        html = self._html_with_boot(
-            tmp_path, {"h1": _make_boot_times_systemd("h1")}
-        )
+        html = self._html_with_boot(tmp_path, {"h1": _make_boot_times_systemd("h1")})
         assert "cat-boot-times" in html
 
     def test_html_contains_system_boot_times_heading(self, tmp_path: Path) -> None:
-        html = self._html_with_boot(
-            tmp_path, {"h1": _make_boot_times_systemd("h1")}
-        )
+        html = self._html_with_boot(tmp_path, {"h1": _make_boot_times_systemd("h1")})
         assert "System Boot Times" in html
 
     def test_html_contains_method_row(self, tmp_path: Path) -> None:
-        html = self._html_with_boot(
-            tmp_path, {"h1": _make_boot_times_systemd("h1")}
-        )
+        html = self._html_with_boot(tmp_path, {"h1": _make_boot_times_systemd("h1")})
         assert "systemd-analyze" in html
 
     def test_html_no_boot_times_section_when_no_data(self, tmp_path: Path) -> None:
         results = tmp_path / "results" / "host-a"
         results.mkdir(parents=True)
-        (results / "metadata.json").write_text(
-            json.dumps(_make_metadata("host-a"))
-        )
+        (results / "metadata.json").write_text(json.dumps(_make_metadata("host-a")))
         hosts = load_results(tmp_path)
         table = build_comparison_table(hosts)
         html = generate_html(hosts, table)

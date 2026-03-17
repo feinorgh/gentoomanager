@@ -1,11 +1,11 @@
 """Tests for Windows benchmark task files and supporting configuration."""
-import os
-import yaml
-import pytest
 
-TASKS_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "..", "roles", "run_benchmarks", "tasks"
-)
+import os
+
+import pytest
+import yaml
+
+TASKS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "roles", "run_benchmarks", "tasks")
 DEFAULTS_FILE = os.path.join(
     os.path.dirname(__file__), "..", "..", "roles", "run_benchmarks", "defaults", "main.yml"
 )
@@ -78,13 +78,16 @@ class TestWindowsCategoriesInDefaults:
 
 
 class TestNewWindowsTaskFileContent:
-    @pytest.mark.parametrize("filename", [
-        "sqlite_win.yml",
-        "numeric_win.yml",
-        "process_win.yml",
-        "linker_win.yml",
-        "startup_win.yml",
-    ])
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "sqlite_win.yml",
+            "numeric_win.yml",
+            "process_win.yml",
+            "linker_win.yml",
+            "startup_win.yml",
+        ],
+    )
     def test_task_file_uses_win_modules(self, filename: str) -> None:
         path = os.path.join(TASKS_DIR, filename)
         with open(path) as f:
@@ -93,32 +96,34 @@ class TestNewWindowsTaskFileContent:
             f"{filename} should use ansible.windows modules"
         )
 
-    @pytest.mark.parametrize("filename", [
-        "sqlite_win.yml",
-        "numeric_win.yml",
-        "process_win.yml",
-        "linker_win.yml",
-        "startup_win.yml",
-    ])
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "sqlite_win.yml",
+            "numeric_win.yml",
+            "process_win.yml",
+            "linker_win.yml",
+            "startup_win.yml",
+        ],
+    )
     def test_task_file_exports_json(self, filename: str) -> None:
         path = os.path.join(TASKS_DIR, filename)
         with open(path) as f:
             content = f.read()
-        assert "--export-json" in content, (
-            f"{filename} should export results to JSON via hyperfine"
-        )
+        assert "--export-json" in content, f"{filename} should export results to JSON via hyperfine"
 
-    @pytest.mark.parametrize("filename", [
-        "sqlite_win.yml",
-        "numeric_win.yml",
-        "process_win.yml",
-        "linker_win.yml",
-        "startup_win.yml",
-    ])
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "sqlite_win.yml",
+            "numeric_win.yml",
+            "process_win.yml",
+            "linker_win.yml",
+            "startup_win.yml",
+        ],
+    )
     def test_task_file_has_warn_on_failure(self, filename: str) -> None:
         path = os.path.join(TASKS_DIR, filename)
         with open(path) as f:
             content = f.read()
-        assert "[WARN]" in content, (
-            f"{filename} should have a warning task for benchmark failure"
-        )
+        assert "[WARN]" in content, f"{filename} should have a warning task for benchmark failure"

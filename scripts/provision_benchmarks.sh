@@ -30,6 +30,7 @@ LIMIT=""
 INCLUDE_WINDOWS=0
 MANAGE_POWER=0
 BOOT_TIMEOUT=""
+SERIAL=""
 DRY_RUN=0
 VERBOSITY=""
 BECOME_PASS=0
@@ -52,7 +53,11 @@ Flags:
                               shut them down again afterwards.  Only VMs
                               started by this run are shut down.
   --boot-timeout SEC          Seconds to wait for a VM to become reachable
-                              after boot (default: 180)
+                              after boot (default: 120)
+  --serial [N]                Provision N hosts at a time (default: 1 when
+                              flag is given).  Without this flag all eligible
+                              hosts in each OS family are provisioned in
+                              parallel.
   --include-windows           Also provision Windows hosts (installs benchmark
                               dependencies via Chocolatey)
   --verbose, -v               Pass -v to ansible-playbook (repeat for -vvv)
@@ -77,6 +82,9 @@ Examples:
 
   # Provision all hosts including Windows
   $(basename "$0") --include-windows
+
+  # Provision all hosts including Windows, one at a time
+  $(basename "$0") --include-windows --serial
 
   # Dry run — show what would happen without making changes
   $(basename "$0") --dry-run --verbose
@@ -119,6 +127,13 @@ while [[ $# -gt 0 ]]; do
         --boot-timeout)
             [[ "$2" =~ ^[0-9]+$ ]] || die "--boot-timeout requires a positive integer"
             BOOT_TIMEOUT="$2"; shift 2 ;;
+        --serial)
+            # Optional numeric argument; default to 1 if omitted
+            if [[ "${2:-}" =~ ^[0-9]+$ ]]; then
+                SERIAL="$2"; shift 2
+            else
+                SERIAL="1"; shift
+            fi ;;
         --include-windows)
             INCLUDE_WINDOWS=1; shift ;;
         --verbose|-v)
@@ -171,6 +186,7 @@ declare -A EVARS=()
 
 [[ "${MANAGE_POWER}"    -eq 1 ]] && EVARS[provision_manage_power]="true"
 [[ -n "${BOOT_TIMEOUT}" ]]       && EVARS[provision_boot_timeout_sec]="${BOOT_TIMEOUT}"
+[[ -n "${SERIAL}" ]]             && EVARS[provision_serial]="${SERIAL}"
 [[ "${INCLUDE_WINDOWS}" -eq 1 ]] && EVARS[provision_include_windows]="true"
 
 if [[ "${#EVARS[@]}" -gt 0 ]]; then

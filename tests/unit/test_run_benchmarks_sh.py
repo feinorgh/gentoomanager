@@ -31,11 +31,7 @@ def mock_bin(tmp_path: Path):
     """
     args_file = tmp_path / "ansible_args.txt"
     mock_ap = tmp_path / "ansible-playbook"
-    mock_ap.write_text(
-        "#!/usr/bin/env bash\n"
-        f'printf "%s\\n" "$@" > "{args_file}"\n'
-        "exit 0\n"
-    )
+    mock_ap.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "{args_file}"\nexit 0\n')
     mock_ap.chmod(mock_ap.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     return tmp_path, args_file
 
@@ -221,7 +217,8 @@ class TestCombinedFlags:
     def test_runs_warmup_category_combined(self, mock_bin) -> None:
         bin_dir, args_file = mock_bin
         result, recorded = _run(
-            bin_dir, args_file,
+            bin_dir,
+            args_file,
             ["--runs", "3", "--warmup", "1", "--category", "bash,compression"],
         )
         assert result.returncode == 0

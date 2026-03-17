@@ -47,6 +47,7 @@ class TestUrlConstants:
     def test_sqlite_url_contains_version(self) -> None:
         # URL should contain a numeric version string
         import re
+
         assert re.search(r"\d{7}", dbf.SQLITE_URL), (
             "SQLite URL should contain a 7-digit version number"
         )
@@ -193,7 +194,7 @@ class TestSqliteAmalgamation:
         return zip_path
 
     def test_extracts_sqlite3_c(self, tmp_path: Path) -> None:
-        zip_path = self._make_sqlite_zip(tmp_path)
+        self._make_sqlite_zip(tmp_path)
 
         def fake_download(url: str, dest: Path, desc: str, **kwargs: object) -> bool:
             # The download function is called to fetch the zip; simulate it
@@ -249,7 +250,9 @@ class TestRunFfmpeg:
 
     def test_prepends_ffmpeg_y_loglevel(self) -> None:
         mock_result = type("R", (), {"returncode": 0, "stderr": ""})()
-        with patch("download_benchmark_fixtures.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "download_benchmark_fixtures.subprocess.run", return_value=mock_result
+        ) as mock_run:
             dbf._run_ffmpeg(["-i", "input.mkv", "output.mkv"], "encode")
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "ffmpeg"
@@ -320,12 +323,14 @@ class TestMain:
         mock_bbb.assert_not_called()
 
     def test_all_five_fixtures_attempted_by_default(self, tmp_path: Path) -> None:
-        with patch.object(dbf, "download_silesia", return_value=True) as s, \
-             patch.object(dbf, "download_canterbury", return_value=True) as c, \
-             patch.object(dbf, "download_bbb", return_value=True) as b, \
-             patch.object(dbf, "download_kodak", return_value=True) as k, \
-             patch.object(dbf, "download_sqlite_amalgamation", return_value=True) as q, \
-             patch("sys.argv", ["prog", str(tmp_path)]):
+        with (
+            patch.object(dbf, "download_silesia", return_value=True) as s,
+            patch.object(dbf, "download_canterbury", return_value=True) as c,
+            patch.object(dbf, "download_bbb", return_value=True) as b,
+            patch.object(dbf, "download_kodak", return_value=True) as k,
+            patch.object(dbf, "download_sqlite_amalgamation", return_value=True) as q,
+            patch("sys.argv", ["prog", str(tmp_path)]),
+        ):
             dbf.main()
         s.assert_called_once()
         c.assert_called_once()
@@ -344,14 +349,15 @@ def _call_main(
     skip_video: bool = False,
 ) -> int:
     """Helper to call main() with patched download functions."""
-    import sys as _sys
     argv = [str(tmp_path)]
     if skip_video:
         argv.append("--skip-video")
-    with patch.object(dbf, "download_silesia", return_value=silesia), \
-         patch.object(dbf, "download_canterbury", return_value=canterbury), \
-         patch.object(dbf, "download_bbb", return_value=bbb), \
-         patch.object(dbf, "download_kodak", return_value=kodak), \
-         patch.object(dbf, "download_sqlite_amalgamation", return_value=sqlite), \
-         patch("sys.argv", ["prog"] + argv):
+    with (
+        patch.object(dbf, "download_silesia", return_value=silesia),
+        patch.object(dbf, "download_canterbury", return_value=canterbury),
+        patch.object(dbf, "download_bbb", return_value=bbb),
+        patch.object(dbf, "download_kodak", return_value=kodak),
+        patch.object(dbf, "download_sqlite_amalgamation", return_value=sqlite),
+        patch("sys.argv", ["prog"] + argv),
+    ):
         return dbf.main()

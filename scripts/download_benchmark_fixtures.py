@@ -39,7 +39,6 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Download helper
 # ---------------------------------------------------------------------------
@@ -74,7 +73,11 @@ def download(url: str, dest: Path, desc: str, force: bool = False) -> bool:
                         mb = done / (1024 * 1024)
                         tmb = total / (1024 * 1024)
                         progress_bar = "=" * (pct // 2) + ">" + " " * (50 - pct // 2)
-                        print(f"\r  [{progress_bar}] {pct}%  {mb:.1f}/{tmb:.1f} MiB", end="", flush=True)
+                        print(
+                            f"\r  [{progress_bar}] {pct}%  {mb:.1f}/{tmb:.1f} MiB",
+                            end="",
+                            flush=True,
+                        )
         print()
         tmp.rename(dest)
         mib = dest.stat().st_size / (1024 * 1024)
@@ -176,13 +179,10 @@ def download_canterbury(fixtures_dir: Path, force: bool = False) -> bool:
 # Big Buck Bunny video + audio
 # ---------------------------------------------------------------------------
 
-BBB_URL = (
-    "https://download.blender.org/demo/movies/BBB/"
-    "bbb_sunflower_1080p_30fps_normal.mp4.zip"
-)
+BBB_URL = "https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip"
 BBB_MP4_NAME = "bbb_sunflower_1080p_30fps_normal.mp4"
-BBB_VIDEO_DURATION = 30   # seconds of FFV1 lossless clip
-BBB_AUDIO_DURATION = 60   # seconds of PCM audio
+BBB_VIDEO_DURATION = 30  # seconds of FFV1 lossless clip
+BBB_AUDIO_DURATION = 60  # seconds of PCM audio
 
 
 def _run_ffmpeg(args: list[str], desc: str) -> bool:
@@ -237,12 +237,18 @@ def download_bbb(fixtures_dir: Path, force: bool = False) -> bool:
         print(f"Encoding {BBB_VIDEO_DURATION} s FFV1 lossless video clip …")
         ok = ok and _run_ffmpeg(
             [
-                "-ss", "00:00:30",          # skip the production-card intro
-                "-i", str(bbb_mp4),
-                "-t", str(BBB_VIDEO_DURATION),
-                "-c:v", "ffv1",
-                "-level", "3",
-                "-threads", "0",
+                "-ss",
+                "00:00:30",  # skip the production-card intro
+                "-i",
+                str(bbb_mp4),
+                "-t",
+                str(BBB_VIDEO_DURATION),
+                "-c:v",
+                "ffv1",
+                "-level",
+                "3",
+                "-threads",
+                "0",
                 "-an",
                 str(video_clip),
             ],
@@ -256,11 +262,15 @@ def download_bbb(fixtures_dir: Path, force: bool = False) -> bool:
         print(f"Extracting {BBB_AUDIO_DURATION} s PCM audio …")
         ok = ok and _run_ffmpeg(
             [
-                "-ss", "00:00:30",
-                "-i", str(bbb_mp4),
-                "-t", str(BBB_AUDIO_DURATION),
+                "-ss",
+                "00:00:30",
+                "-i",
+                str(bbb_mp4),
+                "-t",
+                str(BBB_AUDIO_DURATION),
                 "-vn",
-                "-c:a", "pcm_s16le",
+                "-c:a",
+                "pcm_s16le",
                 str(audio_clip),
             ],
             f"ffmpeg → {audio_clip.name}",
@@ -305,9 +315,9 @@ def download_kodak(fixtures_dir: Path, force: bool = False) -> bool:
         else:
             ok = False
 
-    total_mib = sum(
-        f.stat().st_size for f in kodak_dir.glob("*.png") if f.is_file()
-    ) / (1024 * 1024)
+    total_mib = sum(f.stat().st_size for f in kodak_dir.glob("*.png") if f.is_file()) / (
+        1024 * 1024
+    )
     print(f"  Kodak images: {downloaded}/{KODAK_COUNT} files, {total_mib:.1f} MiB total")
     return ok
 
@@ -362,6 +372,7 @@ def download_sqlite_amalgamation(fixtures_dir: Path, force: bool = False) -> boo
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(

@@ -17,7 +17,6 @@ import argparse
 import sys
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Makefile template
 # ---------------------------------------------------------------------------
@@ -269,6 +268,7 @@ double mod{n}_run(unsigned seed)
 # Generator
 # ---------------------------------------------------------------------------
 
+
 def gen_module(n: int, proj_dir: Path) -> None:
     """Write mod_NN.c for module index n."""
     content = MODULE_TMPL.format(n=n)
@@ -277,12 +277,9 @@ def gen_module(n: int, proj_dir: Path) -> None:
 
 def gen_main(n_modules: int, proj_dir: Path) -> None:
     """Write main.c that calls run() on every module."""
-    decls = "\n".join(
-        f"double mod{n}_run(unsigned seed);"
-        for n in range(n_modules)
-    )
+    decls = "\n".join(f"double mod{n}_run(unsigned seed);" for n in range(n_modules))
     calls = "\n".join(
-        f"    total += mod{n}_run(seed ^ 0x{(n * 0x9e3779b9) & 0xFFFFFFFF:08x}u);"
+        f"    total += mod{n}_run(seed ^ 0x{(n * 0x9E3779B9) & 0xFFFFFFFF:08x}u);"
         for n in range(n_modules)
     )
     content = MAIN_HEADER + decls + "\n\n" + MAIN_FOOTER_TMPL.format(calls=calls)
@@ -295,22 +292,16 @@ def generate(proj_dir: Path, n_modules: int) -> None:
     for n in range(n_modules):
         gen_module(n, proj_dir)
     gen_main(n_modules, proj_dir)
-    total_lines = sum(
-        p.read_text().count("\n")
-        for p in proj_dir.glob("*.c")
-    )
-    print(
-        f"Generated {n_modules} modules + main.c in {proj_dir} "
-        f"({total_lines} total lines)"
-    )
+    total_lines = sum(p.read_text().count("\n") for p in proj_dir.glob("*.c"))
+    print(f"Generated {n_modules} modules + main.c in {proj_dir} ({total_lines} total lines)")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("output_dir", type=Path,
-                        help="Directory to write the project into")
-    parser.add_argument("--modules", type=int, default=30,
-                        help="Number of C modules to generate (default: 30)")
+    parser.add_argument("output_dir", type=Path, help="Directory to write the project into")
+    parser.add_argument(
+        "--modules", type=int, default=30, help="Number of C modules to generate (default: 30)"
+    )
     args = parser.parse_args()
     generate(args.output_dir, args.modules)
     return 0

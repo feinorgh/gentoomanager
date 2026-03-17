@@ -56,15 +56,20 @@ class TestBuildDf:
     def test_empty_hosts_has_required_columns(self) -> None:
         df, _host_os = build_df({})
         required = {
-            "category", "benchmark", "host", "os_family",
-            "mean", "stddev", "min", "max", "median",
+            "category",
+            "benchmark",
+            "host",
+            "os_family",
+            "mean",
+            "stddev",
+            "min",
+            "max",
+            "median",
         }
         assert required.issubset(set(df.columns))
 
     def test_single_host_single_benchmark_creates_one_row(self) -> None:
-        hosts = {
-            "h1": _host({"compression": [_bench("gzip", 1.2, 0.05)]})
-        }
+        hosts = {"h1": _host({"compression": [_bench("gzip", 1.2, 0.05)]})}
         df, _host_os = build_df(hosts)
         assert len(df) == 1
         assert df.iloc[0]["benchmark"] == "gzip"
@@ -72,12 +77,14 @@ class TestBuildDf:
 
     def test_multiple_benchmarks_create_multiple_rows(self) -> None:
         hosts = {
-            "h1": _host({
-                "compression": [
-                    _bench("gzip", 1.2, 0.05),
-                    _bench("zstd", 0.4, 0.02),
-                ]
-            })
+            "h1": _host(
+                {
+                    "compression": [
+                        _bench("gzip", 1.2, 0.05),
+                        _bench("zstd", 0.4, 0.02),
+                    ]
+                }
+            )
         }
         df, _host_os = build_df(hosts)
         assert len(df) == 2
@@ -93,10 +100,12 @@ class TestBuildDf:
 
     def test_multiple_categories_all_included(self) -> None:
         hosts = {
-            "h1": _host({
-                "compression": [_bench("gzip", 1.0, 0.05)],
-                "python": [_bench("fibonacci", 2.5, 0.1)],
-            })
+            "h1": _host(
+                {
+                    "compression": [_bench("gzip", 1.0, 0.05)],
+                    "python": [_bench("fibonacci", 2.5, 0.1)],
+                }
+            )
         }
         df, _host_os = build_df(hosts)
         assert len(df) == 2
@@ -121,9 +130,7 @@ class TestBuildDf:
         assert host_os["h1"] == "Unknown"
 
     def test_missing_benchmarks_key_produces_empty_df(self) -> None:
-        hosts = {
-            "h1": {"metadata": {"hostname": "h1", "os_family": "Gentoo"}}
-        }
+        hosts = {"h1": {"metadata": {"hostname": "h1", "os_family": "Gentoo"}}}
         df, host_os = build_df(hosts)
         assert df.empty
         assert host_os["h1"] == "Gentoo"
@@ -141,9 +148,7 @@ class TestBuildDf:
         assert "boot_times" not in df["category"].values
 
     def test_numeric_columns_are_float(self) -> None:
-        hosts = {
-            "h1": _host({"compression": [_bench("gzip", 1.23, 0.01)]})
-        }
+        hosts = {"h1": _host({"compression": [_bench("gzip", 1.23, 0.01)]})}
         df, _host_os = build_df(hosts)
         for col in ("mean", "stddev", "min", "max", "median"):
             assert df[col].dtype == float, f"{col} should be float"
@@ -151,10 +156,13 @@ class TestBuildDf:
     def test_cross_product_rows_correct(self) -> None:
         """3 hosts × 2 categories × 2 benchmarks each = 12 rows."""
         hosts = {
-            f"h{i}": _host({
-                "compression": [_bench("gzip"), _bench("zstd")],
-                "python": [_bench("fib"), _bench("json")],
-            }, hostname=f"h{i}")
+            f"h{i}": _host(
+                {
+                    "compression": [_bench("gzip"), _bench("zstd")],
+                    "python": [_bench("fib"), _bench("json")],
+                },
+                hostname=f"h{i}",
+            )
             for i in range(3)
         }
         df, _host_os = build_df(hosts)

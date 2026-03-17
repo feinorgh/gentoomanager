@@ -165,7 +165,11 @@ def get_vms_from_host(host):
                 os_name = vm.split("-")[0].lower()
 
             # 4. Try to get the actual hostname from the QEMU guest agent
-            actual_hostname = vm  # default: fall back to libvirt VM name
+            # Fall back to the short hostname derived from the VM name by stripping the
+            # OS prefix (e.g. "fedora-eden" → "eden"), so the ProxyCommand target remains
+            # resolvable on the hypervisor even when the guest agent is unavailable.
+            short_vm_name = vm.rsplit("-", 1)[-1] if "-" in vm else vm
+            actual_hostname = short_vm_name  # default: short hostname fallback
             hostname_cmd = (
                 f"virsh --connect qemu:///system qemu-agent-command {shlex.quote(vm)}"
                 ' \'{"execute":"guest-get-host-name"}\''
@@ -326,7 +330,8 @@ def main():
                         # Use the actual hostname reported by the VM (via QEMU guest agent)
                         # for ansible_host and the ProxyCommand target, so Ansible connects
                         # by the machine's real hostname rather than the libvirt domain name.
-                        # Falls back to the libvirt VM name if the guest agent was unavailable.
+                        # When the guest agent is unavailable the hostname already defaults to
+                        # the short name (e.g. "eden" for "fedora-eden") inside get_vms_from_host.
                         actual_hostname = vm.get("hostname", vm_name)
                         hostvars = {
                             "ansible_host": actual_hostname,

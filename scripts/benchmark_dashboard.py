@@ -39,15 +39,11 @@ from typing import Any
 
 try:
     import dash
-    from dash import Input, Output, dash_table, dcc, html
-    import plotly.graph_objects as go
     import pandas as pd
+    import plotly.graph_objects as go
+    from dash import Input, Output, dash_table, dcc, html
 except ImportError as exc:
-    sys.exit(
-        f"ERROR: {exc}\n"
-        "Install required packages with:\n"
-        "    pip install dash pandas\n"
-    )
+    sys.exit(f"ERROR: {exc}\nInstall required packages with:\n    pip install dash pandas\n")
 
 # ---------------------------------------------------------------------------
 # Import shared utilities from the sibling report generator
@@ -131,9 +127,22 @@ def build_df(
                     }
                 )
 
-    df = pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["category", "benchmark", "host", "os_family",
-                 "mean", "stddev", "min", "max", "median"]
+    df = (
+        pd.DataFrame(rows)
+        if rows
+        else pd.DataFrame(
+            columns=[
+                "category",
+                "benchmark",
+                "host",
+                "os_family",
+                "mean",
+                "stddev",
+                "min",
+                "max",
+                "median",
+            ]
+        )
     )
     return df, host_os
 
@@ -316,9 +325,7 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
                             ),
                             dcc.Checklist(
                                 id="horiz-toggle",
-                                options=[
-                                    {"label": "  Horizontal bars", "value": "horiz"}
-                                ],
+                                options=[{"label": "  Horizontal bars", "value": "horiz"}],
                                 value=[],
                                 inputStyle={"marginRight": "6px"},
                                 labelStyle={
@@ -418,9 +425,7 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
                 style={"color": "#888"},
             )
 
-        cat_df = df[
-            (df["category"] == category) & (df["host"].isin(selected_hosts))
-        ].copy()
+        cat_df = df[(df["category"] == category) & (df["host"].isin(selected_hosts))].copy()
 
         if cat_df.empty:
             return _empty_fig("No data for this selection."), html.P(
@@ -451,12 +456,7 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
         # Sort benchmarks
         benchmarks = sorted(cat_df["benchmark"].unique().tolist())
         if sort_by == "fastest":
-            benchmarks = (
-                cat_df.groupby("benchmark")["mean"]
-                .min()
-                .sort_values()
-                .index.tolist()
-            )
+            benchmarks = cat_df.groupby("benchmark")["mean"].min().sort_values().index.tolist()
         elif sort_by == "spread":
             benchmarks = (
                 cat_df.groupby("benchmark")["mean"]
@@ -466,19 +466,15 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
             )
 
         # Build Plotly traces
-        category_title = CATEGORY_TITLES.get(
-            category, category.replace("_", " ").title()
-        )
+        category_title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
         traces = []
         for host in selected_hosts:
             host_df = cat_df[cat_df["host"] == host].set_index("benchmark")
             y_vals = [
-                float(host_df.loc[b, "mean"]) if b in host_df.index else None
-                for b in benchmarks
+                float(host_df.loc[b, "mean"]) if b in host_df.index else None for b in benchmarks
             ]
             err_vals = [
-                float(host_df.loc[b, "stddev"]) if b in host_df.index else 0.0
-                for b in benchmarks
+                float(host_df.loc[b, "stddev"]) if b in host_df.index else 0.0 for b in benchmarks
             ]
             color = host_colors.get(host, "#888")
 
@@ -534,15 +530,11 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
             ),
             xaxis=dict(
                 gridcolor=DARK["border"],
-                title=dict(
-                    text=value_label if horizontal else "Benchmark"
-                ),
+                title=dict(text=value_label if horizontal else "Benchmark"),
             ),
             yaxis=dict(
                 gridcolor=DARK["border"],
-                title=dict(
-                    text="Benchmark" if horizontal else value_label
-                ),
+                title=dict(text="Benchmark" if horizontal else value_label),
             ),
             margin=dict(l=20, r=20, t=50, b=20),
         )
@@ -643,7 +635,10 @@ def main() -> None:
     parser.add_argument(
         "--host",
         default="127.0.0.1",
-        help="Interface address to bind (default: 127.0.0.1). Use 0.0.0.0 to listen on all interfaces.",
+        help=(
+            "Interface address to bind (default: 127.0.0.1). "
+            "Use 0.0.0.0 to listen on all interfaces."
+        ),
     )
     parser.add_argument(
         "--anonymize",

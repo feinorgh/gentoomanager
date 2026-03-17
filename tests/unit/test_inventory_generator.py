@@ -275,6 +275,7 @@ class TestBuildInventory:
         inv_data = _build(vms)
         assert len(inv_data["gentoo"]["hosts"]) == 1
 
+
 # ── Edge case tests ──────────────────────────────────────────────────────
 
 
@@ -401,10 +402,7 @@ class TestBuildInventoryEdgeCases:
 
     def test_each_host_has_ansible_host_var(self) -> None:
         vms = {
-            "hv": [
-                {"name": f"vm-{n}", "os": "gentoo", "hostname": f"host-{n}"}
-                for n in range(5)
-            ]
+            "hv": [{"name": f"vm-{n}", "os": "gentoo", "hostname": f"host-{n}"} for n in range(5)]
         }
         inv_data = _build(vms)
         for n in range(5):
@@ -417,6 +415,9 @@ class TestBuildInventoryEdgeCases:
             "hv-beta": [{"name": "vm2", "os": "gentoo", "hostname": "vm2"}],
         }
         inv_data = _build(vms)
-        assert "hypervisor_hv_alpha" in inv_data or "hypervisor_hv-alpha" in inv_data or \
-               any("hv_alpha" in k or "hv-alpha" in k for k in inv_data)
+        assert (
+            "hypervisor_hv_alpha" in inv_data
+            or "hypervisor_hv-alpha" in inv_data
+            or any("hv_alpha" in k or "hv-alpha" in k for k in inv_data)
+        )
         assert any("hv_beta" in k or "hv-beta" in k for k in inv_data)
