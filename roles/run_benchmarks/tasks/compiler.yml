@@ -278,22 +278,47 @@
   changed_when: false
   failed_when: false
 
-# Discover all rustup toolchains (stable, nightly, beta, pinned versions).
-# Falls back to a bare rustc entry when rustup is not available.
+# Discover all Rust toolchains, outputting "LABEL /path/to/cargo" per unique binary.
+# Sources checked (in order, deduplicated by resolved real path):
+#   1. rustup toolchains (stable, nightly, beta, pinned)
+#   2. Gentoo eselect rust slots (/usr/lib/rust/<ver>/bin/cargo)
+#   3. Bare cargo on PATH (when neither rustup nor eselect is present)
 - name: Discover Rust toolchains
   ansible.builtin.shell:
     cmd: |
       set +e
       set -o pipefail
-      if command -v rustup >/dev/null 2>&1; then
-        rustup toolchain list 2>/dev/null | while read -r toolchain _rest; do
-          # Strip arch suffix to get a short label: stable-x86_64-unknown-linux-gnu → stable
-          short=$(echo "$toolchain" | sed 's/-x86_64-.*//; s/-aarch64-.*//; s/-arm-.*//')
-          printf '%s %s\n' "$short" "$toolchain"
-        done
-      else
-        command -v rustc >/dev/null 2>&1 && printf 'rustc default\n'
-      fi
+      {
+        if command -v rustup >/dev/null 2>&1; then
+          rustup toolchain list 2>/dev/null | while read -r toolchain _rest; do
+            # Strip arch suffix: stable-x86_64-unknown-linux-gnu → stable
+            short=$(echo "$toolchain" | sed 's/-x86_64-.*//; s/-aarch64-.*//; s/-arm-.*//')
+            cargo_bin=$(rustup which --toolchain "$toolchain" cargo 2>/dev/null) || continue
+            printf '%s %s\n' "$short" "$cargo_bin"
+          done
+        fi
+        # Gentoo: eselect rust managed slots (may include non-active versions not on PATH)
+        if command -v eselect >/dev/null 2>&1 && eselect rust list >/dev/null 2>&1; then
+          eselect rust list 2>/dev/null | grep -oE 'rust-[0-9]+\.[0-9]+\.[0-9]+' |
+          while read -r slot; do
+            ver="${slot#rust-}"
+            for cargo_bin in "/usr/lib/rust/${ver}/bin/cargo" \
+                             "/usr/lib64/rust/${ver}/bin/cargo" \
+                             "/usr/bin/cargo-${ver}"; do
+              [ -x "$cargo_bin" ] && printf '%s %s\n' "$slot" "$cargo_bin" && break
+            done
+          done
+        fi
+        # Bare cargo fallback (no rustup, no eselect)
+        if ! command -v rustup >/dev/null 2>&1 && \
+           ! (command -v eselect >/dev/null 2>&1 && eselect rust list >/dev/null 2>&1); then
+          cargo_bin=$(command -v cargo 2>/dev/null) || true
+          [ -n "$cargo_bin" ] && printf 'rustc %s\n' "$cargo_bin"
+        fi
+      } | while IFS=' ' read -r label cargo_bin; do
+          real=$(readlink -f "$cargo_bin" 2>/dev/null || echo "$cargo_bin")
+          printf '%s\t%s\t%s\n' "$real" "$label" "$cargo_bin"
+        done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
     executable: /bin/bash
   register: run_benchmarks_rust_toolchains
   changed_when: false
@@ -310,14 +335,11 @@
       {% set tc_parts = tc.split() %}
       {% if tc_parts | length >= 2 %}
       {% set tc_label = tc_parts[0] %}
-      {% set tc_name = tc_parts[1] %}
-      {% if tc_name == 'default' %}
-      CMDS+=(--command-name "{{ tc_label }}-cargo-debug"   "cargo build 2>&1")
-      CMDS+=(--command-name "{{ tc_label }}-cargo-release" "cargo build --release 2>&1")
-      {% else %}
-      CMDS+=(--command-name "{{ tc_label }}-cargo-debug"   "cargo +{{ tc_name }} build 2>&1")
-      CMDS+=(--command-name "{{ tc_label }}-cargo-release" "cargo +{{ tc_name }} build --release 2>&1")
-      {% endif %}
+      {% set tc_cargo = tc_parts[1] %}
+      if [ -x "{{ tc_cargo }}" ]; then
+        CMDS+=(--command-name "{{ tc_label }}-cargo-debug"   "{{ tc_cargo }} build 2>&1")
+        CMDS+=(--command-name "{{ tc_label }}-cargo-release" "{{ tc_cargo }} build --release 2>&1")
+      fi
       {% endif %}
       {% endfor %}
       if [ -z "${CMDS[*]}" ]; then
@@ -343,19 +365,18 @@
     cmd: |
       set -eo pipefail
       python3 - << 'PYEOF'
-      import json, subprocess
+      import json, os, subprocess
       versions = {}
       lines = """{{ run_benchmarks_rust_toolchains.stdout | default('') }}""".strip().splitlines()
       for line in lines:
           parts = line.split(None, 1)
           if len(parts) < 2:
               continue
-          label, toolchain = parts[0], parts[1]
+          label, cargo_bin = parts[0], parts[1]
+          # Derive rustc path from cargo binary (same bin/ directory)
+          rustc_bin = os.path.join(os.path.dirname(cargo_bin), 'rustc')
+          cmd = [rustc_bin, '--version'] if os.path.isfile(rustc_bin) else ['rustc', '--version']
           try:
-              if toolchain == 'default':
-                  cmd = ['rustc', '--version']
-              else:
-                  cmd = ['rustup', 'run', toolchain, 'rustc', '--version']
               out = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
               ver = (out.stdout or out.stderr).splitlines()[0].strip()
           except Exception as exc:
