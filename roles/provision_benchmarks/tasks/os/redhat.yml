@@ -89,6 +89,15 @@
       changed_when: true
       failed_when: false
 
+    - name: Remove ffmpeg-free if present (conflicts with RPM Fusion ffmpeg)
+      # Fedora 40+ ships a restricted 'ffmpeg-free' build in the main repos that
+      # lacks h264/h265 support and conflicts with the RPM Fusion 'ffmpeg' package.
+      # Removing it first ensures dnf can install the full RPM Fusion build.
+      ansible.builtin.command:
+        cmd: dnf remove -y ffmpeg-free
+      changed_when: true
+      failed_when: false
+
     - name: Install ffmpeg (Fedora)
       ansible.builtin.command:
         cmd: dnf install -y ffmpeg
