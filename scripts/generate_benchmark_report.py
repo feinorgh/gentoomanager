@@ -248,6 +248,21 @@ def anonymize_hosts(
     return result
 
 
+def _is_higher_better(host_results: dict) -> bool:
+    """Return True if this benchmark's metric is higher=better (e.g. throughput)."""
+    sample = next(iter(host_results.values()), {})
+    return bool(sample.get("higher_is_better", False))
+
+
+def _format_throughput(mean_kb_s: float, stddev_kb_s: float = 0.0) -> str:
+    """Format a KB/s throughput value with automatic unit scaling."""
+    if mean_kb_s >= 1_000_000:
+        return f"{mean_kb_s / 1_000_000:.2f} ± {stddev_kb_s / 1_000_000:.2f} GB/s"
+    if mean_kb_s >= 1_000:
+        return f"{mean_kb_s / 1_000:.1f} ± {stddev_kb_s / 1_000:.1f} MB/s"
+    return f"{mean_kb_s:.0f} ± {stddev_kb_s:.0f} KB/s"
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -333,6 +348,7 @@ def build_comparison_table(
                     "min": bench.get("min", 0.0),
                     "max": bench.get("max", 0.0),
                     "median": bench.get("median", 0.0),
+                    "higher_is_better": bench.get("higher_is_better", False),
                 }
 
     return dict(table)
@@ -618,9 +634,15 @@ def compute_scores(
             valid = {h: r["mean"] for h, r in host_results.items() if r.get("mean", 0) > 0}
             if not valid:
                 continue
-            min_time = min(valid.values())
-            for hostname, t in valid.items():
-                cat_scores[category][hostname].append(min_time / t * 100)
+            higher = _is_higher_better(host_results)
+            if higher:
+                best = max(valid.values())
+                for hostname, t in valid.items():
+                    cat_scores[category][hostname].append(t / best * 100)
+            else:
+                min_time = min(valid.values())
+                for hostname, t in valid.items():
+                    cat_scores[category][hostname].append(min_time / t * 100)
 
     # Collect all hostnames seen
     all_hosts: set[str] = set()
@@ -886,7 +908,15 @@ def generate_markdown(
         benchmarks = table[category]
         lines.append(f"## {title}")
         lines.append("")
-        lines.append("Times in seconds (mean ± stddev). **Lowest** is bold.")
+
+        # Detect whether this category uses throughput metrics
+        sample_bench = next(iter(benchmarks.values()), {})
+        higher = _is_higher_better(sample_bench)
+
+        if higher:
+            lines.append("Throughput in KB/s (mean ± stddev). **Highest** is bold.")
+        else:
+            lines.append("Times in seconds (mean ± stddev). **Lowest** is bold.")
         lines.append("")
 
         headers = ["Benchmark"] + hostnames
@@ -896,15 +926,18 @@ def generate_markdown(
             host_results = benchmarks[bench_name]
             row = [bench_name]
 
-            # Find the fastest host for this benchmark
+            # Find the best host for this benchmark
             means = {h: r["mean"] for h, r in host_results.items() if r["mean"] > 0}
-            fastest = min(means, key=means.get) if means else None
+            best = (max if higher else min)(means, key=means.get) if means else None
 
             for hostname in hostnames:
                 if hostname in host_results:
                     r = host_results[hostname]
-                    cell = f"{r['mean']:.3f} ± {r['stddev']:.3f}"
-                    if hostname == fastest:
+                    if higher:
+                        cell = _format_throughput(r["mean"], r["stddev"])
+                    else:
+                        cell = f"{r['mean']:.3f} ± {r['stddev']:.3f}"
+                    if hostname == best:
                         cell = f"**{cell}**"
                 else:
                     cell = "—"
@@ -1075,7 +1108,11 @@ def generate_html(
         bench_data_for_js[_cat] = {}
         for _bench, _host_results in _benchmarks.items():
             bench_data_for_js[_cat][_bench] = {
-                h: {"mean": round(r["mean"], 6), "stddev": round(r["stddev"], 6)}
+                h: {
+                    "mean": round(r["mean"], 6),
+                    "stddev": round(r["stddev"], 6),
+                    "higher_is_better": r.get("higher_is_better", False),
+                }
                 for h, r in _host_results.items()
             }
 
@@ -1116,6 +1153,19 @@ def generate_html(
         labels_json = json.dumps(bench_names)
         datasets_json = json.dumps(datasets, indent=2)
 
+        # Detect if this category uses throughput metrics
+        sample_bench_name = bench_names[0] if bench_names else None
+        higher = False
+        if sample_bench_name and hostnames:
+            sample_r = benchmarks.get(sample_bench_name, {}).get(hostnames[0], {})
+            higher = bool(sample_r.get("higher_is_better", False))
+
+        y_label = "Throughput (KB/s)" if higher else "Time (seconds)"
+        chart_title_suffix = "KB/s, higher is better" if higher else "seconds, lower is better"
+        tooltip_suffix = "KB/s" if higher else "s"
+        tooltip_digits = 2 if higher else 4
+        higher_js = "true" if higher else "false"
+
         # Build HTML table for this category
         table_html = _html_benchmark_table(benchmarks, bench_names, hostnames)
 
@@ -1137,14 +1187,16 @@ def generate_html(
         datasets: {datasets_json}
       }},
       options: {{
+        higherIsBetter: {higher_js},
         responsive: true,
         plugins: {{
-          title: {{ display: true, text: '{title} (seconds, lower is better)' }},
+          title: {{ display: true, text: '{title} ({chart_title_suffix})' }},
           legend: {{ position: 'bottom' }},
           tooltip: {{
             callbacks: {{
               label: function(ctx) {{
-                return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + 's';
+                const v = ctx.parsed.y.toFixed({tooltip_digits});
+                return ctx.dataset.label + ': ' + v + '{tooltip_suffix}';
               }}
             }}
           }}
@@ -1152,7 +1204,7 @@ def generate_html(
         scales: {{
           y: {{
             beginAtZero: true,
-            title: {{ display: true, text: 'Time (seconds)' }}
+            title: {{ display: true, text: '{y_label}' }}
           }}
         }}
       }}
@@ -1639,26 +1691,30 @@ def generate_html(
                 .filter(([h]) => selected.has(h))
                 .map(([, r]) => r.mean)
                 .filter(v => v > 0);
-              const minVal = allVals.length ? Math.min(...allVals) : 1;
-              return minVal > 0 ? parseFloat((val / minVal).toFixed(4)) : null;
+              const hib = chart.options.higherIsBetter || false;
+              const refVal = hib ? Math.max(...allVals) : Math.min(...allVals);
+              return refVal > 0 ? parseFloat((hib ? val / refVal : refVal / val).toFixed(4)) : null;
             }}
             return val;
           }});
 
           // Update tooltip suffix
-          dataset.tooltip_suffix = normalize ? 'x' : 's';
+          dataset.tooltip_suffix = normalize ? 'x' : (chart.options.higherIsBetter ? 'KB/s' : 's');
         }});
 
         // Toggle orientation
         chart.options.indexAxis = horiz ? 'y' : 'x';
 
         // Update axis labels
+        const hib = chart.options.higherIsBetter || false;
         const valueLabel = normalize
-          ? 'Relative to fastest (1.0 = fastest)'
-          : 'Time (seconds)';
+          ? (hib ? 'Relative to best (1.0 = best)' : 'Relative to fastest (1.0 = fastest)')
+          : (hib ? 'Throughput (KB/s)' : 'Time (seconds)');
         const catTitle = chart.options.plugins.title.text
           .replace(/ \\(.*\\)$/, '')
-          + (normalize ? ' (normalized, lower is better)' : ' (seconds, lower is better)');
+          + (normalize
+            ? (hib ? ' (normalized, higher is better)' : ' (normalized, lower is better)')
+            : (hib ? ' (KB/s, higher is better)' : ' (seconds, lower is better)'));
         chart.options.plugins.title.text = catTitle;
         if (horiz) {{
           chart.options.scales.x = chart.options.scales.x || {{}};
@@ -1819,14 +1875,18 @@ def _html_benchmark_table(
 
     for bench_name in bench_names:
         host_results = benchmarks.get(bench_name, {})
+        higher = _is_higher_better(host_results)
         means = {h: r["mean"] for h, r in host_results.items() if r["mean"] > 0}
-        fastest = min(means, key=means.get) if means else None
+        fastest = (max if higher else min)(means, key=means.get) if means else None
 
         cells: list[str] = [f"<td><strong>{bench_name}</strong></td>"]
         for hostname in hostnames:
             if hostname in host_results:
                 r = host_results[hostname]
-                val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
+                if higher:
+                    val = _format_throughput(r["mean"], r["stddev"])
+                else:
+                    val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
                 cls = ' class="fastest"' if hostname == fastest else ""
                 cells.append(f"<td{cls}>{val}</td>")
             else:

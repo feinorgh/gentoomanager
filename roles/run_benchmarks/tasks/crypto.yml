@@ -193,38 +193,93 @@
     - run_benchmarks_crypto_hash_coreutils_result.rc | default(0) != 0
 
 # ── 5. OpenSSL speed — built-in throughput benchmarks ────────────────────
-# These use OpenSSL's internal benchmarking, wrapped in hyperfine for
-# consistent measurement. The '-seconds 3' flag keeps each run short.
+# Run openssl speed directly and parse the KB/s throughput from its output.
+# Wrapping in hyperfine discarded the real data because openssl speed always
+# runs for exactly the requested number of seconds (the wall-clock time is
+# constant, not the throughput). We instead run each algorithm for
+# warmup+runs iterations and store actual KB/s values.
 - name: Run OpenSSL speed benchmarks (symmetric + AEAD)
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
 
-      {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
-        --ignore-failure \
-        --export-json {{ run_benchmarks_work_dir }}/crypto_openssl_speed.json \
-        --command-name 'speed-aes-256-gcm' \
-          'openssl speed -seconds 1 -bytes 16384 -evp aes-256-gcm' \
-        --command-name 'speed-aes-256-cbc' \
-          'openssl speed -seconds 1 -bytes 16384 aes-256-cbc' \
-        --command-name 'speed-chacha20-poly1305' \
-          'openssl speed -seconds 1 -bytes 16384 -evp chacha20-poly1305' \
-        --command-name 'speed-sha256' \
-          'openssl speed -seconds 1 -bytes 16384 sha256' \
-        --command-name 'speed-sha512' \
-          'openssl speed -seconds 1 -bytes 16384 sha512'
+      python3 - << 'PYEOF'
+      import json
+      import math
+      import re
+      import subprocess
+      import sys
+
+      ALGORITHMS = [
+          ("speed-aes-256-gcm",       ["openssl", "speed", "-seconds", "3", "-bytes", "16384", "-evp", "aes-256-gcm"]),
+          ("speed-aes-256-cbc",       ["openssl", "speed", "-seconds", "3", "-bytes", "16384", "aes-256-cbc"]),
+          ("speed-chacha20-poly1305", ["openssl", "speed", "-seconds", "3", "-bytes", "16384", "-evp", "chacha20-poly1305"]),
+          ("speed-sha256",            ["openssl", "speed", "-seconds", "3", "-bytes", "16384", "sha256"]),
+          ("speed-sha512",            ["openssl", "speed", "-seconds", "3", "-bytes", "16384", "sha512"]),
+      ]
+      WARMUP = {{ run_benchmarks_warmup }}
+      RUNS   = {{ run_benchmarks_runs }}
+      OUTFILE = "{{ run_benchmarks_work_dir }}/crypto_openssl_speed.json"
+
+      # Pattern: last number with 'k' suffix on the algorithm result line
+      _KB_RE = re.compile(r"([\d.]+)k\s*$")
+
+      def parse_kbps(output):
+          """Return KB/s float from openssl speed stdout, or None."""
+          for line in reversed(output.splitlines()):
+              m = _KB_RE.search(line.strip())
+              if m:
+                  return float(m.group(1)) * 1000.0
+          return None
+
+      results = []
+      for name, cmd in ALGORITHMS:
+          samples = []
+          total_iters = WARMUP + RUNS
+          for i in range(total_iters):
+              proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+              combined = proc.stdout + proc.stderr
+              val = parse_kbps(combined)
+              if val is not None and i >= WARMUP:
+                  samples.append(val)
+
+          if not samples:
+              continue
+
+          n = len(samples)
+          mean = sum(samples) / n
+          variance = sum((x - mean) ** 2 for x in samples) / (n - 1) if n > 1 else 0.0
+          stddev = math.sqrt(variance)
+          sorted_s = sorted(samples)
+          mid = n // 2
+          median = (sorted_s[mid - 1] + sorted_s[mid]) / 2.0 if n % 2 == 0 else sorted_s[mid]
+
+          results.append({
+              "command": name,
+              "mean":    mean,
+              "stddev":  stddev,
+              "min":     min(samples),
+              "max":     max(samples),
+              "median":  median,
+              "unit":    "KB/s",
+              "higher_is_better": True,
+          })
+
+      with open(OUTFILE, "w") as fh:
+          json.dump({"results": results}, fh, indent=2)
+
+      print(f"Wrote {len(results)} result(s) to {OUTFILE}", file=sys.stderr)
+      PYEOF
     executable: /bin/bash
   register: run_benchmarks_crypto_speed_result
   changed_when: false
   failed_when: false
 
-- name: Warn on crypto_speed benchmark failure
+- name: Warn on crypto_openssl_speed benchmark failure
   ansible.builtin.debug:
     msg: >-
-      [WARN] {{ inventory_hostname }}: crypto_speed benchmark exited
+      [WARN] {{ inventory_hostname }}: crypto_openssl_speed benchmark exited
       rc={{ run_benchmarks_crypto_speed_result.rc }}.
       {{ run_benchmarks_crypto_speed_result.stderr | default('') | truncate(300) | trim }}
   when:

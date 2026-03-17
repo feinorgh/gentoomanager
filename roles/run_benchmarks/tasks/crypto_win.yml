@@ -29,21 +29,86 @@
 
 - name: Run OpenSSL speed benchmarks (Windows)
   ansible.windows.win_shell: |
-    $wd = "{{ run_benchmarks_work_dir_win }}"
-    $hf = "hyperfine"
-    $runs = {{ run_benchmarks_runs }}
+    # Refresh PATH so openssl installed via package manager is found
+    $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $userPath    = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:Path    = "$machinePath;$userPath"
+
+    $wd     = "{{ run_benchmarks_work_dir_win }}"
+    $runs   = {{ run_benchmarks_runs }}
     $warmup = {{ run_benchmarks_warmup }}
-    $cmds = @()
+    $outFile = "$wd\crypto_openssl_speed.json"
 
-    foreach ($cipher in @('aes-256-cbc', 'aes-256-gcm', 'chacha20-poly1305')) {
-      $cmds += "--command-name 'openssl-${cipher}' 'openssl speed -elapsed -seconds 3 ${cipher} >NUL 2>&1'"
+    $algorithms = @(
+        @{ name = 'speed-aes-256-gcm';       args = @('speed', '-seconds', '3', '-bytes', '16384', '-evp', 'aes-256-gcm') },
+        @{ name = 'speed-aes-256-cbc';       args = @('speed', '-seconds', '3', '-bytes', '16384', 'aes-256-cbc') },
+        @{ name = 'speed-chacha20-poly1305'; args = @('speed', '-seconds', '3', '-bytes', '16384', '-evp', 'chacha20-poly1305') },
+        @{ name = 'speed-sha256';            args = @('speed', '-seconds', '3', '-bytes', '16384', 'sha256') },
+        @{ name = 'speed-sha512';            args = @('speed', '-seconds', '3', '-bytes', '16384', 'sha512') }
+    )
+
+    function Parse-KBps($output) {
+        # Last line matching a number followed by 'k' at end of line
+        $lines = $output -split "`n" | Where-Object { $_ -match '\d+\.\d+k\s*$' }
+        if ($lines.Count -gt 0) {
+            $line = $lines[-1]
+            if ($line -match '([\d.]+)k\s*$') {
+                return [double]$Matches[1] * 1000.0
+            }
+        }
+        return $null
     }
 
-    foreach ($hash in @('sha256', 'sha512')) {
-      $cmds += "--command-name 'openssl-${hash}' 'openssl speed -elapsed -seconds 3 ${hash} >NUL 2>&1'"
+    function Get-Median($arr) {
+        $sorted = $arr | Sort-Object
+        $n = $sorted.Count
+        if ($n -eq 0) { return 0.0 }
+        $mid = [int]($n / 2)
+        if ($n % 2 -eq 0) {
+            return ($sorted[$mid - 1] + $sorted[$mid]) / 2.0
+        }
+        return [double]$sorted[$mid]
     }
 
-    $argStr = $cmds -join ' '
-    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\crypto-openssl.json $argStr"
+    $results = @()
+    foreach ($alg in $algorithms) {
+        $samples = @()
+        $totalIters = $warmup + $runs
+        for ($i = 0; $i -lt $totalIters; $i++) {
+            $proc = & openssl @($alg.args) 2>&1
+            $output = $proc -join "`n"
+            $val = Parse-KBps $output
+            if ($val -ne $null -and $i -ge $warmup) {
+                $samples += $val
+            }
+        }
+        if ($samples.Count -eq 0) { continue }
+
+        $n    = $samples.Count
+        $mean = ($samples | Measure-Object -Sum).Sum / $n
+        $variance = 0.0
+        if ($n -gt 1) {
+            foreach ($s in $samples) { $variance += ($s - $mean) * ($s - $mean) }
+            $variance /= ($n - 1)
+        }
+        $stddev = [Math]::Sqrt($variance)
+        $minVal  = ($samples | Measure-Object -Minimum).Minimum
+        $maxVal  = ($samples | Measure-Object -Maximum).Maximum
+        $median  = Get-Median $samples
+
+        $results += [ordered]@{
+            command           = $alg.name
+            mean              = $mean
+            stddev            = $stddev
+            min               = $minVal
+            max               = $maxVal
+            median            = $median
+            unit              = 'KB/s'
+            higher_is_better  = $true
+        }
+    }
+
+    $output = [ordered]@{ results = $results }
+    $output | ConvertTo-Json -Depth 5 | Out-File -Encoding utf8 $outFile
   changed_when: false
   when: "'openssl' in run_benchmarks_win_crypto_tools.stdout"

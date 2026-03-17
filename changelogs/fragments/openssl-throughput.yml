@@ -1,0 +1,4 @@
+bugfixes:
+  - "roles/run_benchmarks: measure OpenSSL throughput (KB/s) directly instead of
+    timing the `openssl speed` command, which always takes exactly the number of
+    seconds requested and discards the real performance data."
