@@ -569,8 +569,8 @@
 # ---------------------------------------------------------------------------
 # CPU affinity support
 # ---------------------------------------------------------------------------
-- name: Check taskset availability
-  ansible.builtin.command:
+- name: Check taskset availability  # noqa: command-instead-of-shell
+  ansible.builtin.shell:
     cmd: command -v taskset
   register: run_benchmarks_taskset_check
   changed_when: false

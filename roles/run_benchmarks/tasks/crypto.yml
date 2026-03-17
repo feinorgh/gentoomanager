@@ -446,8 +446,8 @@
     - run_benchmarks_crypto_kdf_result.rc | default(0) != 0
 
 # ── 9. GPG sign/verify (kept from original) ──────────────────────────────
-- name: Check if GPG is available
-  ansible.builtin.command:
+- name: Check if GPG is available  # noqa: command-instead-of-shell
+  ansible.builtin.shell:
     cmd: command -v gpg
   register: run_benchmarks_gpg_check
   changed_when: false
