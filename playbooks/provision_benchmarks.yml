@@ -18,7 +18,7 @@
 
 # ── Play 0: Boot powered-off VMs (--manage-power) ────────────────────────
 - name: Boot powered-off VMs before provisioning
-  hosts: "all:!win:!win11:!win10"
+  hosts: "{{ 'all' if (provision_include_windows | default(false) | bool) else 'all:!win:!win11:!win10' }}"
   serial: 1
   gather_facts: false
   ignore_unreachable: true
@@ -99,7 +99,7 @@
         - _provision_vm_was_off | default(false) | bool
 
 - name: Gather facts and group hosts by OS family
-  hosts: "all:!win:!win11:!win10"
+  hosts: "{{ 'all' if (provision_include_windows | default(false) | bool) else 'all:!win:!win11:!win10' }}"
   serial: "100%"
   gather_facts: true
   ignore_unreachable: true
@@ -301,9 +301,22 @@
         name: provision_benchmarks
         tasks_from: os/solus.yml
 
-# ── Play 11: Shut down VMs that were booted by this run (--manage-power) ─
+# ── Play 11: Provision Windows hosts ────────────────────────────────────
+- name: Provision Windows hosts
+  hosts: win
+  serial: "{{ provision_serial | default('100%') }}"
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/windows.yml
+
+# ── Play 12: Shut down VMs that were booted by this run (--manage-power) ─
 - name: Shut down VMs booted by this provisioning run
-  hosts: "all:!win:!win11:!win10"
+  hosts: "{{ 'all' if (provision_include_windows | default(false) | bool) else 'all:!win:!win11:!win10' }}"
   serial: "100%"
   gather_facts: false
   ignore_unreachable: true

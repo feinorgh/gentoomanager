@@ -168,15 +168,7 @@ CMD=(ansible-playbook "${PLAYBOOK}" -i "${INVENTORY}")
 
 [[ -n "${VERBOSITY}" ]] && CMD+=("-${VERBOSITY}")
 
-if [[ -n "${LIMIT}" ]]; then
-    if [[ "${INCLUDE_WINDOWS}" -eq 1 ]]; then
-        # Don't filter out Windows when explicitly requested
-        CMD+=(--limit "${LIMIT}")
-    else
-        # Exclude Windows hosts unless --include-windows was given
-        CMD+=(--limit "${LIMIT}")
-    fi
-fi
+[[ -n "${LIMIT}" ]] && CMD+=(--limit "${LIMIT}")
 
 [[ "${DRY_RUN}"     -eq 1 ]] && CMD+=(--check)
 [[ "${BECOME_PASS}" -eq 1 ]] && CMD+=(-K)
