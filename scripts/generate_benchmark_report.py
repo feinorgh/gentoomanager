@@ -54,7 +54,7 @@ CHART_COLORS = [
 _CATEGORY_TOOL_VERSION: dict[str, str | None] = {
     "compiler": None,  # multiple compilers; version encoded in command label
     "startup": None,  # many tools
-    "python": "python",
+    "python": None,  # multiple Python versions; version encoded in command label
     "crypto": "openssl",
     "ffmpeg": "ffmpeg",
     "imagemagick": "imagemagick",
@@ -436,6 +436,9 @@ def _format_bench_label(command: str, category: str) -> str:
 
     For compiler categories the command name encodes flags and bench type as
     ``{cc_label}--{opt_flags}-{bench_type}`` (e.g. ``gcc-14--O3_-flto-compile``).
+    Rust toolchain commands use ``{tc_label}-cargo-{mode}`` (e.g. ``stable-cargo-debug``).
+    Go toolchain commands use ``{go_label}-build`` (e.g. ``go1.25-build``).
+    Python commands use ``{py_version}-{bench}`` (e.g. ``py3.13-prime-sieve``).
     This function reformats those into human-readable form.  Other categories
     are returned unchanged.
     """
@@ -452,6 +455,14 @@ def _format_bench_label(command: str, category: str) -> str:
             cc_label, opt_flags = m2.groups()
             opt_clean = opt_flags.replace("_", " ")
             return f"{cc_label} {opt_clean}"
+        # Rust/Go pattern: label-bench (e.g. stable-cargo-debug, go1.25-build)
+        return command.replace("-", " ")
+    if category == "python":
+        # Version-prefixed Python command: py3.13-prime-sieve → py3.13 prime-sieve
+        m = re.match(r"^(py[\d.]+|python\d*(?:\.\d+)?)-(.+)$", command)
+        if m:
+            version, bench = m.groups()
+            return f"{version} {bench}"
     return command
 
 

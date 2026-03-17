@@ -77,23 +77,84 @@
               benchmarks[name]()
   when: run_benchmarks_python_check.rc == 0
 
+# Discover all installed python3.X versioned binaries on PATH, deduplicated by
+# resolved real path so that symlinks (python3 → python3.13) are not double-counted.
+- name: Discover versioned Python binaries
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      {
+        IFS=:
+        for d in $PATH; do
+          [ -d "$d" ] || continue
+          for f in "$d"/python3.[0-9]*; do
+            [ -x "$f" ] || continue
+            name=$(basename "$f")
+            # Only accept python3.X — skip python3-config, python3-dbg, python3m, etc.
+            case "$name" in
+              python3.[0-9]*) ;;
+              *) continue ;;
+            esac
+            full=$(command -v "$name" 2>/dev/null) || full="$f"
+            printf '%s %s\n' "$name" "$full"
+          done
+        done
+        unset IFS
+        # Generic python3 last (dedup drops it if it resolves to an already-seen binary)
+        full=$(command -v python3 2>/dev/null) || true
+        [ -n "$full" ] && printf 'python3 %s\n' "$full"
+      } | while IFS=' ' read -r label path; do
+          real=$(readlink -f "$path" 2>/dev/null || echo "$path")
+          printf '%s\t%s\t%s\n' "$real" "$label" "$path"
+        done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
+    executable: /bin/bash
+  register: run_benchmarks_py_versions
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_python_check.rc == 0
+
 - name: Run Python benchmarks
   ansible.builtin.shell:
     cmd: |
-      set -e
+      set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
+      # Map bench display-name → pybench.py argument
+      declare -A BENCH_ARGS
+      BENCH_ARGS[prime-sieve]=sieve
+      BENCH_ARGS[json-serde]=json_serde
+      BENCH_ARGS[regex]=regex
+      BENCH_ARGS[sha256-hash]=sha256_hash
+      BENCH_ARGS[list-comprehension]=list_comprehension
+      BENCH_ARGS[dict-operations]=dict_operations
+      BENCH_ARGS[python-all]=all
+      BENCH_NAMES=(prime-sieve json-serde regex sha256-hash list-comprehension dict-operations python-all)
+      CMDS=()
+      {% for py in run_benchmarks_py_versions.stdout_lines | default([]) %}
+      {% set py_parts = py.split() %}
+      {% if py_parts | length >= 2 %}
+      {% set py_label = py_parts[0] %}
+      {% set py_exe = py_parts[1] %}
+      {% set py_prefix = py_label | regex_replace('^python', 'py') %}
+      if [ -x "{{ py_exe }}" ]; then
+        for bench in "${BENCH_NAMES[@]}"; do
+          bench_arg="${BENCH_ARGS[$bench]}"
+          CMDS+=(--command-name "{{ py_prefix }}-${bench}" "{{ py_exe }} pybench.py ${bench_arg}")
+        done
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ -z "${CMDS[*]}" ]; then
+        echo "No Python interpreters found, skipping"
+        exit 0
+      fi
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/python.json \
-        --command-name 'prime-sieve' 'python3 pybench.py sieve' \
-        --command-name 'json-serde' 'python3 pybench.py json_serde' \
-        --command-name 'regex' 'python3 pybench.py regex' \
-        --command-name 'sha256-hash' 'python3 pybench.py sha256_hash' \
-        --command-name 'list-comprehension' 'python3 pybench.py list_comprehension' \
-        --command-name 'dict-operations' 'python3 pybench.py dict_operations' \
-        --command-name 'python-all' 'python3 pybench.py all'
+        "${CMDS[@]}"
+    executable: /bin/bash
   when: run_benchmarks_python_check.rc == 0
   register: run_benchmarks_python_result
   changed_when: false

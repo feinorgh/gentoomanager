@@ -1,0 +1,9 @@
+minor_changes:
+  - "roles/run_benchmarks: extend multi-version benchmarking to Python (all python3.X
+    binaries on PATH, deduplicated by resolved real path), Rust (all rustup toolchains,
+    falling back to bare rustc), and Go (all go1.X binaries on PATH and SDK toolchain
+    cache); Rust and Go version strings are merged into compiler_versions.json."
+  - "scripts/generate_benchmark_report.py: update _format_bench_label to handle
+    version-prefixed Python (py3.13-prime-sieve), Rust toolchain (stable-cargo-debug),
+    and Go toolchain (go1.25-build) command names; mark python category as multi-version
+    so per-host tool-version rows are omitted."

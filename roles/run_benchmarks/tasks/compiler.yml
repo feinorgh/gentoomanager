@@ -129,7 +129,13 @@
 - name: Write compiler_versions.json
   ansible.builtin.copy:
     dest: "{{ run_benchmarks_work_dir }}/compiler_versions.json"
-    content: "{{ run_benchmarks_compiler_versions_raw.stdout | default('{}') }}"
+    content: >-
+      {{
+        (run_benchmarks_compiler_versions_raw.stdout | default('{}') | from_json) |
+        combine(run_benchmarks_rust_versions_raw.stdout | default('{}') | from_json) |
+        combine(run_benchmarks_go_versions_raw.stdout | default('{}') | from_json) |
+        to_nice_json
+      }}
     mode: "0644"
   when: run_benchmarks_compiler_versions_raw.rc | default(1) == 0
 
@@ -272,23 +278,96 @@
   changed_when: false
   failed_when: false
 
+# Discover all rustup toolchains (stable, nightly, beta, pinned versions).
+# Falls back to a bare rustc entry when rustup is not available.
+- name: Discover Rust toolchains
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      if command -v rustup >/dev/null 2>&1; then
+        rustup toolchain list 2>/dev/null | while read -r toolchain _rest; do
+          # Strip arch suffix to get a short label: stable-x86_64-unknown-linux-gnu → stable
+          short=$(echo "$toolchain" | sed 's/-x86_64-.*//; s/-aarch64-.*//; s/-arm-.*//')
+          printf '%s %s\n' "$short" "$toolchain"
+        done
+      else
+        command -v rustc >/dev/null 2>&1 && printf 'rustc default\n'
+      fi
+    executable: /bin/bash
+  register: run_benchmarks_rust_toolchains
+  changed_when: false
+  failed_when: false
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+
 - name: Run Rust compile benchmark
   ansible.builtin.shell:
     cmd: |
-      set -e
+      set -eo pipefail
       cd {{ run_benchmarks_work_dir }}/rust_bench
+      CMDS=()
+      {% for tc in run_benchmarks_rust_toolchains.stdout_lines | default([]) %}
+      {% set tc_parts = tc.split() %}
+      {% if tc_parts | length >= 2 %}
+      {% set tc_label = tc_parts[0] %}
+      {% set tc_name = tc_parts[1] %}
+      {% if tc_name == 'default' %}
+      CMDS+=(--command-name "{{ tc_label }}-cargo-debug"   "cargo build 2>&1")
+      CMDS+=(--command-name "{{ tc_label }}-cargo-release" "cargo build --release 2>&1")
+      {% else %}
+      CMDS+=(--command-name "{{ tc_label }}-cargo-debug"   "cargo +{{ tc_name }} build 2>&1")
+      CMDS+=(--command-name "{{ tc_label }}-cargo-release" "cargo +{{ tc_name }} build --release 2>&1")
+      {% endif %}
+      {% endif %}
+      {% endfor %}
+      if [ -z "${CMDS[*]}" ]; then
+        exit 0
+      fi
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --prepare 'cargo clean 2>/dev/null || true' \
         --export-json {{ run_benchmarks_work_dir }}/compiler_rust.json \
-        --command-name 'cargo-debug' 'cargo build 2>&1' \
-        --command-name 'cargo-release' 'cargo build --release 2>&1'
+        "${CMDS[@]}"
+    executable: /bin/bash
+  args:
+    executable: /bin/bash
   when: "'rustc' in run_benchmarks_compilers_available.stdout"
   register: run_benchmarks_compiler_rust_result
   changed_when: false
   failed_when: false
+
+- name: Collect Rust toolchain version strings
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import json, subprocess
+      versions = {}
+      lines = """{{ run_benchmarks_rust_toolchains.stdout | default('') }}""".strip().splitlines()
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          label, toolchain = parts[0], parts[1]
+          try:
+              if toolchain == 'default':
+                  cmd = ['rustc', '--version']
+              else:
+                  cmd = ['rustup', 'run', toolchain, 'rustc', '--version']
+              out = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
+              ver = (out.stdout or out.stderr).splitlines()[0].strip()
+          except Exception as exc:
+              ver = str(exc)
+          versions[label] = ver
+      print(json.dumps(versions, indent=2))
+      PYEOF
+    executable: /bin/bash
+  register: run_benchmarks_rust_versions_raw
+  changed_when: false
+  failed_when: false
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
 
 - name: Warn on compiler_rust benchmark failure
   ansible.builtin.debug:
@@ -345,22 +424,116 @@
   changed_when: false
   failed_when: false
 
+# Discover all go1.X binaries on PATH and in common SDK cache directories.
+# Deduplicates by resolved real path so a generic `go` symlink is not double-counted.
+- name: Discover Go toolchains
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      {
+        # Versioned go1.X binaries on PATH
+        IFS=:
+        for d in $PATH; do
+          [ -d "$d" ] || continue
+          for f in "$d"/go1.[0-9]*; do
+            [ -x "$f" ] || continue
+            name=$(basename "$f")
+            case "$name" in
+              go1.[0-9]*) ;;
+              *) continue ;;
+            esac
+            printf '%s %s\n' "$name" "$f"
+          done
+        done
+        unset IFS
+        # Go SDK toolchain cache (go1.21+ download-on-demand toolchains)
+        for cache_dir in "${HOME}/sdk" "${HOME}/.local/share/go/toolchains" \
+                          /usr/local/go/toolchains; do
+          [ -d "$cache_dir" ] || continue
+          for d in "$cache_dir"/go1.[0-9]*; do
+            [ -d "$d" ] || continue
+            gbin="$d/bin/go"
+            [ -x "$gbin" ] || continue
+            name=$(basename "$d")
+            printf '%s %s\n' "$name" "$gbin"
+          done
+        done
+        # Generic go last (dedup drops it if it resolves to an already-seen binary)
+        full=$(command -v go 2>/dev/null) || true
+        [ -n "$full" ] && printf 'go %s\n' "$full"
+      } | while IFS=' ' read -r label path; do
+          real=$(readlink -f "$path" 2>/dev/null || echo "$path")
+          printf '%s\t%s\t%s\n' "$real" "$label" "$path"
+        done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
+    executable: /bin/bash
+  register: run_benchmarks_go_toolchains
+  changed_when: false
+  failed_when: false
+  when: "'go' in run_benchmarks_compilers_available.stdout"
+
 - name: Run Go compile benchmark
   ansible.builtin.shell:
     cmd: |
-      set -e
+      set -eo pipefail
       cd {{ run_benchmarks_work_dir }}/go_bench
+      CMDS=()
+      {% for go in run_benchmarks_go_toolchains.stdout_lines | default([]) %}
+      {% set go_parts = go.split() %}
+      {% if go_parts | length >= 2 %}
+      {% set go_label = go_parts[0] %}
+      {% set go_exe = go_parts[1] %}
+      if [ -x "{{ go_exe }}" ]; then
+        CMDS+=(--command-name "{{ go_label }}-build"
+          "{{ go_exe }} build -o bench_{{ go_label }} .")
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ -z "${CMDS[*]}" ]; then
+        exit 0
+      fi
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
-        --prepare 'rm -f bench' \
+        --prepare 'rm -f bench_*' \
         --export-json {{ run_benchmarks_work_dir }}/compiler_go.json \
-        --command-name 'go-build' 'go build -o bench .'
+        "${CMDS[@]}"
+    executable: /bin/bash
+  args:
+    executable: /bin/bash
   when: "'go' in run_benchmarks_compilers_available.stdout"
   register: run_benchmarks_compiler_go_result
   changed_when: false
   failed_when: false
+
+- name: Collect Go toolchain version strings
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import json, subprocess
+      versions = {}
+      lines = """{{ run_benchmarks_go_toolchains.stdout | default('') }}""".strip().splitlines()
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          label, exe = parts[0], parts[1]
+          try:
+              out = subprocess.run([exe, 'version'], capture_output=True, text=True,
+                                   timeout=10, check=False)
+              ver = (out.stdout or out.stderr).splitlines()[0].strip()
+          except Exception as exc:
+              ver = str(exc)
+          versions[label] = ver
+      print(json.dumps(versions, indent=2))
+      PYEOF
+    executable: /bin/bash
+  register: run_benchmarks_go_versions_raw
+  changed_when: false
+  failed_when: false
+  when: "'go' in run_benchmarks_compilers_available.stdout"
 
 - name: Warn on compiler_go benchmark failure
   ansible.builtin.debug:

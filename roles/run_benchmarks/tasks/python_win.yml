@@ -83,13 +83,32 @@
     $hf = "hyperfine"
     $runs = {{ run_benchmarks_runs }}
     $warmup = {{ run_benchmarks_warmup }}
-    $cmds = @()
 
-    foreach ($bench in @('fibonacci', 'json', 'regex', 'hash', 'sort', 'string')) {
-      $cmds += "--command-name 'python-${bench}' 'python -c ""import json,time,hashlib,re,os,random,sys; exec(open(chr(39)+\"$wd\pybench.py\"+chr(39)).read())""'"
+    # Discover all installed Python versions using the Windows Python Launcher
+    $pyVersions = @()
+    try {
+      $pyList = (py -0 2>&1) | Select-String -Pattern '^\s*-V:(\S+)' |
+                ForEach-Object { $_.Matches[0].Groups[1].Value }
+      foreach ($v in $pyList) {
+        $pyVersions += "py-$v py -$v"
+      }
+    } catch {}
+    if ($pyVersions.Count -eq 0) {
+      $pyVersions += "python python"
     }
 
-    # Simpler approach: one benchmark command per invocation
-    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\python.json --command-name 'python-full' 'python $wd\pybench.py'"
+    $cmds = @()
+    foreach ($pyEntry in $pyVersions) {
+      $parts = $pyEntry.Split(' ', 2)
+      $pyLabel = $parts[0]
+      $pyExe = $parts[1]
+      $pyPrefix = $pyLabel -replace '^python', 'py'
+      $cmds += "--command-name '${pyPrefix}-full' '${pyExe} $wd\pybench.py'"
+    }
+
+    if ($cmds.Count -gt 0) {
+      $argStr = $cmds -join ' '
+      Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\python.json $argStr"
+    }
   changed_when: false
   when: run_benchmarks_win_python_check.rc == 0
