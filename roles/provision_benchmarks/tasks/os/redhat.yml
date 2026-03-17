@@ -89,18 +89,12 @@
       changed_when: true
       failed_when: false
 
-    - name: Remove ffmpeg-free if present (conflicts with RPM Fusion ffmpeg)
-      # Fedora 40+ ships a restricted 'ffmpeg-free' build in the main repos that
-      # lacks h264/h265 support and conflicts with the RPM Fusion 'ffmpeg' package.
-      # Removing it first ensures dnf can install the full RPM Fusion build.
+    - name: Install ffmpeg from RPM Fusion, replacing ffmpeg-free if present (Fedora)
+      # '--allowerasing' lets dnf automatically remove the conflicting
+      # 'ffmpeg-free' package (Fedora 40+ base repo) and install the full
+      # RPM Fusion build which includes libx264/libx265 (h264/h265) support.
       ansible.builtin.command:
-        cmd: dnf remove -y ffmpeg-free
-      changed_when: true
-      failed_when: false
-
-    - name: Install ffmpeg (Fedora)
-      ansible.builtin.command:
-        cmd: dnf install -y ffmpeg
+        cmd: dnf install -y --allowerasing ffmpeg
       changed_when: true
       failed_when: false
 
@@ -144,11 +138,13 @@
   failed_when: false
 
 - name: Install OpenCV Python bindings (Red Hat)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_opencv_packages['RedHat'] }}"
-    state: present
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      {{ provision_benchmarks_opencv_packages['RedHat'] | join(' ') }}
   become: true
   when: provision_benchmarks_install_opencv | bool
+  changed_when: true
   failed_when: false
 
 - name: Install hyperfine binary (fallback)
