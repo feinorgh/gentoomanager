@@ -54,8 +54,8 @@
       set -e
       cd {{ run_benchmarks_work_dir }}
       {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_fast_runs }} \
+        --warmup {{ run_benchmarks_fast_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
         --command-name 'sort' 'sort sortdata.txt > /dev/null' \
@@ -121,8 +121,8 @@
       cd {{ run_benchmarks_work_dir }}/gitrepo
       BRANCH=$(git branch --show-current)
       {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_fast_runs }} \
+        --warmup {{ run_benchmarks_fast_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/git.json \
         --command-name 'git-log' 'git log --oneline' \

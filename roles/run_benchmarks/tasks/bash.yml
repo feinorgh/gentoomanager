@@ -96,8 +96,8 @@
       done
 
       {{ run_benchmarks_hyperfine_bin }} \
-        --warmup {{ run_benchmarks_warmup }} \
-        --runs   {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_fast_warmup }} \
+        --runs   {{ run_benchmarks_fast_runs }} \
         --export-json {{ run_benchmarks_work_dir }}/bash.json \
         "${CMDS[@]}"
 

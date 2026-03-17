@@ -39,9 +39,10 @@
         # GIMP: use batch mode for startup measurement
         CMDS+=(--command-name "gimp-startup" "gimp -i --quit 2>/dev/null")
       {% elif app == 'inkscape' %}
-        # Inkscape: use shell mode or export for startup measurement
+        # Inkscape: feed a minimal valid SVG via stdin to avoid the ~25 s timeout
+        # that occurs when --pipe receives empty/invalid input on headless systems.
         CMDS+=(--command-name "inkscape-startup"
-          "inkscape --pipe --export-type=png < /dev/null > /dev/null 2>&1")
+          "printf '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"><rect width=\"1\" height=\"1\" fill=\"red\"/></svg>' | inkscape --pipe --export-type=png --export-filename=/dev/null 2>/dev/null")
       {% endif %}
       fi
       {% endfor %}
@@ -53,7 +54,10 @@
       if command -v node >/dev/null 2>&1; then
         CMDS+=(--command-name "node-startup" 'node -e ""')
       fi
-      if command -v perl >/dev/null 2>&1; then
+      # Validate perl actually executes before benchmarking — on Gentoo, the
+      # perl-exec wrapper may exist on PATH but exit instantly (exit 0) without
+      # running perl when no active slot is configured, giving 0 ms timings.
+      if command -v perl >/dev/null 2>&1 && perl -e 'print "ok"' 2>/dev/null | grep -q "^ok$"; then
         CMDS+=(--command-name "perl-startup" "perl -e 1")
       fi
 

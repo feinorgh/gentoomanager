@@ -125,9 +125,16 @@ run_benchmarks_ffmpeg_include_libaom: false
 #   Audio: ac3/eac3 (Dolby, niche on Linux), wavpack (lossless), alac (Apple lossless)
 # Enable with: -e "run_benchmarks_ffmpeg_extended_codecs=true"
 run_benchmarks_ffmpeg_extended_codecs: false
-# Application startup: 3 runs are enough — variance comes from page-cache
-run_benchmarks_startup_runs: 3
-run_benchmarks_startup_warmup: 2
+# Fast benchmarks (<10 ms per run): sub-millisecond commands need many more
+# samples to achieve statistical significance.  Used by bash, coreutils, and
+# git task files for their shortest-running commands.
+run_benchmarks_fast_runs: 30
+run_benchmarks_fast_warmup: 10
+
+# Application startup: more runs than the old default of 3 to reduce the
+# impact of cold-cache outliers; variance is inherent in GUI startup.
+run_benchmarks_startup_runs: 10
+run_benchmarks_startup_warmup: 3
 
 # Ansible task timeout for the full FFmpeg video encode hyperfine run (seconds).
 # Must be larger than runs * warmup * ffmpeg_cmd_timeout_sec.  Default covers

@@ -1,0 +1,13 @@
+minor_changes:
+  - "roles/run_benchmarks: fixed inkscape startup benchmark command — the old
+    ``--pipe < /dev/null`` approach caused inkscape to wait ~25 s for valid SVG
+    input; a minimal inline SVG is now piped instead."
+  - "roles/run_benchmarks: added perl output validation before adding
+    perl-startup to the benchmark set, guarding against Gentoo's perl-exec
+    wrapper that returns exit 0 instantly when no active perl slot is configured."
+  - "roles/run_benchmarks: added ``run_benchmarks_fast_runs`` (30) and
+    ``run_benchmarks_fast_warmup`` (10) defaults for sub-10 ms benchmarks;
+    bash, coreutils, and git benchmarks now use these values instead of the
+    global 5-run default to achieve statistical significance."
+  - "roles/run_benchmarks: increased ``run_benchmarks_startup_runs`` from 3 to
+    10 to better capture startup-time variance across warm/cold cache conditions."
