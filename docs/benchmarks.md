@@ -12,6 +12,8 @@ reports with charts.
 - [Architecture Overview](#architecture-overview)
 - [Prerequisites](#prerequisites)
 - [Provisioning Hosts](#provisioning-hosts)
+  - [Provisioning Wrapper Script](#provisioning-wrapper-script)
+  - [Provisioning Options](#provisioning-options)
 - [Running Benchmarks](#running-benchmarks)
   - [Wrapper Script](#wrapper-script)
   - [Selected Categories](#selected-categories)
@@ -40,6 +42,7 @@ reports with charts.
   - [Markdown Report](#markdown-report)
   - [HTML Report](#html-report)
   - [Regenerating Reports](#regenerating-reports)
+  - [Dashboard](#dashboard)
 - [Benchmark Fixture Files](#benchmark-fixture-files)
   - [Fixture Corpus Details](#fixture-corpus-details)
   - [Fallback Behaviour](#fallback-behaviour)
@@ -102,124 +105,31 @@ even if benchmarks fail.
 
 ## Prerequisites
 
+> **First time?** See **[docs/preparation.md](preparation.md)** for a complete
+> step-by-step guide covering Ansible installation, inventory configuration,
+> SSH key setup, passwordless privilege escalation, and special-case host
+> bootstrapping.
+
 ### Linux / Unix / macOS Hosts
 
 - **Ansible** 2.17+ on the controller
 - **Python 3.10+** on the controller
-- **Python 3.8+** on managed nodes
-- **SSH access** to all target hosts (key-based recommended)
+- **Python 3.8+** on managed nodes (see [RHEL 7/8 note](preparation.md#61-rhel-7--rhel-8--python-bootstrap))
+- **SSH key-based access** to all target hosts (see [docs/setup-access.md](setup-access.md))
 - **libvirt/virsh** on hypervisors (for RAM scaling; optional)
 - **Collections:** `ansible-galaxy collection install -r requirements.yml`
 
 ### Windows Hosts
 
-Windows hosts require remote management to be enabled before Ansible can
-reach them.  Two options are supported; OpenSSH is recommended for modern
-Windows because it integrates seamlessly with the existing SSH proxy
-infrastructure.
+Windows hosts need remote management enabled before Ansible can reach them.
+See **[docs/preparation.md — Windows Hosts](preparation.md#62-windows-hosts)**
+for full setup instructions (OpenSSH and WinRM options).
 
-**Option A — OpenSSH (Recommended, Windows 10 1809+ / Server 2019+)**
-
-No extra controller dependencies.  Works through the same `ProxyJump`
-as all other hosts.
-
-Run the following in an **elevated PowerShell** on each Windows VM:
-
-```powershell
-# 1. Install the OpenSSH Server feature
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-
-# 2. Start the service and set it to start automatically
-Start-Service sshd
-Set-Service -Name sshd -StartupType Automatic
-
-# 3. Allow SSH through Windows Firewall (usually done automatically)
-New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server' `
-    -Enabled True -Direction Inbound -Protocol TCP `
-    -Action Allow -LocalPort 22
-
-# 4. Set PowerShell as the default shell for Ansible
-New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' `
-    -Name DefaultShell `
-    -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' `
-    -PropertyType String -Force
-
-# 5. Authorise the controller's SSH public key
-$authorizedKeysFile = "$env:ProgramData\ssh\administrators_authorized_keys"
-Add-Content -Path $authorizedKeysFile -Value '<paste controller public key here>'
-# Fix permissions (required by OpenSSH):
-icacls $authorizedKeysFile /inheritance:r /grant 'SYSTEM:(F)' /grant 'ADMINISTRATORS:(F)'
-```
-
-Then configure `group_vars/mswindows/connection.yml` on the controller
-(copy from `group_vars.example/mswindows/connection.yml` as a starting point):
-
-```yaml
-ansible_connection: ssh
-ansible_shell_type: powershell
-ansible_shell_executable: powershell.exe
-ansible_user: ansible        # Windows user to connect as
-```
-
-**Option B — WinRM (Fallback, all Windows versions)**
-
-Requires `pywinrm` on the controller:
-
-```bash
-pip install pywinrm
-```
-
-Run the following in an **elevated PowerShell** on each Windows VM:
-
-```powershell
-# 1. Enable WinRM with HTTP (port 5985)
-winrm quickconfig -q
-
-# 2. Allow unencrypted auth (required for Basic/NTLM over HTTP in a lab)
-winrm set winrm/config/service '@{AllowUnencrypted="true"}'
-winrm set winrm/config/service/auth '@{Basic="true"}'
-
-# 3. Set the WinRM service to start automatically
-Set-Service -Name WinRM -StartupType Automatic
-
-# 4. Open firewall port
-New-NetFirewallRule -Name 'WinRM-HTTP' -DisplayName 'WinRM HTTP' `
-    -Enabled True -Direction Inbound -Protocol TCP `
-    -Action Allow -LocalPort 5985
-```
-
-> **HTTPS / production:** For HTTPS (port 5986) with a self-signed
-> certificate, see the Microsoft docs for `New-SelfSignedCertificate` and
-> `winrm create winrm/config/Listener?Address=*+Transport=HTTPS`.
-
-Then configure `group_vars/mswindows/connection.yml` on the controller
-(copy from `group_vars.example/mswindows/connection.yml` as a starting point):
-
-```yaml
-ansible_connection: winrm
-ansible_winrm_transport: ntlm     # or: basic, kerberos, credssp
-ansible_winrm_port: 5985
-ansible_winrm_scheme: http
-ansible_winrm_server_cert_validation: ignore   # for self-signed certs
-ansible_user: ansible
-```
-
-**Verify connectivity** (either option):
+Verify connectivity after setup:
 
 ```bash
 ansible mswindows -m ansible.windows.win_ping
 ```
-
-> **Dedicated `ansible` user (recommended):** Create a local Windows user named
-> `ansible` (or any ASCII name) with Administrator privileges rather than using
-> a personal account.  Usernames with non-ASCII characters (e.g. `Pär`) cause
-> path and SSH problems.  In an elevated PowerShell:
-> ```powershell
-> $pass = ConvertTo-SecureString "ChangeMe123!" -AsPlainText -Force
-> New-LocalUser "ansible" -Password $pass -FullName "Ansible" `
->     -Description "Ansible automation account" -PasswordNeverExpires
-> Add-LocalGroupMember -Group "Administrators" -Member "ansible"
-> ```
 
 **Benchmark software is installed automatically** during the first run of the
 benchmark suite.  The setup step installs the following via
@@ -238,27 +148,6 @@ benchmark suite.  The setup step installs the following via
 NumPy is also installed via `pip` for the numeric benchmark category.
 The `chocolatey.chocolatey` Ansible collection is required and is included in
 `requirements.yml`.
-
-> **RHEL 7 / RHEL 8:** These ship Python 3.6, which is too old for
-> Ansible 2.17+.  Bootstrap Python 3.8 before provisioning:
->
-> ```bash
-> # RHEL 7 — install via Software Collections
-> subscription-manager repos --enable rhel-server-rhscl-7-rpms
-> yum install rh-python38
->
-> # RHEL 8 — install via AppStream
-> dnf install python38
-> ```
->
-> Then set `ansible_python_interpreter` in `host_vars/<host>/main.yml`:
-> ```yaml
-> # RHEL 7
-> ansible_python_interpreter: /opt/rh/rh-python38/root/usr/bin/python3.8
->
-> # RHEL 8
-> ansible_python_interpreter: /usr/bin/python3.8
-> ```
 
 ## Provisioning Hosts
 
@@ -292,7 +181,60 @@ is downloaded from the [GitHub release](https://github.com/sharkdp/hyperfine/rel
 > install successfully.  FFmpeg benchmarks will be skipped automatically on
 > those hosts.
 
-### Provisioning options
+### Provisioning Wrapper Script
+
+`scripts/provision_benchmarks.sh` is the recommended way to provision hosts.
+It wraps `ansible-playbook playbooks/provision_benchmarks.yml` with
+convenience options for host selection and power management.
+
+```
+Usage: provision_benchmarks.sh [OPTIONS] [-- EXTRA_ANSIBLE_ARGS...]
+
+Host selection (mutually exclusive):
+  --host HOST[,HOST...]       Provision specific host(s) by name
+  --hypervisor HV[,HV...]     Provision VMs belonging to hypervisor(s)
+                              (e.g. hv1, hv2 — matches hypervisor_<name>)
+  --group GROUP[,GROUP...]    Provision an inventory group (e.g. gentoo, ubuntu)
+  --limit PATTERN             Raw ansible --limit expression
+
+Flags:
+  --manage-power              Boot VMs that are off before provisioning and
+                              shut them down again afterwards.  Only VMs
+                              started by this run are shut down.
+  --boot-timeout SEC          Seconds to wait for a VM to become reachable
+                              after boot (default: 120)
+  --serial [N]                Provision N hosts at a time (default: 1 when
+                              flag is given).  Without this flag all eligible
+                              hosts in each OS family are provisioned in parallel.
+  --include-windows           Also provision Windows hosts via Chocolatey
+  --verbose, -v               Pass -v to ansible-playbook (repeat for -vvv)
+  --dry-run, -C               Pass --check to ansible-playbook (no changes)
+  --ask-become-pass, -K       Prompt for sudo/become password
+```
+
+```bash
+# Provision all hosts
+./scripts/provision_benchmarks.sh
+
+# Provision a single host
+./scripts/provision_benchmarks.sh --host gentoo-vm1
+
+# Provision all VMs on one hypervisor, boot/shutdown as needed
+./scripts/provision_benchmarks.sh --hypervisor hv1 --manage-power
+
+# Provision only Gentoo hosts with sudo prompt
+./scripts/provision_benchmarks.sh --group gentoo --ask-become-pass
+
+# Provision all hosts including Windows, one at a time
+./scripts/provision_benchmarks.sh --include-windows --serial
+
+# Dry run — show what would happen without making changes
+./scripts/provision_benchmarks.sh --dry-run --verbose
+```
+
+### Provisioning Options
+
+Fine-grained control via Ansible variables (pass with `-e`):
 
 ```bash
 # Provision only one hypervisor's VMs
@@ -1132,6 +1074,44 @@ through amber to red (low).
 > benchmarks.  A host that completed all categories will always score lower
 > than one that only ran fast categories from a full run, so compare scores
 > across full runs for fair results.
+
+### Dashboard
+
+`scripts/benchmark_dashboard.py` serves an interactive Plotly Dash web
+dashboard for exploring and comparing results across hosts and categories.
+It requires `pip install dash pandas`.
+
+```
+Usage: benchmark_dashboard.py [OPTIONS] benchmarks_dir
+
+Arguments:
+  benchmarks_dir        Directory containing results/<host>/*.json
+
+Options:
+  --port PORT           Port to listen on (default: 8050)
+  --host ADDR           Interface address to bind (default: 127.0.0.1)
+                        Use 0.0.0.0 to listen on all interfaces
+  --anonymize           Replace hostnames with Greek mythology names
+```
+
+```bash
+pip install dash pandas
+python3 scripts/benchmark_dashboard.py benchmarks/
+
+# Serve on all interfaces (e.g. inside a VM)
+python3 scripts/benchmark_dashboard.py benchmarks/ --host 0.0.0.0 --port 9090
+```
+
+Then open `http://localhost:8050` in a browser.  Press **Ctrl+C** to stop.
+
+Dashboard features:
+- Filter by OS family or individual host
+- Switch between benchmark categories
+- Normalize times relative to the fastest host per benchmark
+- Compare against a fixed baseline host
+- Sort by name, fastest mean, or largest spread
+- Toggle error bars (stddev) and horizontal bar orientation
+- Export data as CSV
 
 ## Benchmark Fixture Files
 
