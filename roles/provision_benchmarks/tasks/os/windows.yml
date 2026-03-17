@@ -17,6 +17,8 @@
     name:
       - hyperfine
       - mingw
+      - golang
+      - rust
       - python
       - openssl
       - 7zip

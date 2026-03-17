@@ -1,0 +1,2 @@
+minor_changes:
+  - "roles/provision_benchmarks: install Go and Rust on Windows hosts via Chocolatey so compiler benchmarks can run them."
