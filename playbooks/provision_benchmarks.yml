@@ -99,7 +99,7 @@
         - _provision_vm_was_off | default(false) | bool
 
 - name: Gather facts and group hosts by OS family
-  hosts: "{{ 'all' if (provision_include_windows | default(false) | bool) else 'all:!win:!win11:!win10' }}"
+  hosts: "all:!win:!win11:!win10"
   serial: "100%"
   gather_facts: true
   ignore_unreachable: true

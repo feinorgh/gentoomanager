@@ -51,4 +51,4 @@
 
 - name: Show tool verification results (Windows)
   ansible.builtin.debug:
-    msg: "{{ provision_benchmarks_win_verify.stdout_lines }}"
+    msg: "{{ provision_benchmarks_win_verify.stdout_lines | default(provision_benchmarks_win_verify.stdout | default('') | split('\n')) }}"
