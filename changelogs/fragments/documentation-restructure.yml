@@ -1,0 +1,10 @@
+minor_changes:
+  - "docs: create preparation.md consolidating all one-time setup steps (requirements,
+    inventory, SSH auth, privilege escalation, RHEL Python bootstrap, Windows connectivity)."
+  - "docs: document all scripts in README with complete options — provision_benchmarks.sh,
+    benchmark_dashboard.py, download_benchmark_fixtures.py, generate_benchmark_images.py,
+    generate_multifile_bench.py, shellcheck_yaml_blocks.py."
+  - "docs: document collect_use_flags.yml and apply_portage_config.yml playbook variables
+    in README."
+  - "docs/benchmarks.md: simplify Prerequisites section to reference preparation.md;
+    add provision_benchmarks.sh wrapper script options; add Dashboard section."
