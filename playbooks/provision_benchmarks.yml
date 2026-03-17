@@ -139,7 +139,7 @@
               virsh --connect qemu:///system dumpxml '{{ inventory_hostname }}' \
                 | grep -oP '<(memory|currentMemory)[^>]*>\K[0-9]+' \
                 | head -2
-          delegate_to: "{{ hypervisor_host }}"
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
           register: _provision_ram_info
           changed_when: false
           when: hypervisor_host is defined and hypervisor_host | length > 0
@@ -157,7 +157,7 @@
             cmd: >-
               virsh --connect qemu:///system setmem '{{ inventory_hostname }}'
               {{ _provision_max_ram_kib }} --live
-          delegate_to: "{{ hypervisor_host }}"
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
           changed_when: true
           when: >-
             hypervisor_host is defined and hypervisor_host | length > 0 and
@@ -178,7 +178,7 @@
               set -eo pipefail
               virsh --connect qemu:///system dumpxml --inactive '{{ inventory_hostname }}' \
                 | grep -oP '<currentMemory[^>]*>\K[0-9]+'
-          delegate_to: "{{ hypervisor_host }}"
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
           register: _provision_minimal_ram
           changed_when: false
           failed_when: false
@@ -189,7 +189,7 @@
             cmd: >-
               virsh --connect qemu:///system setmem '{{ inventory_hostname }}'
               {{ _provision_minimal_ram.stdout | trim }} --live
-          delegate_to: "{{ hypervisor_host }}"
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
           changed_when: true
           failed_when: false
           when: >-
