@@ -73,5 +73,13 @@
   when: provision_benchmarks_install_inkscape | bool
   failed_when: false
 
+- name: Install OpenCV Python bindings (FreeBSD)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_opencv_packages['FreeBSD'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_opencv | bool
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

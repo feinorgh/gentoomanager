@@ -134,6 +134,14 @@
   changed_when: true
   failed_when: false
 
+- name: Install OpenCV Python bindings (Red Hat)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_opencv_packages['RedHat'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_opencv | bool
+  failed_when: false
+
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml
 

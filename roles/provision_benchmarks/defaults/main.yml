@@ -133,7 +133,7 @@ provision_benchmarks_freebsd_hyperfine_port: benchmarks/hyperfine
 provision_benchmarks_freebsd_ffmpeg_port: multimedia/ffmpeg
 
 # Optional: install OpenCV Python bindings
-provision_benchmarks_install_opencv: false
+provision_benchmarks_install_opencv: true
 
 # Optional: install GIMP for batch-mode image processing benchmarks
 provision_benchmarks_install_gimp: false
@@ -158,3 +158,18 @@ provision_benchmarks_numpy_packages:
     - python3-numpy
   FreeBSD:
     - math/py-numpy
+
+# opencv package name per OS family (used when provision_benchmarks_install_opencv is true)
+provision_benchmarks_opencv_packages:
+  Gentoo:
+    - media-libs/opencv
+  RedHat:
+    - python3-opencv
+  Debian:
+    - python3-opencv
+  Archlinux:
+    - python-opencv
+  Suse:
+    - python3-opencv
+  FreeBSD:
+    - graphics/py-opencv
