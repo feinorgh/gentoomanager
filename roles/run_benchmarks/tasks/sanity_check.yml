@@ -178,3 +178,17 @@
     run_benchmarks_sanity_sudo.rc | default(1) != 0 or
     not run_benchmarks_sanity_disk_ok or
     (run_benchmarks_sanity_is_tmpfs and not run_benchmarks_sanity_ram_ok)
+
+# ── 6. Persist sanity-check notes ────────────────────────────────────────
+- name: Write benchmark notes (missing tools)
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/benchmark_notes.json"
+    content: "{{ _notes | to_nice_json }}"
+    mode: "0644"
+  vars:
+    _notes:
+      missing_tools:
+        required: "{{ run_benchmarks_sanity_missing_req | default([]) }}"
+        optional: "{{ run_benchmarks_sanity_missing_opt | default([]) }}"
+  changed_when: false
+  failed_when: false

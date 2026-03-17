@@ -52,6 +52,7 @@ except ImportError as exc:
 sys.path.insert(0, str(Path(__file__).parent))
 from generate_benchmark_report import (  # noqa: E402
     CATEGORY_TITLES,
+    _compute_footnotes,
     anonymize_hosts,
     load_results,
 )
@@ -152,7 +153,7 @@ def build_df(
 # ---------------------------------------------------------------------------
 
 
-def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
+def make_app(df: pd.DataFrame, host_os: dict[str, str], hosts: dict | None = None) -> dash.Dash:
     """Build and return the configured Dash app (no data stored globally)."""
     os_families = sorted(df["os_family"].unique().tolist()) if not df.empty else []
     all_hosts = sorted(df["host"].unique().tolist()) if not df.empty else []
@@ -362,6 +363,46 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
     )
 
     # ── Callbacks ────────────────────────────────────────────────────────────
+
+    def _build_footnote_elements(
+        category: str,
+        bench_names: list[str],
+        selected_host_list: list[str],
+    ) -> list:
+        """Return Dash HTML elements for missing-result footnotes, or empty list."""
+        if not hosts or not selected_host_list:
+            return []
+        # Rebuild benchmarks dict from df for this category (all hosts, not filtered)
+        cat_df_all = df[df["category"] == category]
+        benchmarks_dict: dict[str, dict[str, dict]] = {}
+        for bench in bench_names:
+            bench_df = cat_df_all[cat_df_all["benchmark"] == bench]
+            benchmarks_dict[bench] = {}
+            for _unused_idx, row in bench_df.iterrows():
+                benchmarks_dict[bench][row["host"]] = {
+                    "mean": float(row["mean"]),
+                    "stddev": float(row["stddev"]),
+                }
+        footnotes = _compute_footnotes(category, benchmarks_dict, selected_host_list, hosts)
+        if not footnotes:
+            return []
+        parts = []
+        for hostname in selected_host_list:
+            if hostname in footnotes:
+                parts.append(f"{hostname}: {'; '.join(footnotes[hostname])}")
+        if not parts:
+            return []
+        return [
+            html.P(
+                f"Missing results — {' · '.join(parts)}",
+                style={
+                    "fontSize": "0.82em",
+                    "color": "#aaa",
+                    "marginTop": "0.5rem",
+                    "fontStyle": "italic",
+                },
+            )
+        ]
 
     @app.callback(
         Output("host-filter", "options"),
@@ -607,6 +648,7 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str]) -> dash.Dash:
                     style={"color": "#888", "fontSize": "0.8rem", "marginBottom": "0.5rem"},
                 ),
                 table,
+                *_build_footnote_elements(category, benchmarks, selected_hosts),
             ]
         )
 
@@ -663,7 +705,7 @@ def main() -> None:
         print("ERROR: no benchmark data found", file=sys.stderr)
         sys.exit(1)
 
-    app = make_app(df, host_os)
+    app = make_app(df, host_os, hosts)
 
     print(f"\nDashboard running at http://{args.host}:{args.port}/")
     if args.host == "0.0.0.0":

@@ -90,6 +90,42 @@ CATEGORY_TITLES = {
     "bash": "Bash Shell Performance",
 }
 
+# Categories not run on Windows (complement of run_benchmarks_windows_categories)
+_WINDOWS_EXCLUDED: frozenset[str] = frozenset(
+    {
+        "boot_time",
+        "bash",
+        "memory",
+        "disk",
+        "opencv",
+        "gimp",
+        "inkscape",
+        "gentoo_build_times",
+    }
+)
+
+# Mapping from tool name → category names it affects
+_TOOL_CATEGORIES: dict[str, list[str]] = {
+    "clang": ["compiler"],
+    "rustc": ["compiler"],
+    "go": ["compiler"],
+    "ffmpeg": ["ffmpeg"],
+    "imagemagick": ["imagemagick"],
+    "7zip": ["compression"],
+}
+
+# Mapping from sub-benchmark name patterns → required tool
+_BENCH_TOOL_MAP: list[tuple[str, str]] = [
+    ("rust", "rustc"),
+    ("cargo", "rustc"),
+    ("-go", "go"),
+    ("go-", "go"),
+    ("go_", "go"),
+    ("clang", "clang"),
+    ("ffmpeg", "ffmpeg"),
+    ("magick", "imagemagick"),
+]
+
 # Greek mythology names for host anonymization (deterministic order)
 _GREEK_NAMES = [
     "Zeus",
@@ -263,6 +299,75 @@ def _format_throughput(mean_kb_s: float, stddev_kb_s: float = 0.0) -> str:
     return f"{mean_kb_s:.0f} ± {stddev_kb_s:.0f} KB/s"
 
 
+def _bench_requires_tool(bench_name: str, category: str) -> str | None:
+    """Return the tool name required by a sub-benchmark, or None."""
+    lower = bench_name.lower()
+    for pattern, tool in _BENCH_TOOL_MAP:
+        if pattern in lower:
+            return tool
+    if category == "ffmpeg":
+        return "ffmpeg"
+    if category == "imagemagick":
+        return "imagemagick"
+    return None
+
+
+def _compute_footnotes(
+    category: str,
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    all_hostnames: list[str],
+    hosts: dict[str, dict],
+) -> dict[str, list[str]]:
+    """Return {hostname: [reason, ...]} for hosts with missing results in this category."""
+    hosts_with_any_result: set[str] = set()
+    for host_results in benchmarks.values():
+        hosts_with_any_result.update(host_results.keys())
+
+    all_bench_names = set(benchmarks.keys())
+    footnotes: dict[str, list[str]] = {}
+
+    for hostname in all_hostnames:
+        meta = hosts[hostname].get("metadata", {})
+        notes = hosts[hostname].get("benchmark_notes", {})
+        os_family = meta.get("os_family", "")
+        os_name = meta.get("os", "")
+        filesystem = meta.get("filesystem", "")
+        missing_opt: set[str] = set(notes.get("missing_tools", {}).get("optional", []))
+        missing_req: set[str] = set(notes.get("missing_tools", {}).get("required", []))
+        all_missing = missing_opt | missing_req
+
+        reasons: list[str] = []
+
+        if hostname not in hosts_with_any_result:
+            if os_family == "Windows" and category in _WINDOWS_EXCLUDED:
+                reasons.append("not available on Windows")
+            elif category == "gentoo_build_times" and "gentoo" not in os_name.lower():
+                reasons.append("Gentoo-only benchmark")
+            elif category == "disk" and filesystem == "tmpfs":
+                reasons.append("work directory is RAM-backed (tmpfs), disk I/O skipped")
+            elif category in ("gimp", "inkscape", "opencv"):
+                tool = category if category != "opencv" else "python3-opencv"
+                reasons.append(f"{tool} not installed or not available headlessly")
+            elif category == "boot_time" and os_family == "Windows":
+                reasons.append("not available on Windows")
+            elif any(
+                cat == category for tool in all_missing for cat in _TOOL_CATEGORIES.get(tool, [])
+            ):
+                tools_needed = [t for t in all_missing if category in _TOOL_CATEGORIES.get(t, [])]
+                reasons.append(f"required tool(s) not installed: {', '.join(sorted(tools_needed))}")
+        else:
+            for bench_name in all_bench_names:
+                if hostname not in benchmarks.get(bench_name, {}):
+                    tool = _bench_requires_tool(bench_name, category)
+                    if tool and tool in all_missing:
+                        reasons.append(f"{bench_name}: {tool} not installed")
+
+        if reasons:
+            footnotes[hostname] = reasons
+
+    return footnotes
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -326,6 +431,8 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
             elif json_file.name == "boot_times.json":
                 # systemd-analyze boot timing data
                 hosts[hostname]["boot_times"] = data
+            elif json_file.name == "benchmark_notes.json":
+                hosts[hostname]["benchmark_notes"] = data
 
     return hosts
 
@@ -946,6 +1053,17 @@ def generate_markdown(
             rows.append(row)
 
         lines.append(_md_table(headers, rows))
+
+        # Footnotes for missing results
+        footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+        if footnotes:
+            lines.append("")
+            fn_parts = []
+            for hostname in hostnames:
+                if hostname in footnotes:
+                    fn_parts.append(f"**{hostname}**: {'; '.join(footnotes[hostname])}")
+            if fn_parts:
+                lines.append(f"*Missing results — {' · '.join(fn_parts)}*")
         lines.append("")
 
     # --- Gentoo build time analysis ---
@@ -1167,7 +1285,8 @@ def generate_html(
         higher_js = "true" if higher else "false"
 
         # Build HTML table for this category
-        table_html = _html_benchmark_table(benchmarks, bench_names, hostnames)
+        footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+        table_html = _html_benchmark_table(benchmarks, bench_names, hostnames, footnotes)
 
         section = f"""
     <section id="cat-{category}">
@@ -1485,6 +1604,12 @@ def generate_html(
     .fastest {{ color: #00e676; font-weight: bold; }}
     .host-summary {{ overflow-x: auto; }}
     .host-summary table {{ font-size: 0.8rem; }}
+    .bench-footnote {{
+      font-size: 0.82em;
+      color: #aaa;
+      margin-top: 0.25em;
+      font-style: italic;
+    }}
     /* Filter sidebar */
     #filter-sidebar {{
       width: 220px;
@@ -1868,6 +1993,7 @@ def _html_benchmark_table(
     benchmarks: dict[str, dict[str, dict[str, float]]],
     bench_names: list[str],
     hostnames: list[str],
+    footnotes: dict[str, list[str]] | None = None,
 ) -> str:
     """Build an HTML table for a single benchmark category."""
     header_cells = "".join(f"<th>{h}</th>" for h in hostnames)
@@ -1894,7 +2020,20 @@ def _html_benchmark_table(
 
         rows.append("        <tr>" + "".join(cells) + "</tr>")
 
-    return f"""    <table>
+    footnote_html = ""
+    if footnotes:
+        parts = []
+        for hostname in hostnames:
+            if hostname in footnotes:
+                reasons = "; ".join(footnotes[hostname])
+                parts.append(f"<strong>{hostname}</strong>: {reasons}")
+        if parts:
+            footnote_html = (
+                f'\n    <p class="bench-footnote">Missing results — {" · ".join(parts)}</p>'
+            )
+
+    return (
+        f"""    <table>
       <thead>
         <tr><th>Benchmark</th>{header_cells}</tr>
       </thead>
@@ -1902,6 +2041,8 @@ def _html_benchmark_table(
 {chr(10).join(rows)}
       </tbody>
     </table>"""
+        + footnote_html
+    )
 
 
 # ---------------------------------------------------------------------------

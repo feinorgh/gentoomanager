@@ -1,0 +1,8 @@
+minor_changes:
+  - "scripts/generate_benchmark_report.py: add missing-result footnotes to benchmark
+    tables explaining why a host shows — (Windows-only, Gentoo-only, missing tools,
+    tmpfs disk skip, etc.) in both Markdown and HTML reports."
+  - "scripts/benchmark_dashboard.py: show missing-result footnotes below the data
+    table in the interactive Dash dashboard."
+  - "roles/run_benchmarks/tasks/sanity_check.yml: persist missing-tool information
+    to benchmark_notes.json so the report generator can explain absent results."
