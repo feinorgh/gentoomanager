@@ -145,8 +145,8 @@
     - run_benchmarks_coreutils_git_result is not skipped
     - run_benchmarks_coreutils_git_result.rc | default(0) != 0
 
-- name: Check diff tool availability
-  ansible.builtin.command:
+- name: Check diff tool availability  # noqa: command-instead-of-shell
+  ansible.builtin.shell:
     cmd: command -v diff
   register: run_benchmarks_diff_check
   changed_when: false
@@ -167,6 +167,8 @@
         --export-json {{ run_benchmarks_work_dir }}/diff.json \
         --command-name 'diff' 'diff diff_a.txt diff_b.txt > /dev/null || true' \
         --command-name 'comm' 'comm <(sort diff_a.txt) <(sort diff_b.txt) > /dev/null'
+  args:
+    executable: /bin/bash
   when: run_benchmarks_diff_check.rc == 0
   register: run_benchmarks_coreutils_diff_result
   changed_when: false
