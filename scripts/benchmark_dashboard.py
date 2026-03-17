@@ -53,7 +53,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from generate_benchmark_report import (  # noqa: E402
     CATEGORY_TITLES,
     _compute_footnotes,
+    _get_category_versions,
     anonymize_hosts,
+    extract_features,
     load_results,
 )
 
@@ -596,6 +598,23 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str], hosts: dict | None = Non
                 else:
                     row[host] = "—"
             table_rows.append(row)
+
+        # Prepend a version row when the category has a primary tool with known versions
+        if hosts and category and selected_hosts:
+            try:
+                host_features_dash = {
+                    h: extract_features(hosts[h].get("metadata", {}))
+                    for h in selected_hosts
+                    if h in hosts
+                }
+                cat_versions_dash = _get_category_versions(category, host_features_dash)
+                if cat_versions_dash:
+                    ver_row: dict = {"Benchmark": "Version"}
+                    for host in selected_hosts:
+                        ver_row[host] = cat_versions_dash.get(host, "—")
+                    table_rows.insert(0, ver_row)
+            except Exception:
+                pass
 
         columns = [{"name": "Benchmark", "id": "Benchmark"}] + [
             {"name": h, "id": h} for h in selected_hosts

@@ -49,6 +49,25 @@ CHART_COLORS = [
     "#42d4f4",
 ]
 
+# Maps benchmark category prefixes to the metadata version key for that category's primary tool.
+# Used to add a per-host "Tool version" row in comparison tables.
+_CATEGORY_TOOL_VERSION: dict[str, str | None] = {
+    "compiler": None,  # multiple compilers; version encoded in command label
+    "startup": None,  # many tools
+    "python": "python",
+    "crypto": "openssl",
+    "ffmpeg": "ffmpeg",
+    "imagemagick": "imagemagick",
+    "compression": "7z",
+    "linker": "lld",
+    "bash": "bash",
+    "sqlite": "sqlite3",
+    "numeric": "python",  # numpy/python benchmarks
+    "opencv": "python",
+    "gimp": "gimp",
+    "inkscape": "inkscape",
+}
+
 CATEGORY_TITLES = {
     "compression": "Compression",
     "crypto_symmetric": "Cryptography — Symmetric Ciphers",
@@ -369,6 +388,74 @@ def _compute_footnotes(
 
 
 # ---------------------------------------------------------------------------
+# Version helpers
+# ---------------------------------------------------------------------------
+
+
+def _short_version(ver_string: str) -> str:
+    """Extract a compact version number from a verbose version string.
+
+    Examples::
+
+        "gcc (GCC) 14.2.1 20250123" -> "14.2.1"
+        "Python 3.13.5"              -> "3.13.5"
+        "OpenSSL 3.5.4 30 Sep 2025"  -> "3.5.4"
+        "go version go1.25.7 linux/amd64" -> "1.25.7"
+        "rustc 1.93.1 (01f6ddf75 2026-02-11)" -> "1.93.1"
+        "clang version 21.1.8"       -> "21.1.8"
+    """
+    m = re.search(r"\b(\d+\.\d+(?:\.\d+)?)\b", ver_string)
+    return m.group(1) if m else ver_string[:20]
+
+
+def _get_category_versions(category: str, hosts_features: dict[str, dict]) -> dict[str, str]:
+    """Return ``{hostname: short_version}`` for the primary tool of *category*.
+
+    Returns an empty dict if the category has no primary tool or no version data
+    is available (graceful degradation for older result sets).
+    """
+    tool_key: str | None = None
+    for prefix, key in _CATEGORY_TOOL_VERSION.items():
+        if category.startswith(prefix):
+            tool_key = key
+            break
+
+    if tool_key is None:
+        return {}
+
+    result: dict[str, str] = {}
+    for host, feat in hosts_features.items():
+        ver_str = feat.get(f"ver_{tool_key}", "")
+        if ver_str and ver_str not in ("not installed", "—", "?"):
+            result[host] = _short_version(ver_str)
+    return result
+
+
+def _format_bench_label(command: str, category: str) -> str:
+    """Format a benchmark command name into a readable label.
+
+    For compiler categories the command name encodes flags and bench type as
+    ``{cc_label}--{opt_flags}-{bench_type}`` (e.g. ``gcc-14--O3_-flto-compile``).
+    This function reformats those into human-readable form.  Other categories
+    are returned unchanged.
+    """
+    if category.startswith("compiler"):
+        # Pattern: cc_label--opt_flags-bench_type (e.g. gcc-14--O3_-flto-compile)
+        m = re.match(r"^(\S+?)--(-\S+)-(\w+)$", command)
+        if m:
+            cc_label, opt_flags, bench_type = m.groups()
+            opt_clean = opt_flags.replace("_", " ")
+            return f"{cc_label} {opt_clean} {bench_type}"
+        # Pattern without bench_type (e.g. sqlite amalgamation: gcc-14--O2)
+        m2 = re.match(r"^(\S+?)--(-\S+)$", command)
+        if m2:
+            cc_label, opt_flags = m2.groups()
+            opt_clean = opt_flags.replace("_", " ")
+            return f"{cc_label} {opt_clean}"
+    return command
+
+
+# ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
 
@@ -428,6 +515,9 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
             elif "video_encoders" in data:
                 # FFmpeg codec availability
                 hosts[hostname]["ffmpeg_codecs"] = data
+            elif json_file.name == "compiler_versions.json":
+                # Merge per-binary version map into metadata for report access
+                hosts[hostname].setdefault("metadata", {})["compiler_versions"] = data
             elif json_file.name == "boot_times.json":
                 # systemd-analyze boot timing data
                 hosts[hostname]["boot_times"] = data
@@ -652,6 +742,9 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     mf = features["makeflags"]
     m = re.search(r"-j\s*([0-9]+)", mf)
     features["parallel_jobs"] = m.group(1) if m else ("auto" if "-j" in mf else "—")
+
+    # Per-binary compiler version map (populated from compiler_versions.json)
+    features["compiler_versions"] = metadata.get("compiler_versions", {})  # type: ignore[assignment]
 
     return features
 
@@ -1010,6 +1103,9 @@ def generate_markdown(
             lines.append("")
 
     # --- Per-category benchmark tables ---
+    # Pre-compute host features once for version row annotation
+    all_host_features_md = {h: extract_features(hosts[h].get("metadata", {})) for h in hostnames}
+
     for category in sorted(table.keys()):
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
         benchmarks = table[category]
@@ -1029,9 +1125,17 @@ def generate_markdown(
         headers = ["Benchmark"] + hostnames
         rows: list[list[str]] = []
 
+        # Optional version row at top of table
+        cat_versions = _get_category_versions(category, all_host_features_md)
+        if cat_versions:
+            ver_row = ["**Tool version**"]
+            for hostname in hostnames:
+                ver_row.append(cat_versions.get(hostname, "—"))
+            rows.append(ver_row)
+
         for bench_name in sorted(benchmarks.keys()):
             host_results = benchmarks[bench_name]
-            row = [bench_name]
+            row = [_format_bench_label(bench_name, category)]
 
             # Find the best host for this benchmark
             means = {h: r["mean"] for h, r in host_results.items() if r["mean"] > 0}
@@ -1237,6 +1341,9 @@ def generate_html(
     # --- Host summary ---
     summary_html = _html_host_summary(hosts, hostnames, scores)
 
+    # Pre-compute host features once for version row annotation across all categories
+    all_host_features_html = {h: extract_features(hosts[h].get("metadata", {})) for h in hostnames}
+
     # --- Per-category sections ---
     for category in sorted(table.keys()):
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
@@ -1286,7 +1393,10 @@ def generate_html(
 
         # Build HTML table for this category
         footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
-        table_html = _html_benchmark_table(benchmarks, bench_names, hostnames, footnotes)
+        cat_versions = _get_category_versions(category, all_host_features_html) or None
+        table_html = _html_benchmark_table(
+            benchmarks, bench_names, hostnames, footnotes, category, cat_versions
+        )
 
         section = f"""
     <section id="cat-{category}">
@@ -1609,6 +1719,12 @@ def generate_html(
       color: #aaa;
       margin-top: 0.25em;
       font-style: italic;
+    }}
+    .version-row td, .version-row th {{
+      font-size: 0.8em;
+      color: #aaa;
+      font-style: italic;
+      background: rgba(255,255,255,0.02);
     }}
     /* Filter sidebar */
     #filter-sidebar {{
@@ -1994,18 +2110,26 @@ def _html_benchmark_table(
     bench_names: list[str],
     hostnames: list[str],
     footnotes: dict[str, list[str]] | None = None,
+    category: str = "",
+    category_versions: dict[str, str] | None = None,
 ) -> str:
     """Build an HTML table for a single benchmark category."""
     header_cells = "".join(f"<th>{h}</th>" for h in hostnames)
     rows: list[str] = []
+
+    # Optional version row at top of table
+    if category_versions:
+        ver_cells = "".join(f"<td>{category_versions.get(h, '—')}</td>" for h in hostnames)
+        rows.append(f'        <tr class="version-row"><th>Tool version</th>{ver_cells}</tr>')
 
     for bench_name in bench_names:
         host_results = benchmarks.get(bench_name, {})
         higher = _is_higher_better(host_results)
         means = {h: r["mean"] for h, r in host_results.items() if r["mean"] > 0}
         fastest = (max if higher else min)(means, key=means.get) if means else None
+        display_label = _format_bench_label(bench_name, category)
 
-        cells: list[str] = [f"<td><strong>{bench_name}</strong></td>"]
+        cells: list[str] = [f"<td><strong>{display_label}</strong></td>"]
         for hostname in hostnames:
             if hostname in host_results:
                 r = host_results[hostname]

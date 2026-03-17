@@ -1,0 +1,9 @@
+minor_changes:
+  - "roles/run_benchmarks: collect exact version strings for all discovered compiler binaries
+    into compiler_versions.json."
+  - "roles/run_benchmarks: expand metadata version collection to include bash, imagemagick,
+    7z, lld, sqlite3, numpy, gimp, inkscape, perl, ruby, and node."
+  - "scripts/generate_benchmark_report.py: add per-host tool version row to each benchmark
+    category comparison table in both Markdown and HTML reports; annotate compiler
+    sub-benchmark labels with readable flag formatting."
+  - "scripts/benchmark_dashboard.py: show tool version information in benchmark data tables."

@@ -76,7 +76,18 @@
       @('go', 'go version 2>&1'),
       @('python', 'python --version 2>&1'),
       @('openssl', 'openssl version 2>&1'),
-      @('kernel', '[System.Environment]::OSVersion.VersionString')
+      @('kernel', '[System.Environment]::OSVersion.VersionString'),
+      @('bash', 'bash --version 2>&1 | Select-Object -First 1'),
+      @('7z', '7z i 2>&1 | Select-Object -First 1'),
+      @('imagemagick', 'magick --version 2>&1 | Select-Object -First 1'),
+      @('lld', 'lld --version 2>&1 | Select-Object -First 1'),
+      @('sqlite3', 'sqlite3 --version 2>&1 | Select-Object -First 1'),
+      @('numpy', 'python -c "import numpy; print(numpy.__version__)" 2>&1'),
+      @('gimp', 'gimp --version 2>&1 | Select-Object -First 1'),
+      @('inkscape', 'inkscape --version 2>&1 | Select-Object -First 1'),
+      @('perl', 'perl --version 2>&1 | Select-Object -First 1'),
+      @('ruby', 'ruby --version 2>&1 | Select-Object -First 1'),
+      @('node', 'node --version 2>&1 | Select-Object -First 1')
     )) {
       $name = $pair[0]
       try {

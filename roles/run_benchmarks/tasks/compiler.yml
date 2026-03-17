@@ -99,6 +99,40 @@
   changed_when: false
   failed_when: false
 
+- name: Collect compiler binary version strings
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import json, subprocess
+      versions = {}
+      lines = """{{ run_benchmarks_cc_versions.stdout | default('') }}""".strip().splitlines()
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          label, exe = parts[0], parts[1]
+          try:
+              out = subprocess.run([exe, '--version'], capture_output=True, text=True,
+                                   timeout=5, check=False)
+              ver = (out.stdout or out.stderr).splitlines()[0].strip()
+          except Exception as exc:
+              ver = str(exc)
+          versions[label] = ver
+      print(json.dumps(versions, indent=2))
+      PYEOF
+    executable: /bin/bash
+  register: run_benchmarks_compiler_versions_raw
+  changed_when: false
+  failed_when: false
+
+- name: Write compiler_versions.json
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/compiler_versions.json"
+    content: "{{ run_benchmarks_compiler_versions_raw.stdout | default('{}') }}"
+    mode: "0644"
+  when: run_benchmarks_compiler_versions_raw.rc | default(1) == 0
+
 - name: Run C compiler benchmarks
   ansible.builtin.shell:
     cmd: |

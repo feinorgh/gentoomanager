@@ -111,6 +111,17 @@
       echo "::ffmpeg::$(ffmpeg -version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::openssl::$(openssl version 2>/dev/null || echo 'not installed')"
       echo "::kernel::$(uname -r)"
+      echo "::bash::$(bash --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::7z::$(7z i 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::imagemagick::$(magick --version 2>/dev/null | head -1 || convert --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::lld::$(lld --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::sqlite3::$(sqlite3 --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::numpy::$(python3 -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo 'not installed')"
+      echo "::gimp::$(gimp --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::inkscape::$(inkscape --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::perl::$(perl --version 2>/dev/null | grep -m1 'This is perl' || echo 'not installed')"
+      echo "::ruby::$(ruby --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::node::$(node --version 2>/dev/null | head -1 || echo 'not installed')"
     executable: /bin/bash
   register: run_benchmarks_versions_raw
   changed_when: false
