@@ -37,6 +37,7 @@
 
 - name: Verify essential tools are available (Windows)
   ansible.windows.win_shell: |
+    $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
     $tools = @('hyperfine', 'gcc', 'python', 'openssl', 'git', 'clang', 'rustc', 'go', 'ffmpeg', 'magick')
     foreach ($tool in $tools) {
       $found = Get-Command $tool -ErrorAction SilentlyContinue
