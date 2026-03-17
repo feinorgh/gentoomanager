@@ -19,11 +19,11 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_UTC = UTC
+UTC = timezone.utc
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -731,7 +731,7 @@ def generate_markdown(
 ) -> str:
     """Generate the full Markdown report."""
     lines: list[str] = []
-    timestamp = datetime.now(tz=_UTC).strftime("%Y-%m-%d %H:%M UTC")
+    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # Sort hosts by score descending (unscored hosts sort last)
     if scores:
@@ -937,7 +937,7 @@ def generate_markdown(
                 dur_str = f"{dur // 60}m {dur % 60:02d}s"
                 ts = entry.get("timestamp", 0)
                 date_str = (
-                    datetime.fromtimestamp(ts, tz=_UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
+                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
                 )
                 bt_rows.append(
                     [
@@ -1053,7 +1053,7 @@ def generate_html(
         hostnames = sorted(hosts.keys(), key=lambda h: scores.get(h, -1), reverse=True)
     else:
         hostnames = sorted(hosts.keys())
-    timestamp = datetime.now(tz=_UTC).strftime("%Y-%m-%d %H:%M UTC")
+    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # Pre-build Chart.js datasets per category
     chart_blocks: list[str] = []
@@ -1227,7 +1227,7 @@ def generate_html(
                 dur_str = f"{dur // 60}m {dur % 60:02d}s"
                 ts = entry.get("timestamp", 0)
                 date_str = (
-                    datetime.fromtimestamp(ts, tz=_UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
+                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
                 )
                 rows_html += f"""          <tr>
             <td>{entry["host"]}</td>
