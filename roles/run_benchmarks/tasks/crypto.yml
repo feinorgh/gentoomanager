@@ -584,6 +584,225 @@
     - run_benchmarks_crypto_gpg_result is not skipped
     - run_benchmarks_crypto_gpg_result.rc | default(0) != 0
 
+# ── 10. SSH signing benchmarks ───────────────────────────────────────────────
+#
+# Benchmarks ssh-keygen -Y sign/verify (OpenSSH 8.0+) across all key types
+# that OpenSSH supports: RSA-2048/3072/4096, ECDSA P-256/P-384/P-521, Ed25519.
+# This measures the full real-world cost of SSH signing including process
+# startup, key parsing, and protocol overhead — not just raw crypto math.
+# Each inner loop runs 1000 operations for direct comparison to the OpenSSL
+# asymmetric benchmark (crypto_asymmetric.json).
+- name: Check if ssh-keygen supports file signing (-Y, OpenSSH 8.0+)
+  ansible.builtin.shell:
+    cmd: |
+      ver=$(ssh -V 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+      major=$(echo "$ver" | cut -d. -f1)
+      [ "${major:-0}" -ge 8 ]
+    executable: /bin/bash
+  register: run_benchmarks_ssh_sign_check
+  changed_when: false
+  failed_when: false
+
+- name: Run SSH signing benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      N=1000
+
+      # ── Generate passphrase-free SSH keys ────────────────────────────────
+      [ -f ssh_ed25519 ]   || ssh-keygen -t ed25519  -f ssh_ed25519   -N "" -q
+      [ -f ssh_rsa2048 ]   || ssh-keygen -t rsa -b 2048 -f ssh_rsa2048 -N "" -q
+      [ -f ssh_rsa3072 ]   || ssh-keygen -t rsa -b 3072 -f ssh_rsa3072 -N "" -q
+      [ -f ssh_rsa4096 ]   || ssh-keygen -t rsa -b 4096 -f ssh_rsa4096 -N "" -q
+      [ -f ssh_ecdsa256 ]  || ssh-keygen -t ecdsa -b 256 -f ssh_ecdsa256 -N "" -q
+      [ -f ssh_ecdsa384 ]  || ssh-keygen -t ecdsa -b 384 -f ssh_ecdsa384 -N "" -q
+      [ -f ssh_ecdsa521 ]  || ssh-keygen -t ecdsa -b 521 -f ssh_ecdsa521 -N "" -q
+
+      # ── Build allowed_signers file (one identity per key type) ───────────
+      {
+        echo "bench-ed25519  $(awk '{print $1,$2}' ssh_ed25519.pub)"
+        echo "bench-rsa2048  $(awk '{print $1,$2}' ssh_rsa2048.pub)"
+        echo "bench-rsa3072  $(awk '{print $1,$2}' ssh_rsa3072.pub)"
+        echo "bench-rsa4096  $(awk '{print $1,$2}' ssh_rsa4096.pub)"
+        echo "bench-ecdsa256 $(awk '{print $1,$2}' ssh_ecdsa256.pub)"
+        echo "bench-ecdsa384 $(awk '{print $1,$2}' ssh_ecdsa384.pub)"
+        echo "bench-ecdsa521 $(awk '{print $1,$2}' ssh_ecdsa521.pub)"
+      } > ssh_allowed_signers
+
+      # ── Pre-generate reference signatures for verify loops ───────────────
+      ssh-keygen -Y sign -f ssh_ed25519   -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_ed25519.sig
+      ssh-keygen -Y sign -f ssh_rsa2048   -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_rsa2048.sig
+      ssh-keygen -Y sign -f ssh_rsa3072   -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_rsa3072.sig
+      ssh-keygen -Y sign -f ssh_rsa4096   -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_rsa4096.sig
+      ssh-keygen -Y sign -f ssh_ecdsa256  -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_ecdsa256.sig
+      ssh-keygen -Y sign -f ssh_ecdsa384  -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_ecdsa384.sig
+      ssh-keygen -Y sign -f ssh_ecdsa521  -n benchmark signdata.bin >/dev/null 2>&1 && mv signdata.bin.sig ssh_sig_ecdsa521.sig
+
+      # ── Build hyperfine command list ─────────────────────────────────────
+      CMDS=()
+
+      CMDS+=(--command-name "ssh-ed25519-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ed25519 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-ed25519-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ed25519 -n benchmark -s ssh_sig_ed25519.sig < signdata.bin >/dev/null 2>&1; done")
+
+      CMDS+=(--command-name "ssh-rsa-2048-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_rsa2048 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-rsa-2048-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa2048 -n benchmark -s ssh_sig_rsa2048.sig < signdata.bin >/dev/null 2>&1; done")
+
+      CMDS+=(--command-name "ssh-rsa-3072-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_rsa3072 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-rsa-3072-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa3072 -n benchmark -s ssh_sig_rsa3072.sig < signdata.bin >/dev/null 2>&1; done")
+
+      CMDS+=(--command-name "ssh-rsa-4096-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_rsa4096 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-rsa-4096-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa4096 -n benchmark -s ssh_sig_rsa4096.sig < signdata.bin >/dev/null 2>&1; done")
+
+      CMDS+=(--command-name "ssh-ecdsa-p256-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ecdsa256 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-ecdsa-p256-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa256 -n benchmark -s ssh_sig_ecdsa256.sig < signdata.bin >/dev/null 2>&1; done")
+
+      CMDS+=(--command-name "ssh-ecdsa-p384-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ecdsa384 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-ecdsa-p384-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa384 -n benchmark -s ssh_sig_ecdsa384.sig < signdata.bin >/dev/null 2>&1; done")
+
+      CMDS+=(--command-name "ssh-ecdsa-p521-sign-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ecdsa521 -n benchmark signdata.bin >/dev/null 2>&1; done")
+      CMDS+=(--command-name "ssh-ecdsa-p521-verify-${N}x"
+        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa521 -n benchmark -s ssh_sig_ecdsa521.sig < signdata.bin >/dev/null 2>&1; done")
+
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/crypto_ssh_sign.json \
+        "${CMDS[@]}"
+    executable: /bin/bash
+  when: run_benchmarks_ssh_sign_check.rc == 0
+  register: run_benchmarks_crypto_ssh_sign_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on crypto_ssh_sign benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_ssh_sign benchmark exited
+      rc={{ run_benchmarks_crypto_ssh_sign_result.rc }}.
+      {{ run_benchmarks_crypto_ssh_sign_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_ssh_sign_result is not skipped
+    - run_benchmarks_crypto_ssh_sign_result.rc | default(0) != 0
+
+# ── 11. Botan speed benchmarks ───────────────────────────────────────────────
+#
+# Botan (https://botan.randombit.net) is a C++ crypto library with a different
+# implementation from OpenSSL.  Its built-in `botan speed` command reports
+# ops/sec for each algorithm; this task converts that to the hyperfine JSON
+# format (time for N=1000 operations) so values are directly comparable to
+# crypto_asymmetric.json.
+#
+# Algorithms tested:
+#   Classical:   RSA-2048/3072/4096, ECDSA-256/384/521, Ed25519, Ed448
+#   Post-quantum (Botan 3.4+): ML-DSA-4x4/6x5/8x7 (FIPS 204)
+#
+# Botan uses its own PKCS1v15(SHA-256) / EMSA1(SHA-256) padding automatically;
+# the mode suffix is stripped when building the command names.
+- name: Check if botan CLI is available
+  ansible.builtin.shell:
+    cmd: command -v botan
+    executable: /bin/bash
+  register: run_benchmarks_botan_check
+  changed_when: false
+  failed_when: false
+
+- name: Run Botan speed benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+
+      # Run botan speed (1 second per algorithm per operation).
+      # Unknown algorithms (e.g. ML-DSA on older Botan) are silently skipped.
+      botan speed --msec=1000 \
+        RSA-2048 RSA-3072 RSA-4096 \
+        ECDSA-256 ECDSA-384 ECDSA-521 \
+        Ed25519 Ed448 \
+        Dilithium-4x4 Dilithium-6x5 Dilithium-8x7 \
+        ML-DSA-4x4 ML-DSA-6x5 ML-DSA-8x7 \
+        2>/dev/null > botan_raw.txt || true
+
+      # Convert ops/sec output to hyperfine-compatible JSON (time for N=1000 ops).
+      # Lines parsed: "Algorithm[/Mode] Sign: 375 ops/sec (376 operations in ...)"
+      # Keygen lines are intentionally excluded (Sign/Verify only).
+      cat > botan_parse.py << 'PYEOF'
+      import json, re
+      N = 1000
+      name_map = {
+          'ecdsa-256': 'ecdsa-p256',
+          'ecdsa-384': 'ecdsa-p384',
+          'ecdsa-521': 'ecdsa-p521',
+          'dilithium-4x4': 'ml-dsa-44',
+          'dilithium-6x5': 'ml-dsa-65',
+          'dilithium-8x7': 'ml-dsa-87',
+          'ml-dsa-4x4': 'ml-dsa-44',
+          'ml-dsa-6x5': 'ml-dsa-65',
+          'ml-dsa-8x7': 'ml-dsa-87',
+      }
+      results = []
+      seen = set()
+      for line in open('botan_raw.txt'):
+          m = re.match(r'^(.+?)\s+(Sign|Verify):\s+([\d.]+)\s+ops/sec', line.strip())
+          if not m:
+              continue
+          ops = float(m.group(3))
+          if ops <= 0:
+              continue
+          raw_algo = re.sub(r'/.*', '', m.group(1)).strip()
+          name = name_map.get(raw_algo.lower(), raw_algo.lower())
+          op = m.group(2).lower()
+          key = (name, op)
+          if key in seen:
+              continue
+          seen.add(key)
+          mean_s = N / ops
+          results.append({
+              'command': f'{name}-{op}-{N}x',
+              'mean': mean_s,
+              'stddev': 0.0,
+              'median': mean_s,
+              'user': 0.0,
+              'system': 0.0,
+              'min': 0.0,
+              'max': 0.0,
+              'times': [],
+              'exit_codes': [0],
+          })
+      print(json.dumps({'results': results}, indent=2))
+      PYEOF
+
+      python3 botan_parse.py > {{ run_benchmarks_work_dir }}/crypto_botan.json
+    executable: /bin/bash
+  when: run_benchmarks_botan_check.rc == 0
+  register: run_benchmarks_crypto_botan_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on crypto_botan benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: crypto_botan benchmark exited
+      rc={{ run_benchmarks_crypto_botan_result.rc }}.
+      {{ run_benchmarks_crypto_botan_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_crypto_botan_result is not skipped
+    - run_benchmarks_crypto_botan_result.rc | default(0) != 0
+
 - name: Remove private key material from benchmark work directory
   ansible.builtin.file:
     path: "{{ item }}"
@@ -601,5 +820,12 @@
     - "{{ run_benchmarks_work_dir }}/mldsa65.pem"
     - "{{ run_benchmarks_work_dir }}/mldsa87.pem"
     - "{{ run_benchmarks_work_dir }}/slhdsa128f.pem"
+    - "{{ run_benchmarks_work_dir }}/ssh_ed25519"
+    - "{{ run_benchmarks_work_dir }}/ssh_rsa2048"
+    - "{{ run_benchmarks_work_dir }}/ssh_rsa3072"
+    - "{{ run_benchmarks_work_dir }}/ssh_rsa4096"
+    - "{{ run_benchmarks_work_dir }}/ssh_ecdsa256"
+    - "{{ run_benchmarks_work_dir }}/ssh_ecdsa384"
+    - "{{ run_benchmarks_work_dir }}/ssh_ecdsa521"
     - "{{ run_benchmarks_work_dir }}/gnupg"
   failed_when: false

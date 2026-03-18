@@ -1,0 +1,9 @@
+minor_changes:
+  - "roles/run_benchmarks: added SSH signing benchmark (ssh-keygen -Y sign/verify,
+    OpenSSH 8.0+) covering RSA-2048/3072/4096, ECDSA P-256/P-384/P-521, and Ed25519
+    with 1000-iteration loops, producing crypto_ssh_sign.json."
+  - "roles/run_benchmarks: added Botan speed benchmark (botan CLI, auto-detected at
+    runtime) covering RSA, ECDSA, Ed25519, Ed448, and ML-DSA (Botan 3.4+), producing
+    crypto_botan.json in hyperfine-compatible format scaled to 1000 operations."
+  - "scripts/generate_benchmark_report.py: registered crypto_ssh_sign and crypto_botan
+    categories with display titles."
