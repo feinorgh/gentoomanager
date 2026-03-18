@@ -1,0 +1,5 @@
+minor_changes:
+  - "scripts/generate_benchmark_report.py: restructured Python Performance table to use
+    a pivoted layout with Python version labels as rows (py3, py3.13, py3.14, etc.) and
+    benchmark names (prime-sieve, list-comprehension, dict-operations, json-serde, regex,
+    sha256-hash, python-all) as columns, consistent with the C compilation table redesign."

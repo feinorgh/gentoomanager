@@ -677,6 +677,203 @@ def _html_compiler_pivot_table(
     )
 
 
+# ---------------------------------------------------------------------------
+# Python benchmark pivot helpers
+# ---------------------------------------------------------------------------
+
+# Known Python benchmark task names (used to split "{py_label}-{bench}").
+_PYTHON_BENCH_NAMES: frozenset[str] = frozenset(
+    {
+        "prime-sieve",
+        "list-comprehension",
+        "dict-operations",
+        "json-serde",
+        "regex",
+        "sha256-hash",
+        "python-all",
+    }
+)
+
+# Display order for Python benchmark columns.
+_PYTHON_BENCH_ORDER: dict[str, int] = {
+    "prime-sieve": 0,
+    "list-comprehension": 1,
+    "dict-operations": 2,
+    "json-serde": 3,
+    "regex": 4,
+    "sha256-hash": 5,
+    "python-all": 6,
+}
+
+# Categories rendered with the Python pivot layout.
+_PYTHON_PIVOT_CATEGORIES: frozenset[str] = frozenset({"python"})
+
+
+def _parse_python_bench(command: str) -> tuple[str, str] | None:
+    """Parse ``{py_label}-{bench}`` → ``(py_label, bench)``.
+
+    Identifies the bench suffix from the known set ``_PYTHON_BENCH_NAMES`` so
+    that labels like ``py3.13-config`` are preserved intact.
+    Returns None if no known bench suffix is found.
+    """
+    for bench in _PYTHON_BENCH_NAMES:
+        suffix = f"-{bench}"
+        if command.endswith(suffix):
+            return command[: -len(suffix)], bench
+    return None
+
+
+def _py_label_sort_key(py_label: str) -> tuple[tuple[int, ...], bool, str]:
+    """Sort key for Python labels: (version_tuple, is_config_variant, label).
+
+    Examples::
+
+        "py3"           → ((3,),    False, "py3")
+        "py3.13"        → ((3, 13), False, "py3.13")
+        "py3.13-config" → ((3, 13), True,  "py3.13-config")
+        "py3.14"        → ((3, 14), False, "py3.14")
+    """
+    is_config = py_label.endswith("-config")
+    base = py_label[: -len("-config")] if is_config else py_label
+    ver_tuple: tuple[int, ...] = tuple(int(x) for x in re.findall(r"\d+", base)) or (0,)
+    return (ver_tuple, is_config, py_label)
+
+
+def _build_python_pivot(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+) -> tuple[list[str], list[tuple[str, str, dict[str, dict[str, float]]]]]:
+    """Build pivoted Python benchmark data.
+
+    Returns:
+        bench_labels: benchmark names sorted by ``_PYTHON_BENCH_ORDER``.
+        rows: list of ``(py_label, hostname, {bench: result_dict})``,
+              sorted by (version tuple, is_config, hostname).
+    """
+    entries: dict[tuple[str, str], dict[str, dict[str, float]]] = {}
+    all_benches: set[str] = set()
+
+    for bench_name, host_results in benchmarks.items():
+        parsed = _parse_python_bench(bench_name)
+        if not parsed:
+            continue
+        py_label, bench = parsed
+        all_benches.add(bench)
+        for hostname, result in host_results.items():
+            entries.setdefault((py_label, hostname), {})[bench] = result
+
+    bench_labels = sorted(all_benches, key=lambda b: (_PYTHON_BENCH_ORDER.get(b, 99), b))
+
+    rows = []
+    for (py_label, hostname), bench_data in sorted(
+        entries.items(), key=lambda kv: (_py_label_sort_key(kv[0][0]), kv[0][1])
+    ):
+        rows.append((py_label, hostname, bench_data))
+
+    return bench_labels, rows
+
+
+def _md_python_pivot_table(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+) -> str:
+    """Render Python benchmarks as a pivoted Markdown table.
+
+    Rows = (Python label, host); Columns = benchmark names.
+    The cell showing the overall fastest time per benchmark is bolded.
+    """
+    bench_labels, rows = _build_python_pivot(benchmarks, hostnames)
+    if not rows:
+        return ""
+
+    fastest_per_bench: dict[str, float] = {}
+    for _py_label, _host, bench_data in rows:
+        for bench, result in bench_data.items():
+            mn = result.get("mean", 0.0)
+            if mn > 0 and (bench not in fastest_per_bench or mn < fastest_per_bench[bench]):
+                fastest_per_bench[bench] = mn
+
+    md_rows = []
+    for py_label, hostname, bench_data in rows:
+        row = [py_label, hostname]
+        for bench in bench_labels:
+            if bench in bench_data:
+                r = bench_data[bench]
+                cell = f"{r['mean']:.3f} ± {r['stddev']:.3f}"
+                if r["mean"] > 0 and abs(r["mean"] - fastest_per_bench.get(bench, -1)) < 1e-9:
+                    cell = f"**{cell}**"
+            else:
+                cell = "—"
+            row.append(cell)
+        md_rows.append(row)
+
+    headers = ["Python", "Host"] + bench_labels
+    return _md_table(headers, md_rows)
+
+
+def _html_python_pivot_table(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    footnotes: dict[str, list[str]] | None = None,
+) -> str:
+    """Render Python benchmarks as a pivoted HTML table."""
+    bench_labels, rows = _build_python_pivot(benchmarks, hostnames)
+    if not rows:
+        return ""
+
+    fastest_per_bench: dict[str, float] = {}
+    for _py_label, _host, bench_data in rows:
+        for bench, result in bench_data.items():
+            mn = result.get("mean", 0.0)
+            if mn > 0 and (bench not in fastest_per_bench or mn < fastest_per_bench[bench]):
+                fastest_per_bench[bench] = mn
+
+    header_cells = (
+        "<th>Python</th><th>Host</th>"
+        + "".join(f"<th>{b}</th>" for b in bench_labels)
+    )
+    html_rows = []
+    for py_label, hostname, bench_data in rows:
+        cells = [f"<td><strong>{py_label}</strong></td>", f"<td>{hostname}</td>"]
+        for bench in bench_labels:
+            if bench in bench_data:
+                r = bench_data[bench]
+                val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
+                is_fastest = r["mean"] > 0 and abs(
+                    r["mean"] - fastest_per_bench.get(bench, -1)
+                ) < 1e-9
+                cls = ' class="fastest"' if is_fastest else ""
+                cells.append(f"<td{cls}>{val}</td>")
+            else:
+                cells.append("<td>—</td>")
+        html_rows.append("        <tr>" + "".join(cells) + "</tr>")
+
+    footnote_html = ""
+    if footnotes:
+        parts = [
+            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}"
+            for h in hostnames
+            if h in footnotes
+        ]
+        if parts:
+            footnote_html = (
+                f'\n    <p class="bench-footnote">'
+                f'Missing results — {" · ".join(parts)}</p>'
+            )
+
+    return (
+        f"    <table>\n"
+        f"      <thead>\n"
+        f"        <tr>{header_cells}</tr>\n"
+        f"      </thead>\n"
+        f"      <tbody>\n"
+        f"{chr(10).join(html_rows)}\n"
+        f"      </tbody>\n"
+        f"    </table>"
+        + footnote_html
+    )
+
+
 def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
     """Load all benchmark JSON results.
 
@@ -1349,6 +1546,25 @@ def generate_markdown(
             lines.append("")
             continue
 
+        if category in _PYTHON_PIVOT_CATEGORIES:
+            lines.append(
+                "Times in seconds (mean ± stddev). **Lowest** per benchmark is bold."
+            )
+            lines.append("")
+            lines.append(_md_python_pivot_table(benchmarks, hostnames))
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            if footnotes:
+                lines.append("")
+                fn_parts = [
+                    f"**{h}**: {'; '.join(footnotes[h])}"
+                    for h in hostnames
+                    if h in footnotes
+                ]
+                if fn_parts:
+                    lines.append(f"*Missing results — {' · '.join(fn_parts)}*")
+            lines.append("")
+            continue
+
         # Detect whether this category uses throughput metrics
         sample_bench = next(iter(benchmarks.values()), {})
         higher = _is_higher_better(sample_bench)
@@ -1651,7 +1867,61 @@ def generate_html(
     }});""")
             continue
 
-        # Build datasets JSON
+        # Python category uses a pivoted layout: rows=(py_label, host),
+        # columns=benchmark names.
+        if category in _PYTHON_PIVOT_CATEGORIES:
+            bench_labels, py_pivot_rows = _build_python_pivot(benchmarks, hostnames)
+            labels_json = json.dumps(bench_labels)
+            py_datasets: list[dict[str, Any]] = []
+            for pidx, (py_label, hostname, bench_data) in enumerate(py_pivot_rows):
+                data_points_py: list[float | None] = []
+                for bench in bench_labels:
+                    if bench in bench_data:
+                        data_points_py.append(round(bench_data[bench]["mean"], 4))
+                    else:
+                        data_points_py.append(None)
+                py_datasets.append(
+                    {
+                        "label": f"{py_label} ({hostname})",
+                        "data": data_points_py,
+                        "backgroundColor": _color_for(pidx) + "cc",
+                        "borderColor": _color_for(pidx),
+                        "borderWidth": 1,
+                    }
+                )
+            datasets_json = json.dumps(py_datasets, indent=2)
+
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            table_html = _html_python_pivot_table(benchmarks, hostnames, footnotes)
+            section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+            html_sections.append(section)
+
+            chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: true }},
+          title: {{ display: true, text: '{title} (seconds, lower is better)' }}
+        }},
+        scales: {{
+          y: {{ title: {{ display: true, text: 'Time (seconds)' }} }}
+        }}
+      }}
+    }});""")
+            continue
         datasets: list[dict[str, Any]] = []
         for idx, hostname in enumerate(hostnames):
             data_points: list[float | None] = []
