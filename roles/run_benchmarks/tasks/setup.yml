@@ -125,6 +125,10 @@
     executable: /bin/bash
   register: run_benchmarks_versions_raw
   changed_when: false
+  # Non-fatal: version collection is informational only.  On systems where
+  # /bin/bash is not at the standard path (e.g. NixOS), this task fails but
+  # benchmarks can still proceed.
+  failed_when: false
 
 - name: Get CPU max clock speed (Linux)
   ansible.builtin.shell:

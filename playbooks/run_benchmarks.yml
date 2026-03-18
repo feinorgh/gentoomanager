@@ -29,6 +29,10 @@
   gather_facts: false
   become: false
   serial: 1
+  # Allow all hosts to fail without aborting remaining batches.  With serial: 1
+  # the default behaviour aborts the play when the single host in a batch fails
+  # (100% failure rate), which would skip all subsequent hosts.
+  max_fail_percentage: 100
   # When a VM goes UNREACHABLE mid-benchmark (e.g. SSH ControlMaster timeout
   # during a large file copy), treat it as a regular failure so that the
   # always: cleanup block still runs and can restore RAM / shut the VM down.
