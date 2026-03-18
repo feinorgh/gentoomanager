@@ -24,6 +24,7 @@ reports with charts.
   - [Cryptography](#cryptography)
   - [Compiler](#compiler)
   - [Python](#python)
+  - [Octave](#octave)
   - [Numeric](#numeric)
   - [SQLite](#sqlite)
   - [FFmpeg](#ffmpeg)
@@ -75,13 +76,14 @@ cat benchmarks/report.md         # Markdown tables
 ## Architecture Overview
 
 ```
-Controller                          Hosts (provisioning: parallel per OS family)
-──────────                          ──────────────────────────────────────────
+Controller                          Hosts (provisioning: serial=1 per OS family by default)
+──────────                          ─────────────────────────────────────────────────────
 provision_benchmarks.yml ────────► Play 1: gather facts → dynamic OS groups
-                                   Play 2: Gentoo  (serial=1, compile noise)
-                                   Play 3: RedHat  (parallel)
-                                   Play 4: Debian  (parallel)
+                                   Play 2: Gentoo  (serial=1, scale RAM via virsh)
+                                   Play 3: RedHat  (serial=1)
+                                   Play 4: Debian  (serial=1)
                                    …
+                                   Play 7: FreeBSD (serial=1, scale RAM via virsh)
 
 Controller                          Hosts (benchmarks: one at a time)
 ──────────                          ──────────────────────────────────
@@ -94,10 +96,14 @@ generate_benchmark_report.py ───► benchmarks/report.md
                                   benchmarks/report.html
 ```
 
-**Provisioning** is parallelized per OS family — all Debian hosts, all
-RedHat hosts, etc. run simultaneously — except Gentoo, which is serialized
-(`serial: 1`) because each `emerge` compilation saturates the hypervisor's
-CPU cores and would add noise to build-time measurements.
+**Provisioning** runs one host at a time per OS family by default (`serial: 1`).
+Gentoo and FreeBSD provisioning plays additionally scale VM RAM to the maximum
+via `virsh setmem --live` before compiling packages, then restore it in an
+`always:` block so it is reset even on failure.
+
+When `--serial` is passed to the wrapper script, each host is processed
+end-to-end (boot → provision → shutdown) before the next host begins,
+regardless of OS family.
 
 **Benchmarks** run one host at a time.  Each VM's RAM is temporarily scaled
 to its maximum configured value during the run and restored afterwards —
@@ -168,7 +174,7 @@ manager differences across OS families:
 | Debian (Ubuntu, Mint, elementary) | apt | — | |
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — | |
 | SUSE (openSUSE, SLES) | zypper | — | |
-| FreeBSD | ports (`make BATCH=yes`) | — | |
+| FreeBSD | ports (`make BATCH=yes`) | — | All packages (including optional ones: GIMP, Inkscape, OpenCV, Botan, mold, Octave) are built from the ports tree to avoid mixing pkg and ports. |
 | Void Linux | xbps-install | — | |
 | NixOS | nix-env | — | |
 | Solus | eopkg | — | |
@@ -203,9 +209,11 @@ Flags:
                               started by this run are shut down.
   --boot-timeout SEC          Seconds to wait for a VM to become reachable
                               after boot (default: 120)
-  --serial [N]                Provision N hosts at a time (default: 1 when
-                              flag is given).  Without this flag all eligible
-                              hosts in each OS family are provisioned in parallel.
+  --serial [N]                Process one complete host lifecycle (boot →
+                              provision → shutdown) at a time.  With N,
+                              process N hosts in parallel.  Without this flag
+                              all eligible hosts in each OS family are
+                              provisioned in parallel.
   --include-windows           Also provision Windows hosts via Chocolatey
   --verbose, -v               Pass -v to ansible-playbook (repeat for -vvv)
   --dry-run, -C               Pass --check to ansible-playbook (no changes)
@@ -255,6 +263,14 @@ ansible-playbook playbooks/provision_benchmarks.yml \
 # Install Inkscape 1.x for SVG rendering benchmarks
 ansible-playbook playbooks/provision_benchmarks.yml \
   -e provision_benchmarks_install_inkscape=true
+
+# Install mold linker (default: true)
+ansible-playbook playbooks/provision_benchmarks.yml \
+  -e provision_benchmarks_install_mold=true
+
+# Install GNU Octave for numerical benchmarks (default: true)
+ansible-playbook playbooks/provision_benchmarks.yml \
+  -e provision_benchmarks_install_octave=true
 
 # Prompt for sudo password
 ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
@@ -329,7 +345,7 @@ ansible-playbook playbooks/run_benchmarks.yml \
 ```
 
 Valid category names: `compression`, `crypto`, `compiler`, `python`,
-`numeric`, `sqlite`, `ffmpeg`, `imagemagick`, `coreutils`, `memory`,
+`octave`, `numeric`, `sqlite`, `ffmpeg`, `imagemagick`, `coreutils`, `memory`,
 `process`, `disk`, `linker`, `opencv`, `startup`, `gentoo_build_times`.
 
 Pass an empty list `[]` (the default) to run all categories.
@@ -576,6 +592,11 @@ Tests compilation speed and the performance of the compiled output.
 Results are written to `compiler_c_compile.json`, `compiler_c_runtime.json`,
 `compiler_rust.json`, and `compiler_go.json`.
 
+The `compiler_c_compile` and `compiler_c_runtime` report tables use a pivot
+layout: compiler version strings (extracted from `--version` output) appear as
+rows, and optimization levels (`-O0`, `-O2`, `-O3`, `-O3 -flto`, `-Os`, etc.)
+appear as columns.
+
 #### SQLite Amalgamation Compile (`compiler_sqlite.json`)
 
 Compiles the SQLite 3.52 amalgamation (`sqlite3.c`, ≈8.5 MiB, ≈230 000 lines)
@@ -631,6 +652,30 @@ Tests Python interpreter performance on micro-benchmarks.
 | bench_hash | 200       | hashlib hashing (inline script)        |
 | bench_list_comprehension | 500 | List comprehension (inline script) |
 | bench_dict_operations | 500  | Dict operations (inline script)    |
+
+The `python` report table uses a pivot layout: Python version label (e.g.
+`py3.13`) appears as rows, and benchmark names appear as columns.  The
+benchmark discovers all `python3.X` interpreters on the host, excluding
+`python3.X-config` scripts.
+
+### Octave
+
+Tests GNU Octave numerical computing performance.
+
+**File:** `octave.json`  
+**Requires:** `octave` installed (via provisioning; default: `true`). Windows: installed via Chocolatey.
+
+| Benchmark      | Description                                      |
+|----------------|--------------------------------------------------|
+| matrix-multiply| 500×500 matrix multiplication (BLAS-backed)      |
+| fft            | 1 000 000-point FFT                               |
+| sort           | Sort 1 000 000 values                             |
+| prime-sieve    | Sieve of Eratosthenes to 1 000 000               |
+| lu-decomp      | 500×500 LU decomposition                         |
+| octave-all     | Composite: all five sub-benchmarks in sequence   |
+
+The report table uses a pivot layout: Octave version label appears as rows,
+benchmark names appear as columns, and results are aggregated per host.
 
 ### Numeric
 
@@ -1165,7 +1210,12 @@ By default, each VM's RAM is scaled to its maximum configured value before
 benchmarks run.  This ensures consistent results even when VMs normally
 operate with reduced memory.
 
-Scaling flow:
+The provisioning plays for both Gentoo and FreeBSD also scale VM RAM to the
+maximum via `virsh setmem --live` before compiling or installing ports, then
+restore it to the configured minimum in an `always:` block — even if
+provisioning fails.
+
+Scaling flow (benchmarks):
 1. Read max memory from `virsh dumpxml` (persistent configuration)
 2. Scale up with `virsh setmem --live`
 3. Run benchmarks
@@ -1198,6 +1248,7 @@ The following categories have Windows-specific task variants (`*_win.yml`):
 | `crypto` | Hash and cipher throughput (certutil, OpenSSL) |
 | `compiler` | C/Rust/Go compile time (MSVC, gcc/MinGW, rustc, go) |
 | `python` | Python stdlib workloads (fibonacci, JSON, regex, sort) |
+| `octave` | GNU Octave numerical benchmarks (matrix-multiply, fft, sort, prime-sieve, lu-decomp) |
 | `coreutils` | Sort, grep, find, archive, git operations (PowerShell) |
 | `sqlite` | Bulk INSERT, indexed SELECT, ORDER BY (Python sqlite3) |
 | `numeric` | Compiled FP workloads: n-body, Mandelbrot, spectral norm; numpy matmul/FFT/sort |
@@ -1277,6 +1328,8 @@ or in inventory.
 | `provision_benchmarks_install_opencv` | `false` | Install OpenCV Python bindings |
 | `provision_benchmarks_install_gimp` | `false` | Install GIMP for batch-mode image-processing benchmarks |
 | `provision_benchmarks_install_inkscape` | `false` | Install Inkscape 1.x for SVG rendering benchmarks |
+| `provision_benchmarks_install_mold` | `true` | Install mold linker for linker benchmarks |
+| `provision_benchmarks_install_octave` | `true` | Install GNU Octave for numerical benchmarks |
 
 ## Troubleshooting
 
@@ -1372,6 +1425,7 @@ and set `ansible_python_interpreter`.
 │   │       ├── crypto.yml
 │   │       ├── compiler.yml
 │   │       ├── python.yml
+│   │       ├── octave.yml
 │   │       ├── numeric.yml
 │   │       ├── sqlite.yml
 │   │       ├── ffmpeg.yml

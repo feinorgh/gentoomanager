@@ -138,11 +138,15 @@ Applies collected USE flags and make.conf settings back to target hosts.
 
 Play 1 gathers facts from all hosts **in parallel** and creates per-OS-family
 dynamic groups (`provision_os_gentoo`, `provision_os_redhat`, …).  Subsequent
-plays provision each OS family in its own parallel play.
+plays provision each OS family one host at a time (`serial: 1`).
 
-**Gentoo is the exception**: because packages are compiled from source and share
-hypervisor CPU, Gentoo hosts are provisioned `serial: 1` to avoid build-time
-noise bleeding into benchmark results.
+Gentoo and FreeBSD provisioning plays additionally scale VM RAM to the maximum
+via `virsh setmem --live` before compiling packages, then restore it in an
+`always:` block.
+
+When `--serial` is passed to `provision_benchmarks.sh`, each host is processed
+end-to-end (boot → provision → shutdown) before the next host begins,
+regardless of OS family.
 
 ```bash
 # Provision all hosts
@@ -163,7 +167,6 @@ ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
 | `provision_include_windows` | `false` | Also provision Windows hosts |
 | `provision_manage_power` | `false` | Boot shut-off VMs; shut them down after |
 | `provision_boot_timeout_sec` | `120` | Seconds to wait for a VM to boot |
-| `provision_serial` | unset | Provision N hosts at a time (default: parallel per OS family) |
 
 See [docs/benchmarks.md](docs/benchmarks.md#provisioning-hosts) for the full
 `provision_benchmarks` role variable reference.
@@ -269,7 +272,8 @@ Host selection (mutually exclusive):
 Flags:
   --manage-power              Boot VMs that are off; shut them down afterwards
   --boot-timeout SEC          Seconds to wait for a VM to boot (default: 120)
-  --serial [N]                Provision N hosts at a time (default: 1 when given)
+  --serial [N]                Process one complete host lifecycle (boot →
+                              provision → shutdown) at a time (default: 1 when given)
   --include-windows           Also provision Windows hosts via Chocolatey
   --verbose, -v               Verbose Ansible output (repeat for -vvv)
   --dry-run, -C               Check mode (no changes applied)
