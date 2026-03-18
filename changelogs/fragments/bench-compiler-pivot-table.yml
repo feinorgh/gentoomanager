@@ -1,0 +1,5 @@
+minor_changes:
+  - "scripts/generate_benchmark_report.py: restructured C Compilation Speed and C Runtime
+    Performance tables to show actual compiler version strings (extracted from
+    compiler_versions.json) as row labels and optimization levels (-O0/-O2/-O3/-O3\
+    \ -flto/-Os) as columns, enabling direct comparison across opt levels on a single line."

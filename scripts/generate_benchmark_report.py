@@ -469,8 +469,212 @@ def _format_bench_label(command: str, category: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Data loading
+# Compiler benchmark pivot helpers
 # ---------------------------------------------------------------------------
+
+# Natural order for C compiler optimization flags.
+_OPT_LEVEL_ORDER: dict[str, int] = {
+    "-O0": 0, "-Og": 1, "-O1": 2, "-O2": 3, "-Os": 4, "-Oz": 5, "-O3": 6, "-O3 -flto": 7,
+}
+
+# Categories that use the compiler pivot layout (opt levels as columns).
+_COMPILER_PIVOT_CATEGORIES: frozenset[str] = frozenset({"compiler_c_compile", "compiler_c_runtime"})
+
+
+def _parse_compiler_bench(command: str) -> tuple[str, str, str] | None:
+    """Parse ``{cc_label}--{opt}-{bench_type}`` → ``(cc_label, opt, bench_type)``.
+
+    Opt flags are stored without a leading dash (e.g. ``O2``, ``O3_-flto``).
+    Returns ``opt`` with underscores expanded to spaces and a ``-`` prepended
+    so it matches common GCC notation (e.g. ``-O3 -flto``).
+    Returns None if the command does not match the expected pattern.
+    """
+    m = re.match(r"^(\S+?)--(\S+?)-(\w+)$", command)
+    if not m:
+        return None
+    cc_label, opt_raw, bench_type = m.groups()
+    opt = "-" + opt_raw.replace("_", " ")
+    return cc_label, opt, bench_type
+
+
+def _compiler_display_version(cc_label: str, hostname: str, hosts: dict) -> str:
+    """Return a short, human-readable version string for *cc_label* on *hostname*.
+
+    Looks up ``compiler_versions.json`` data (stored in host metadata) and
+    extracts the first semver token.  Falls back to *cc_label* if not found.
+
+    Examples::
+
+        "gcc-14 (Gentoo Hardened 14.3.1_p20260213 p5) 14.3.1 20260213"  → "gcc 14.3.1"
+        "clang version 21.1.8"                                            → "clang 21.1.8"
+    """
+    ver_map: dict[str, str] = (
+        hosts.get(hostname, {}).get("metadata", {}).get("compiler_versions", {})
+    )
+    full_ver = ver_map.get(cc_label, "")
+    base = re.sub(r"-\d+$", "", cc_label)  # "gcc-14" → "gcc", "clang-21" → "clang"
+    if full_ver:
+        m = re.search(r"\b(\d+\.\d+\.\d+)\b", full_ver)
+        if m:
+            return f"{base} {m.group(1)}"
+    return cc_label
+
+
+def _sort_cc_label(cc_label: str) -> tuple[str, int]:
+    """Sort key so ``gcc-14 < gcc-15 < clang-21``."""
+    m = re.match(r"^([A-Za-z]+)-(\d+)$", cc_label)
+    return (m.group(1), int(m.group(2))) if m else (cc_label, 0)
+
+
+def _build_compiler_pivot(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    hosts: dict,
+) -> tuple[list[str], list[tuple[str, str, str, dict[str, dict[str, float]]]]]:
+    """Build the pivoted compiler benchmark structure.
+
+    Returns:
+        opt_labels: list of optimization flags sorted by ``_OPT_LEVEL_ORDER``.
+        rows: list of ``(cc_label, version_display, hostname, {opt: result_dict})``,
+              sorted by (compiler base name, version tuple, hostname).
+    """
+    entries: dict[tuple[str, str], dict[str, dict[str, float]]] = {}
+    all_opts: set[str] = set()
+
+    for bench_name, host_results in benchmarks.items():
+        parsed = _parse_compiler_bench(bench_name)
+        if not parsed:
+            continue
+        cc_label, opt, _bench_type = parsed
+        all_opts.add(opt)
+        for hostname, result in host_results.items():
+            entries.setdefault((cc_label, hostname), {})[opt] = result
+
+    opt_labels = sorted(all_opts, key=lambda o: (_OPT_LEVEL_ORDER.get(o, 99), o))
+
+    def _row_sort_key(kv: tuple[tuple[str, str], Any]) -> tuple[str, tuple[int, ...], str]:
+        (cc_label, hostname), _ignored = kv
+        ver_display = _compiler_display_version(cc_label, hostname, hosts)
+        # "gcc 14.3.1" → base="gcc", ver_tuple=(14,3,1); "clang" → ("clang", (0,))
+        parts = ver_display.split(" ", 1)
+        base = parts[0]
+        ver_tuple: tuple[int, ...] = (
+            tuple(int(x) for x in re.findall(r"\d+", parts[1]))  # type: ignore[assignment]
+            if len(parts) > 1
+            else (0,)
+        )
+        return (base, ver_tuple, hostname)
+
+    rows = []
+    for (cc_label, hostname), opt_data in sorted(entries.items(), key=_row_sort_key):
+        ver_display = _compiler_display_version(cc_label, hostname, hosts)
+        rows.append((cc_label, ver_display, hostname, opt_data))
+
+    return opt_labels, rows
+
+
+def _md_compiler_pivot_table(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    hosts: dict,
+) -> str:
+    """Render compiler benchmarks as a pivoted Markdown table.
+
+    Rows = (compiler version, host); Columns = optimization levels.
+    The cell showing the overall fastest time per optimization level is bolded.
+    """
+    opt_labels, rows = _build_compiler_pivot(benchmarks, hostnames, hosts)
+    if not rows:
+        return ""
+
+    # Find fastest time per optimization level (lower is better).
+    fastest_per_opt: dict[str, float] = {}
+    for _cc, _ver, _host, opt_data in rows:
+        for opt, result in opt_data.items():
+            mn = result.get("mean", 0.0)
+            if mn > 0 and (opt not in fastest_per_opt or mn < fastest_per_opt[opt]):
+                fastest_per_opt[opt] = mn
+
+    md_rows = []
+    for _cc_label, ver_display, hostname, opt_data in rows:
+        row = [ver_display, hostname]
+        for opt in opt_labels:
+            if opt in opt_data:
+                r = opt_data[opt]
+                cell = f"{r['mean']:.3f} ± {r['stddev']:.3f}"
+                if r["mean"] > 0 and abs(r["mean"] - fastest_per_opt.get(opt, -1)) < 1e-9:
+                    cell = f"**{cell}**"
+            else:
+                cell = "—"
+            row.append(cell)
+        md_rows.append(row)
+
+    headers = ["Compiler", "Host"] + opt_labels
+    return _md_table(headers, md_rows)
+
+
+def _html_compiler_pivot_table(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    hosts: dict,
+    footnotes: dict[str, list[str]] | None = None,
+) -> str:
+    """Render compiler benchmarks as a pivoted HTML table."""
+    opt_labels, rows = _build_compiler_pivot(benchmarks, hostnames, hosts)
+    if not rows:
+        return ""
+
+    fastest_per_opt: dict[str, float] = {}
+    for _cc, _ver, _host, opt_data in rows:
+        for opt, result in opt_data.items():
+            mn = result.get("mean", 0.0)
+            if mn > 0 and (opt not in fastest_per_opt or mn < fastest_per_opt[opt]):
+                fastest_per_opt[opt] = mn
+
+    header_cells = (
+        "<th>Compiler</th><th>Host</th>"
+        + "".join(f"<th>{o}</th>" for o in opt_labels)
+    )
+    html_rows = []
+    for _cc_label, ver_display, hostname, opt_data in rows:
+        cells = [f"<td><strong>{ver_display}</strong></td>", f"<td>{hostname}</td>"]
+        for opt in opt_labels:
+            if opt in opt_data:
+                r = opt_data[opt]
+                val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
+                is_fastest = r["mean"] > 0 and abs(
+                    r["mean"] - fastest_per_opt.get(opt, -1)
+                ) < 1e-9
+                cls = ' class="fastest"' if is_fastest else ""
+                cells.append(f"<td{cls}>{val}</td>")
+            else:
+                cells.append("<td>—</td>")
+        html_rows.append("        <tr>" + "".join(cells) + "</tr>")
+
+    footnote_html = ""
+    if footnotes:
+        parts = [
+            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}"
+            for h in hostnames
+            if h in footnotes
+        ]
+        if parts:
+            footnote_html = (
+                f'\n    <p class="bench-footnote">'
+                f'Missing results — {" · ".join(parts)}</p>'
+            )
+
+    return (
+        f"    <table>\n"
+        f"      <thead>\n"
+        f"        <tr>{header_cells}</tr>\n"
+        f"      </thead>\n"
+        f"      <tbody>\n"
+        f"{chr(10).join(html_rows)}\n"
+        f"      </tbody>\n"
+        f"    </table>"
+        + footnote_html
+    )
 
 
 def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
@@ -1125,6 +1329,26 @@ def generate_markdown(
         lines.append(f"## {title}")
         lines.append("")
 
+        # Compiler categories use a pivoted layout: rows=(compiler, host), cols=opt levels.
+        if category in _COMPILER_PIVOT_CATEGORIES:
+            lines.append(
+                "Times in seconds (mean ± stddev). **Lowest** per optimization level is bold."
+            )
+            lines.append("")
+            lines.append(_md_compiler_pivot_table(benchmarks, hostnames, hosts))
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            if footnotes:
+                lines.append("")
+                fn_parts = [
+                    f"**{h}**: {'; '.join(footnotes[h])}"
+                    for h in hostnames
+                    if h in footnotes
+                ]
+                if fn_parts:
+                    lines.append(f"*Missing results — {' · '.join(fn_parts)}*")
+            lines.append("")
+            continue
+
         # Detect whether this category uses throughput metrics
         sample_bench = next(iter(benchmarks.values()), {})
         higher = _is_higher_better(sample_bench)
@@ -1364,6 +1588,68 @@ def generate_html(
         bench_names = sorted(benchmarks.keys())
         chart_id += 1
         canvas_id = f"chart_{chart_id}"
+
+        # ---------------------------------------------------------------
+        # Compiler categories use a pivoted layout: rows=(compiler, host),
+        # columns=optimization levels. Rewrite datasets accordingly.
+        # ---------------------------------------------------------------
+        if category in _COMPILER_PIVOT_CATEGORIES:
+            opt_labels, pivot_rows = _build_compiler_pivot(benchmarks, hostnames, hosts)
+            labels_json = json.dumps(opt_labels)
+            datasets_pivot: list[dict[str, Any]] = []
+            for pidx, (_cc_label, ver_display, hostname, opt_data) in enumerate(pivot_rows):
+                data_points_p: list[float | None] = []
+                error_bars_p: list[float | None] = []
+                for opt in opt_labels:
+                    if opt in opt_data:
+                        data_points_p.append(round(opt_data[opt]["mean"], 4))
+                        error_bars_p.append(round(opt_data[opt]["stddev"], 4))
+                    else:
+                        data_points_p.append(None)
+                        error_bars_p.append(None)
+                # Vary colour by index; add hostname suffix when multiple hosts.
+                datasets_pivot.append(
+                    {
+                        "label": f"{ver_display} ({hostname})",
+                        "data": data_points_p,
+                        "backgroundColor": _color_for(pidx) + "cc",
+                        "borderColor": _color_for(pidx),
+                        "borderWidth": 1,
+                    }
+                )
+            datasets_json = json.dumps(datasets_pivot, indent=2)
+
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            table_html = _html_compiler_pivot_table(benchmarks, hostnames, hosts, footnotes)
+            section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+            html_sections.append(section)
+
+            chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: true }},
+          title: {{ display: true, text: '{title} (seconds, lower is better)' }}
+        }},
+        scales: {{
+          y: {{ title: {{ display: true, text: 'Time (seconds)' }} }}
+        }}
+      }}
+    }});""")
+            continue
 
         # Build datasets JSON
         datasets: list[dict[str, Any]] = []
