@@ -91,11 +91,9 @@
           for f in "$d"/python3.[0-9]*; do
             [ -x "$f" ] || continue
             name=$(basename "$f")
-            # Only accept python3.X — skip python3-config, python3-dbg, python3m, etc.
-            case "$name" in
-              python3.[0-9]*) ;;
-              *) continue ;;
-            esac
+            # Only accept python3.X (e.g. python3.13) — skip python3-config,
+            # python3-dbg, python3m, python3.13-config, python3.13t, etc.
+            echo "$name" | grep -qE '^python3\.[0-9]+$' || continue
             full=$(command -v "$name" 2>/dev/null) || full="$f"
             printf '%s %s\n' "$name" "$full"
           done

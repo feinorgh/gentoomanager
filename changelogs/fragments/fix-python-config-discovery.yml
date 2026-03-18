@@ -1,0 +1,6 @@
+bugfixes:
+  - "roles/run_benchmarks/tasks/python.yml: tightened Python binary discovery to only
+    accept exactly versioned binaries matching python3.X (e.g. python3.13) by using a
+    regex check instead of a shell glob case pattern; this prevents python3.13-config
+    (a compiler-flags helper script) from being mistakenly benchmarked as a Python
+    interpreter."
