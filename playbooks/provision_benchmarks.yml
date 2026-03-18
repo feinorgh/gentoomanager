@@ -200,7 +200,7 @@
 # ── Play 3: Red Hat family – Fedora, RHEL, CentOS, Oracle Linux ─────────
 - name: Provision Red Hat family hosts
   hosts: provision_os_redhat
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -213,7 +213,7 @@
 # ── Play 4: Debian family – Ubuntu, Debian, Mint, elementary OS ─────────
 - name: Provision Debian family hosts
   hosts: provision_os_debian
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -226,7 +226,7 @@
 # ── Play 5: Arch Linux family – Arch, Manjaro, CachyOS ──────────────────
 - name: Provision Arch Linux family hosts
   hosts: provision_os_archlinux
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -239,7 +239,7 @@
 # ── Play 6: SUSE family – openSUSE Tumbleweed, Leap ─────────────────────
 - name: Provision SUSE family hosts
   hosts: provision_os_suse
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -252,7 +252,7 @@
 # ── Play 7: FreeBSD ──────────────────────────────────────────────────────
 - name: Provision FreeBSD hosts
   hosts: provision_os_freebsd
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -328,7 +328,7 @@
 # ── Play 8: Void Linux ───────────────────────────────────────────────────
 - name: Provision Void Linux hosts
   hosts: provision_os_void
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -341,7 +341,7 @@
 # ── Play 9: NixOS ────────────────────────────────────────────────────────
 - name: Provision NixOS hosts
   hosts: provision_os_nixos
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -354,7 +354,7 @@
 # ── Play 10: Solus ───────────────────────────────────────────────────────
 - name: Provision Solus hosts
   hosts: provision_os_solus
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
@@ -367,7 +367,7 @@
 # ── Play 11: Provision Windows hosts ────────────────────────────────────
 - name: Provision Windows hosts
   hosts: mswindows
-  serial: "{{ provision_serial | default('100%') }}"
+  serial: "{{ provision_serial | default(1) }}"
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
