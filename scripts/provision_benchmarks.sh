@@ -54,10 +54,10 @@ Flags:
                               started by this run are shut down.
   --boot-timeout SEC          Seconds to wait for a VM to become reachable
                               after boot (default: 120)
-  --serial [N]                Provision N hosts at a time (default: 1 when
-                              flag is given).  Without this flag all eligible
-                              hosts in each OS family are provisioned in
-                              parallel.
+  --serial [N]                Provision one host at a time (or N hosts per
+                              batch), completing the full boot → provision →
+                              shutdown lifecycle before moving to the next.
+                              Default batch size is 1 when flag is given.
   --include-windows           Also provision Windows hosts (installs benchmark
                               dependencies via Chocolatey)
   --verbose, -v               Pass -v to ansible-playbook (repeat for -vvv)
@@ -163,13 +163,10 @@ require_cmd python3
 
 cd "${REPO_ROOT}"
 
-# ── Build ansible-playbook command ───────────────────────────────────────────
+# ── Build ansible-playbook command (no --limit yet) ──────────────────────────
 CMD=(ansible-playbook "${PLAYBOOK}" -i "${INVENTORY}")
 
 [[ -n "${VERBOSITY}" ]] && CMD+=("-${VERBOSITY}")
-
-[[ -n "${LIMIT}" ]] && CMD+=(--limit "${LIMIT}")
-
 [[ "${DRY_RUN}"     -eq 1 ]] && CMD+=(--check)
 [[ "${BECOME_PASS}" -eq 1 ]] && CMD+=(-K)
 
@@ -178,7 +175,6 @@ declare -A EVARS=()
 
 [[ "${MANAGE_POWER}"    -eq 1 ]] && EVARS[provision_manage_power]="true"
 [[ -n "${BOOT_TIMEOUT}" ]]       && EVARS[provision_boot_timeout_sec]="${BOOT_TIMEOUT}"
-[[ -n "${SERIAL}" ]]             && EVARS[provision_serial]="${SERIAL}"
 [[ "${INCLUDE_WINDOWS}" -eq 1 ]] && EVARS[provision_include_windows]="true"
 
 if [[ "${#EVARS[@]}" -gt 0 ]]; then
@@ -197,7 +193,52 @@ fi
 
 CMD+=("${EXTRA_ARGS[@]}")
 
-# ── Print and run ─────────────────────────────────────────────────────────────
+# ── Serial mode: one host (or batch of N) at a time ──────────────────────────
+# When --serial is given, enumerate all matching hosts and run the full
+# playbook once per host (or per batch of N).  This guarantees the complete
+# boot → provision → shutdown lifecycle completes for each host before the
+# next one is started — something that cannot be achieved with Ansible's
+# serial: keyword alone, because the boot play would still run across the
+# entire fleet before any provisioning play begins.
+if [[ -n "${SERIAL}" ]]; then
+    SERIAL_N="${SERIAL}"
+
+    # Query inventory for all hosts matching the user's selection
+    HOST_QUERY=(ansible-inventory -i "${INVENTORY}" --list)
+    [[ -n "${LIMIT}" ]] && HOST_QUERY+=(--limit "${LIMIT}")
+
+    mapfile -t ALL_HOSTS < <(
+        "${HOST_QUERY[@]}" 2>/dev/null | \
+        python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for h in sorted(d.get('_meta', {}).get('hostvars', {}).keys()):
+    print(h)
+"
+    )
+
+    [[ "${#ALL_HOSTS[@]}" -eq 0 ]] && die "No hosts matched the given selection"
+
+    echo "▶ Serial mode: ${#ALL_HOSTS[@]} host(s), batch size ${SERIAL_N}" >&2
+    echo "" >&2
+
+    batch_start=0
+    while [[ "${batch_start}" -lt "${#ALL_HOSTS[@]}" ]]; do
+        batch=("${ALL_HOSTS[@]:${batch_start}:${SERIAL_N}}")
+        batch_limit="$(IFS=','; echo "${batch[*]}")"
+
+        echo "▶ Running: ${CMD[*]} --limit ${batch_limit}" >&2
+        echo "" >&2
+
+        "${CMD[@]}" --limit "${batch_limit}"
+        batch_start=$(( batch_start + SERIAL_N ))
+    done
+    exit 0
+fi
+
+# ── Non-serial: add limit (if any) and exec ──────────────────────────────────
+[[ -n "${LIMIT}" ]] && CMD+=(--limit "${LIMIT}")
+
 echo "▶ Running: ${CMD[*]}" >&2
 echo "" >&2
 
