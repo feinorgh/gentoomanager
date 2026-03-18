@@ -341,10 +341,10 @@
       openssl ec   -in ec521.pem   -pubout -out ec521pub.pem   2>/dev/null
       openssl pkey -in ed25519.pem -pubout -out ed25519pub.pem 2>/dev/null
       openssl pkey -in ed448.pem   -pubout -out ed448pub.pem   2>/dev/null
-      [ -f mldsa44.pem ]    && openssl pkey -in mldsa44.pem    -pubout -out mldsa44pub.pem    2>/dev/null || true
-      [ -f mldsa65.pem ]    && openssl pkey -in mldsa65.pem    -pubout -out mldsa65pub.pem    2>/dev/null || true
-      [ -f mldsa87.pem ]    && openssl pkey -in mldsa87.pem    -pubout -out mldsa87pub.pem    2>/dev/null || true
-      [ -f slhdsa128f.pem ] && openssl pkey -in slhdsa128f.pem -pubout -out slhdsa128fpub.pem 2>/dev/null || true
+      if [ -f mldsa44.pem ];    then openssl pkey -in mldsa44.pem    -pubout -out mldsa44pub.pem    2>/dev/null; fi
+      if [ -f mldsa65.pem ];    then openssl pkey -in mldsa65.pem    -pubout -out mldsa65pub.pem    2>/dev/null; fi
+      if [ -f mldsa87.pem ];    then openssl pkey -in mldsa87.pem    -pubout -out mldsa87pub.pem    2>/dev/null; fi
+      if [ -f slhdsa128f.pem ]; then openssl pkey -in slhdsa128f.pem -pubout -out slhdsa128fpub.pem 2>/dev/null; fi
 
       # ── Pre-generate reference signatures for verify loops ───────────────
       openssl dgst   -sha256 -sign rsa2048.pem   -out sig_rsa2048.bin   signdata.bin
@@ -355,10 +355,10 @@
       openssl dgst   -sha256 -sign ec521.pem     -out sig_ec521.bin     signdata.bin
       openssl pkeyutl -sign -inkey ed25519.pem   -in signdata.bin -out sig_ed25519.bin
       openssl pkeyutl -sign -inkey ed448.pem     -in signdata.bin -out sig_ed448.bin
-      [ -f mldsa44.pem ]    && openssl pkeyutl -sign -inkey mldsa44.pem    -in signdata.bin -out sig_mldsa44.bin    2>/dev/null || true
-      [ -f mldsa65.pem ]    && openssl pkeyutl -sign -inkey mldsa65.pem    -in signdata.bin -out sig_mldsa65.bin    2>/dev/null || true
-      [ -f mldsa87.pem ]    && openssl pkeyutl -sign -inkey mldsa87.pem    -in signdata.bin -out sig_mldsa87.bin    2>/dev/null || true
-      [ -f slhdsa128f.pem ] && openssl pkeyutl -sign -inkey slhdsa128f.pem -in signdata.bin -out sig_slhdsa128f.bin 2>/dev/null || true
+      if [ -f mldsa44.pem ];    then openssl pkeyutl -sign -inkey mldsa44.pem    -in signdata.bin -out sig_mldsa44.bin    2>/dev/null; fi
+      if [ -f mldsa65.pem ];    then openssl pkeyutl -sign -inkey mldsa65.pem    -in signdata.bin -out sig_mldsa65.bin    2>/dev/null; fi
+      if [ -f mldsa87.pem ];    then openssl pkeyutl -sign -inkey mldsa87.pem    -in signdata.bin -out sig_mldsa87.bin    2>/dev/null; fi
+      if [ -f slhdsa128f.pem ]; then openssl pkeyutl -sign -inkey slhdsa128f.pem -in signdata.bin -out sig_slhdsa128f.bin 2>/dev/null; fi
 
       # ── Build hyperfine command list ─────────────────────────────────────
       CMDS=()
