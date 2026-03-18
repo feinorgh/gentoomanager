@@ -257,10 +257,73 @@
   ignore_unreachable: true
   any_errors_fatal: false
   tasks:
-    - name: Provision benchmark dependencies
-      ansible.builtin.include_role:
-        name: provision_benchmarks
-        tasks_from: os/freebsd.yml
+    - name: Provision FreeBSD with RAM scaling
+      block:
+        # ── Scale RAM up (VMs only) ───────────────────────────────────
+        - name: Read current and max VM memory (FreeBSD)
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              virsh --connect qemu:///system dumpxml '{{ inventory_hostname }}' \
+                | grep -oP '<(memory|currentMemory)[^>]*>\K[0-9]+' \
+                | head -2
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
+          register: _provision_ram_info
+          changed_when: false
+          when: hypervisor_host is defined and hypervisor_host | length > 0
+
+        - name: Save original RAM values (FreeBSD)
+          ansible.builtin.set_fact:
+            _provision_max_ram_kib: "{{ _provision_ram_info.stdout_lines[0] | trim }}"
+            _provision_original_ram_kib: "{{ _provision_ram_info.stdout_lines[1] | trim }}"
+          when: >-
+            hypervisor_host is defined and hypervisor_host | length > 0 and
+            _provision_ram_info is not skipped
+
+        - name: Scale VM RAM to max memory (live, FreeBSD)
+          ansible.builtin.command:
+            cmd: >-
+              virsh --connect qemu:///system setmem '{{ inventory_hostname }}'
+              {{ _provision_max_ram_kib }} --live
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
+          changed_when: true
+          when: >-
+            hypervisor_host is defined and hypervisor_host | length > 0 and
+            _provision_original_ram_kib is defined and
+            _provision_original_ram_kib != _provision_max_ram_kib
+
+        # ── Provision ─────────────────────────────────────────────────
+        - name: Provision benchmark dependencies
+          ansible.builtin.include_role:
+            name: provision_benchmarks
+            tasks_from: os/freebsd.yml
+
+      # ── Always restore RAM, even on failure ─────────────────────────
+      always:
+        - name: Read configured minimal RAM from persistent XML (FreeBSD)
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              virsh --connect qemu:///system dumpxml --inactive '{{ inventory_hostname }}' \
+                | grep -oP '<currentMemory[^>]*>\K[0-9]+'
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
+          register: _provision_minimal_ram
+          changed_when: false
+          failed_when: false
+          when: hypervisor_host is defined and hypervisor_host | length > 0
+
+        - name: Restore VM RAM to minimal allocation (live, FreeBSD)
+          ansible.builtin.command:
+            cmd: >-
+              virsh --connect qemu:///system setmem '{{ inventory_hostname }}'
+              {{ _provision_minimal_ram.stdout | trim }} --live
+          delegate_to: "{{ hypervisor_host | default(inventory_hostname) }}"
+          changed_when: true
+          failed_when: false
+          when: >-
+            hypervisor_host is defined and hypervisor_host | length > 0 and
+            _provision_minimal_ram.stdout is defined and
+            _provision_minimal_ram.stdout | trim | length > 0
 
 # ── Play 8: Void Linux ───────────────────────────────────────────────────
 - name: Provision Void Linux hosts
