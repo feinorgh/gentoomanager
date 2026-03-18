@@ -474,7 +474,14 @@ def _format_bench_label(command: str, category: str) -> str:
 
 # Natural order for C compiler optimization flags.
 _OPT_LEVEL_ORDER: dict[str, int] = {
-    "-O0": 0, "-Og": 1, "-O1": 2, "-O2": 3, "-Os": 4, "-Oz": 5, "-O3": 6, "-O3 -flto": 7,
+    "-O0": 0,
+    "-Og": 1,
+    "-O1": 2,
+    "-O2": 3,
+    "-Os": 4,
+    "-Oz": 5,
+    "-O3": 6,
+    "-O3 -flto": 7,
 }
 
 # Categories that use the compiler pivot layout (opt levels as columns).
@@ -631,10 +638,7 @@ def _html_compiler_pivot_table(
             if mn > 0 and (opt not in fastest_per_opt or mn < fastest_per_opt[opt]):
                 fastest_per_opt[opt] = mn
 
-    header_cells = (
-        "<th>Compiler</th><th>Host</th>"
-        + "".join(f"<th>{o}</th>" for o in opt_labels)
-    )
+    header_cells = "<th>Compiler</th><th>Host</th>" + "".join(f"<th>{o}</th>" for o in opt_labels)
     html_rows = []
     for _cc_label, ver_display, hostname, opt_data in rows:
         cells = [f"<td><strong>{ver_display}</strong></td>", f"<td>{hostname}</td>"]
@@ -642,9 +646,7 @@ def _html_compiler_pivot_table(
             if opt in opt_data:
                 r = opt_data[opt]
                 val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
-                is_fastest = r["mean"] > 0 and abs(
-                    r["mean"] - fastest_per_opt.get(opt, -1)
-                ) < 1e-9
+                is_fastest = r["mean"] > 0 and abs(r["mean"] - fastest_per_opt.get(opt, -1)) < 1e-9
                 cls = ' class="fastest"' if is_fastest else ""
                 cells.append(f"<td{cls}>{val}</td>")
             else:
@@ -654,14 +656,11 @@ def _html_compiler_pivot_table(
     footnote_html = ""
     if footnotes:
         parts = [
-            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}"
-            for h in hostnames
-            if h in footnotes
+            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}" for h in hostnames if h in footnotes
         ]
         if parts:
             footnote_html = (
-                f'\n    <p class="bench-footnote">'
-                f'Missing results — {" · ".join(parts)}</p>'
+                f'\n    <p class="bench-footnote">Missing results — {" · ".join(parts)}</p>'
             )
 
     return (
@@ -672,8 +671,7 @@ def _html_compiler_pivot_table(
         f"      <tbody>\n"
         f"{chr(10).join(html_rows)}\n"
         f"      </tbody>\n"
-        f"    </table>"
-        + footnote_html
+        f"    </table>" + footnote_html
     )
 
 
@@ -707,6 +705,31 @@ _PYTHON_BENCH_ORDER: dict[str, int] = {
 
 # Categories rendered with the Python pivot layout.
 _PYTHON_PIVOT_CATEGORIES: frozenset[str] = frozenset({"python"})
+
+# Known Octave benchmark task names (used to split "{octave_label}-{bench}").
+_OCTAVE_BENCH_NAMES: frozenset[str] = frozenset(
+    {
+        "matrix-multiply",
+        "fft",
+        "sort",
+        "prime-sieve",
+        "lu-decomp",
+        "octave-all",
+    }
+)
+
+# Display order for Octave benchmark columns.
+_OCTAVE_BENCH_ORDER: dict[str, int] = {
+    "matrix-multiply": 0,
+    "fft": 1,
+    "sort": 2,
+    "prime-sieve": 3,
+    "lu-decomp": 4,
+    "octave-all": 5,
+}
+
+# Categories rendered with the Octave pivot layout.
+_OCTAVE_PIVOT_CATEGORIES: frozenset[str] = frozenset({"octave"})
 
 
 def _parse_python_bench(command: str) -> tuple[str, str] | None:
@@ -828,10 +851,7 @@ def _html_python_pivot_table(
             if mn > 0 and (bench not in fastest_per_bench or mn < fastest_per_bench[bench]):
                 fastest_per_bench[bench] = mn
 
-    header_cells = (
-        "<th>Python</th><th>Host</th>"
-        + "".join(f"<th>{b}</th>" for b in bench_labels)
-    )
+    header_cells = "<th>Python</th><th>Host</th>" + "".join(f"<th>{b}</th>" for b in bench_labels)
     html_rows = []
     for py_label, hostname, bench_data in rows:
         cells = [f"<td><strong>{py_label}</strong></td>", f"<td>{hostname}</td>"]
@@ -839,9 +859,9 @@ def _html_python_pivot_table(
             if bench in bench_data:
                 r = bench_data[bench]
                 val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
-                is_fastest = r["mean"] > 0 and abs(
-                    r["mean"] - fastest_per_bench.get(bench, -1)
-                ) < 1e-9
+                is_fastest = (
+                    r["mean"] > 0 and abs(r["mean"] - fastest_per_bench.get(bench, -1)) < 1e-9
+                )
                 cls = ' class="fastest"' if is_fastest else ""
                 cells.append(f"<td{cls}>{val}</td>")
             else:
@@ -851,14 +871,11 @@ def _html_python_pivot_table(
     footnote_html = ""
     if footnotes:
         parts = [
-            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}"
-            for h in hostnames
-            if h in footnotes
+            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}" for h in hostnames if h in footnotes
         ]
         if parts:
             footnote_html = (
-                f'\n    <p class="bench-footnote">'
-                f'Missing results — {" · ".join(parts)}</p>'
+                f'\n    <p class="bench-footnote">Missing results — {" · ".join(parts)}</p>'
             )
 
     return (
@@ -869,8 +886,162 @@ def _html_python_pivot_table(
         f"      <tbody>\n"
         f"{chr(10).join(html_rows)}\n"
         f"      </tbody>\n"
-        f"    </table>"
-        + footnote_html
+        f"    </table>" + footnote_html
+    )
+
+
+def _parse_octave_bench(command: str) -> tuple[str, str] | None:
+    """Parse ``{octave_label}-{bench}`` → ``(octave_label, bench)``.
+
+    Identifies the bench suffix from the known set ``_OCTAVE_BENCH_NAMES`` so
+    that labels like ``octave-9.3`` are preserved intact.
+    Returns None if no known bench suffix is found.
+    """
+    for bench in _OCTAVE_BENCH_NAMES:
+        suffix = f"-{bench}"
+        if command.endswith(suffix):
+            return command[: -len(suffix)], bench
+    return None
+
+
+def _octave_label_sort_key(octave_label: str) -> tuple[tuple[int, ...], str]:
+    """Sort key for Octave labels: (version_tuple, label).
+
+    Examples::
+
+        "octave-9"    → ((9,),    "octave-9")
+        "octave-9.3"  → ((9, 3),  "octave-9.3")
+        "octave-10.1" → ((10, 1), "octave-10.1")
+    """
+    ver_tuple: tuple[int, ...] = tuple(int(x) for x in re.findall(r"\d+", octave_label)) or (0,)
+    return (ver_tuple, octave_label)
+
+
+def _build_octave_pivot(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+) -> tuple[list[str], list[tuple[str, str, dict[str, dict[str, float]]]]]:
+    """Build pivoted Octave benchmark data.
+
+    Returns:
+        bench_labels: benchmark names sorted by ``_OCTAVE_BENCH_ORDER``.
+        rows: list of ``(octave_label, hostname, {bench: result_dict})``,
+              sorted by (version tuple, hostname).
+    """
+    entries: dict[tuple[str, str], dict[str, dict[str, float]]] = {}
+    all_benches: set[str] = set()
+
+    for bench_name, host_results in benchmarks.items():
+        parsed = _parse_octave_bench(bench_name)
+        if not parsed:
+            continue
+        octave_label, bench = parsed
+        all_benches.add(bench)
+        for hostname, result in host_results.items():
+            entries.setdefault((octave_label, hostname), {})[bench] = result
+
+    bench_labels = sorted(all_benches, key=lambda b: (_OCTAVE_BENCH_ORDER.get(b, 99), b))
+
+    rows = []
+    for (octave_label, hostname), bench_data in sorted(
+        entries.items(), key=lambda kv: (_octave_label_sort_key(kv[0][0]), kv[0][1])
+    ):
+        rows.append((octave_label, hostname, bench_data))
+
+    return bench_labels, rows
+
+
+def _md_octave_pivot_table(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+) -> str:
+    """Render Octave benchmarks as a pivoted Markdown table.
+
+    Rows = (Octave label, host); Columns = benchmark names.
+    The cell showing the overall fastest time per benchmark is bolded.
+    """
+    bench_labels, rows = _build_octave_pivot(benchmarks, hostnames)
+    if not rows:
+        return ""
+
+    fastest_per_bench: dict[str, float] = {}
+    for _octave_label, _host, bench_data in rows:
+        for bench, result in bench_data.items():
+            mn = result.get("mean", 0.0)
+            if mn > 0 and (bench not in fastest_per_bench or mn < fastest_per_bench[bench]):
+                fastest_per_bench[bench] = mn
+
+    md_rows = []
+    for octave_label, hostname, bench_data in rows:
+        row = [octave_label, hostname]
+        for bench in bench_labels:
+            if bench in bench_data:
+                r = bench_data[bench]
+                cell = f"{r['mean']:.3f} ± {r['stddev']:.3f}"
+                if r["mean"] > 0 and abs(r["mean"] - fastest_per_bench.get(bench, -1)) < 1e-9:
+                    cell = f"**{cell}**"
+            else:
+                cell = "—"
+            row.append(cell)
+        md_rows.append(row)
+
+    headers = ["Octave", "Host"] + bench_labels
+    return _md_table(headers, md_rows)
+
+
+def _html_octave_pivot_table(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    footnotes: dict[str, list[str]] | None = None,
+) -> str:
+    """Render Octave benchmarks as a pivoted HTML table."""
+    bench_labels, rows = _build_octave_pivot(benchmarks, hostnames)
+    if not rows:
+        return ""
+
+    fastest_per_bench: dict[str, float] = {}
+    for _octave_label, _host, bench_data in rows:
+        for bench, result in bench_data.items():
+            mn = result.get("mean", 0.0)
+            if mn > 0 and (bench not in fastest_per_bench or mn < fastest_per_bench[bench]):
+                fastest_per_bench[bench] = mn
+
+    header_cells = "<th>Octave</th><th>Host</th>" + "".join(f"<th>{b}</th>" for b in bench_labels)
+    html_rows = []
+    for octave_label, hostname, bench_data in rows:
+        cells = [f"<td><strong>{octave_label}</strong></td>", f"<td>{hostname}</td>"]
+        for bench in bench_labels:
+            if bench in bench_data:
+                r = bench_data[bench]
+                val = f"{r['mean']:.4f} ± {r['stddev']:.4f}"
+                is_fastest = (
+                    r["mean"] > 0 and abs(r["mean"] - fastest_per_bench.get(bench, -1)) < 1e-9
+                )
+                cls = ' class="fastest"' if is_fastest else ""
+                cells.append(f"<td{cls}>{val}</td>")
+            else:
+                cells.append("<td>—</td>")
+        html_rows.append("        <tr>" + "".join(cells) + "</tr>")
+
+    footnote_html = ""
+    if footnotes:
+        parts = [
+            f"<strong>{h}</strong>: {'; '.join(footnotes[h])}" for h in hostnames if h in footnotes
+        ]
+        if parts:
+            footnote_html = (
+                f'\n    <p class="bench-footnote">Missing results — {" · ".join(parts)}</p>'
+            )
+
+    return (
+        f"    <table>\n"
+        f"      <thead>\n"
+        f"        <tr>{header_cells}</tr>\n"
+        f"      </thead>\n"
+        f"      <tbody>\n"
+        f"{chr(10).join(html_rows)}\n"
+        f"      </tbody>\n"
+        f"    </table>" + footnote_html
     )
 
 
@@ -1537,9 +1708,7 @@ def generate_markdown(
             if footnotes:
                 lines.append("")
                 fn_parts = [
-                    f"**{h}**: {'; '.join(footnotes[h])}"
-                    for h in hostnames
-                    if h in footnotes
+                    f"**{h}**: {'; '.join(footnotes[h])}" for h in hostnames if h in footnotes
                 ]
                 if fn_parts:
                     lines.append(f"*Missing results — {' · '.join(fn_parts)}*")
@@ -1547,18 +1716,29 @@ def generate_markdown(
             continue
 
         if category in _PYTHON_PIVOT_CATEGORIES:
-            lines.append(
-                "Times in seconds (mean ± stddev). **Lowest** per benchmark is bold."
-            )
+            lines.append("Times in seconds (mean ± stddev). **Lowest** per benchmark is bold.")
             lines.append("")
             lines.append(_md_python_pivot_table(benchmarks, hostnames))
             footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
             if footnotes:
                 lines.append("")
                 fn_parts = [
-                    f"**{h}**: {'; '.join(footnotes[h])}"
-                    for h in hostnames
-                    if h in footnotes
+                    f"**{h}**: {'; '.join(footnotes[h])}" for h in hostnames if h in footnotes
+                ]
+                if fn_parts:
+                    lines.append(f"*Missing results — {' · '.join(fn_parts)}*")
+            lines.append("")
+            continue
+
+        if category in _OCTAVE_PIVOT_CATEGORIES:
+            lines.append("Times in seconds (mean ± stddev). **Lowest** per benchmark is bold.")
+            lines.append("")
+            lines.append(_md_octave_pivot_table(benchmarks, hostnames))
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            if footnotes:
+                lines.append("")
+                fn_parts = [
+                    f"**{h}**: {'; '.join(footnotes[h])}" for h in hostnames if h in footnotes
                 ]
                 if fn_parts:
                     lines.append(f"*Missing results — {' · '.join(fn_parts)}*")
@@ -1893,6 +2073,60 @@ def generate_html(
 
             footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
             table_html = _html_python_pivot_table(benchmarks, hostnames, footnotes)
+            section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+            html_sections.append(section)
+
+            chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: true }},
+          title: {{ display: true, text: '{title} (seconds, lower is better)' }}
+        }},
+        scales: {{
+          y: {{ title: {{ display: true, text: 'Time (seconds)' }} }}
+        }}
+      }}
+    }});""")
+            continue
+
+        if category in _OCTAVE_PIVOT_CATEGORIES:
+            bench_labels, oct_pivot_rows = _build_octave_pivot(benchmarks, hostnames)
+            labels_json = json.dumps(bench_labels)
+            oct_datasets: list[dict[str, Any]] = []
+            for oidx, (oct_label, hostname, bench_data) in enumerate(oct_pivot_rows):
+                data_points_oct: list[float | None] = []
+                for bench in bench_labels:
+                    if bench in bench_data:
+                        data_points_oct.append(round(bench_data[bench]["mean"], 4))
+                    else:
+                        data_points_oct.append(None)
+                oct_datasets.append(
+                    {
+                        "label": f"{oct_label} ({hostname})",
+                        "data": data_points_oct,
+                        "backgroundColor": _color_for(oidx) + "cc",
+                        "borderColor": _color_for(oidx),
+                        "borderWidth": 1,
+                    }
+                )
+            datasets_json = json.dumps(oct_datasets, indent=2)
+
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            table_html = _html_octave_pivot_table(benchmarks, hostnames, footnotes)
             section = f"""
     <section id="cat-{category}">
       <h2>{title}</h2>

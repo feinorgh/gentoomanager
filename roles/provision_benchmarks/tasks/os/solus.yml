@@ -39,5 +39,13 @@
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml
 
+- name: Install Octave (Solus)
+  ansible.builtin.command:
+    cmd: eopkg install -y octave
+  become: true
+  when: provision_benchmarks_install_octave | bool
+  changed_when: true
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

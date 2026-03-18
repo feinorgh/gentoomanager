@@ -1,0 +1,111 @@
+---
+# GNU Octave numerical performance benchmarks
+
+- name: Check Octave availability
+  ansible.builtin.command:
+    cmd: octave --version
+  register: run_benchmarks_octave_check
+  changed_when: false
+  failed_when: false
+  when: not run_benchmarks_is_windows
+
+- name: Create Octave benchmark script
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/octavebench.m"
+    mode: "0644"
+    content: |
+      more off;
+      bench = argv(){1};
+      switch bench
+        case 'matrix-multiply'
+          A = rand(500, 500); B = rand(500, 500); C = A * B;
+        case 'fft'
+          x = rand(1, 1048576); y = fft(x);
+        case 'sort'
+          x = rand(1, 1000000); y = sort(x);
+        case 'prime-sieve'
+          N = 1000000;
+          sieve = true(1, N);
+          sieve(1) = false;
+          for i = 2:floor(sqrt(N))
+            if sieve(i)
+              sieve(i * i:i:N) = false;
+            end
+          end
+        case 'lu-decomp'
+          [L, U, P] = lu(rand(500, 500));
+        case 'octave-all'
+          A = rand(500, 500); B = rand(500, 500); C = A * B;
+          x = rand(1, 1048576); y = fft(x);
+          x = rand(1, 1000000); y = sort(x);
+          N = 1000000;
+          sieve = true(1, N);
+          sieve(1) = false;
+          for i = 2:floor(sqrt(N))
+            if sieve(i)
+              sieve(i * i:i:N) = false;
+            end
+          end
+          [L, U, P] = lu(rand(500, 500));
+      end
+      exit(0);
+  when:
+    - not run_benchmarks_is_windows
+    - run_benchmarks_octave_check.rc == 0
+
+- name: Detect Octave version
+  ansible.builtin.command:
+    cmd: octave --norc --eval "disp(OCTAVE_VERSION)"
+  register: run_benchmarks_octave_version_raw
+  changed_when: false
+  failed_when: false
+  when:
+    - not run_benchmarks_is_windows
+    - run_benchmarks_octave_check.rc == 0
+
+- name: Set Octave version label fact
+  ansible.builtin.set_fact:
+    _run_benchmarks_octave_label: >-
+      octave-{{ (run_benchmarks_octave_version_raw.stdout | trim).split('.')[:2] | join('.') }}
+  when:
+    - not run_benchmarks_is_windows
+    - run_benchmarks_octave_check.rc == 0
+
+- name: Run Octave benchmarks
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_hyperfine_bin }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_runs }} \
+        --export-json {{ run_benchmarks_work_dir }}/octave.json \
+        --command-name "{{ _run_benchmarks_octave_label }}-matrix-multiply" \
+          "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m matrix-multiply" \
+        --command-name "{{ _run_benchmarks_octave_label }}-fft" \
+          "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m fft" \
+        --command-name "{{ _run_benchmarks_octave_label }}-sort" \
+          "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m sort" \
+        --command-name "{{ _run_benchmarks_octave_label }}-prime-sieve" \
+          "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m prime-sieve" \
+        --command-name "{{ _run_benchmarks_octave_label }}-lu-decomp" \
+          "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m lu-decomp" \
+        --command-name "{{ _run_benchmarks_octave_label }}-octave-all" \
+          "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m octave-all"
+    executable: /bin/bash
+  when:
+    - not run_benchmarks_is_windows
+    - run_benchmarks_octave_check.rc == 0
+  register: run_benchmarks_octave_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on Octave benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: octave benchmark exited
+      rc={{ run_benchmarks_octave_result.rc }}.
+      {{ run_benchmarks_octave_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - not run_benchmarks_is_windows
+    - run_benchmarks_octave_result is not skipped
+    - run_benchmarks_octave_result.rc | default(0) != 0

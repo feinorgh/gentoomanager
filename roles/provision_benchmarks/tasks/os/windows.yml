@@ -26,6 +26,7 @@
       - nodejs
       - ffmpeg
       - imagemagick
+      - octave
     state: present
   register: provision_benchmarks_choco_result
   failed_when: >-

@@ -52,6 +52,14 @@
   changed_when: true
   failed_when: false
 
+- name: Install Octave (Void Linux)
+  ansible.builtin.command:
+    cmd: xbps-install -y octave
+  become: true
+  when: provision_benchmarks_install_octave | bool
+  changed_when: true
+  failed_when: false
+
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml
 

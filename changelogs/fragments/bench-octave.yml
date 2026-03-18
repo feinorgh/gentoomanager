@@ -1,0 +1,3 @@
+minor_changes:
+  - "roles/run_benchmarks: add GNU Octave numerical benchmark category (matrix multiply, FFT, sort, prime sieve, LU decomposition)."
+  - "roles/provision_benchmarks: provision GNU Octave on all benchmark host OS families."

@@ -14,7 +14,7 @@
           printf "  %-15s MISSING\n" "$tool"
         fi
       done
-      for tool in clang rustc go ffmpeg; do
+      for tool in clang rustc go ffmpeg octave; do
         if command -v "$tool" >/dev/null 2>&1; then
           printf "  %-15s OK\n" "$tool"
         else

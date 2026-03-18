@@ -1,0 +1,72 @@
+---
+# GNU Octave numerical benchmarks on Windows.
+
+- name: Check Octave availability (Windows)
+  ansible.windows.win_shell: octave --version 2>&1
+  register: run_benchmarks_win_octave_check
+  changed_when: false
+  failed_when: false
+
+- name: Create Octave benchmark script (Windows)
+  ansible.windows.win_copy:
+    content: |
+      more off;
+      bench = argv(){1};
+      switch bench
+        case 'matrix-multiply'
+          A = rand(500, 500); B = rand(500, 500); C = A * B;
+        case 'fft'
+          x = rand(1, 1048576); y = fft(x);
+        case 'sort'
+          x = rand(1, 1000000); y = sort(x);
+        case 'prime-sieve'
+          N = 1000000;
+          sieve = true(1, N);
+          sieve(1) = false;
+          for i = 2:floor(sqrt(N))
+            if sieve(i)
+              sieve(i * i:i:N) = false;
+            end
+          end
+        case 'lu-decomp'
+          [L, U, P] = lu(rand(500, 500));
+        case 'octave-all'
+          A = rand(500, 500); B = rand(500, 500); C = A * B;
+          x = rand(1, 1048576); y = fft(x);
+          x = rand(1, 1000000); y = sort(x);
+          N = 1000000;
+          sieve = true(1, N);
+          sieve(1) = false;
+          for i = 2:floor(sqrt(N))
+            if sieve(i)
+              sieve(i * i:i:N) = false;
+            end
+          end
+          [L, U, P] = lu(rand(500, 500));
+      end
+      exit(0);
+    dest: "{{ run_benchmarks_work_dir_win }}\\octavebench.m"
+  when: run_benchmarks_win_octave_check.rc == 0
+
+- name: Run Octave benchmarks (Windows)
+  ansible.windows.win_shell: |
+    $wd = "{{ run_benchmarks_work_dir_win }}"
+    $hf = "hyperfine"
+    $runs = {{ run_benchmarks_runs }}
+    $warmup = {{ run_benchmarks_warmup }}
+
+    $ver = (octave --norc --eval "disp(OCTAVE_VERSION)" 2>&1) | Select-String -Pattern '\d+\.\d+' |
+           ForEach-Object { $_.Matches[0].Value } | Select-Object -First 1
+    if (-not $ver) { $ver = "unknown" }
+    $label = "octave-$ver"
+
+    $benches = @('matrix-multiply','fft','sort','prime-sieve','lu-decomp','octave-all')
+    $cmds = @()
+    foreach ($b in $benches) {
+      $cmds += "--command-name '${label}-${b}' 'octave --norc $wd\octavebench.m $b'"
+    }
+    $argStr = $cmds -join ' '
+    Invoke-Expression "$hf --runs $runs --warmup $warmup --export-json $wd\octave.json $argStr"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_win_octave_check.rc == 0

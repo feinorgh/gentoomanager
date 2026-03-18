@@ -80,5 +80,13 @@
   when: provision_benchmarks_install_mold | bool
   failed_when: false
 
+- name: Install Octave (Gentoo)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_octave_packages['Gentoo'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_octave | bool
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

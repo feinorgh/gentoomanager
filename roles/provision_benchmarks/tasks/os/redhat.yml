@@ -187,5 +187,15 @@
   changed_when: true
   failed_when: false
 
+- name: Install Octave (Red Hat)
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      {{ provision_benchmarks_octave_packages['RedHat'] | join(' ') }}
+  become: true
+  when: provision_benchmarks_install_octave | bool
+  changed_when: true
+  failed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

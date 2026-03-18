@@ -204,3 +204,20 @@ provision_benchmarks_mold_packages:
     - mold
   FreeBSD:
     - devel/mold
+
+provision_benchmarks_install_octave: true
+
+# octave package name per OS family (GNU Octave numerical computing)
+provision_benchmarks_octave_packages:
+  Gentoo:
+    - sci-mathematics/octave
+  RedHat:
+    - octave
+  Debian:
+    - octave
+  Archlinux:
+    - octave
+  Suse:
+    - octave
+  FreeBSD:
+    - math/octave

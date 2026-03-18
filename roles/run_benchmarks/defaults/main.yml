@@ -40,7 +40,7 @@ run_benchmarks_gimp_timeout_sec: 900
 run_benchmarks_cpu_affinity: ""
 
 # Categories to run (empty list = all)
-# Valid: compression, crypto, compiler, python, ffmpeg, coreutils, opencv, startup, gentoo_build_times,
+# Valid: compression, crypto, compiler, python, octave, ffmpeg, coreutils, opencv, startup, gentoo_build_times,
 #        numeric, sqlite, memory, process, disk, linker
 run_benchmarks_categories: []
 
@@ -51,6 +51,7 @@ run_benchmarks_windows_categories:
   - crypto
   - compiler
   - python
+  - octave
   - coreutils
   - sqlite
   - numeric
@@ -185,6 +186,7 @@ run_benchmarks_hypervisor_categories:
   - coreutils
   - compiler
   - python
+  - octave
   - ffmpeg
   - imagemagick
   - opencv
