@@ -59,5 +59,12 @@
   when: provision_benchmarks_install_opencv | bool
   failed_when: false
 
+- name: Install Botan CLI (SUSE)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_botan_packages['Suse'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_botan | bool
+  failed_when: false
+
 - name: Verify installed tools
-  ansible.builtin.include_tasks: verify.yml

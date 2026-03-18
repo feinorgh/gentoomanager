@@ -25,6 +25,7 @@
     - ffmpeg
     - sqlite
     - python3Packages.numpy
+    - botan3
   changed_when: true
   failed_when: false
 

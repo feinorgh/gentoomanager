@@ -36,6 +36,14 @@
   changed_when: true
   failed_when: false
 
+- name: Install Botan CLI (Void Linux)
+  ansible.builtin.command:
+    cmd: xbps-install -y botan3
+  become: true
+  when: provision_benchmarks_install_botan | bool
+  changed_when: true
+  failed_when: false
+
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml
 

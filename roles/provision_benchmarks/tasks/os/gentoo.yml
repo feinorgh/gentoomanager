@@ -64,5 +64,12 @@
   when: provision_benchmarks_install_opencv | bool
   failed_when: false
 
+- name: Install Botan CLI (Gentoo)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_botan_packages['Gentoo'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_botan | bool
+  failed_when: false
+
 - name: Verify installed tools
-  ansible.builtin.include_tasks: verify.yml
