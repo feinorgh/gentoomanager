@@ -76,4 +76,12 @@
   when: provision_benchmarks_install_botan | bool
   failed_when: false
 
+- name: Install mold linker (Debian)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_mold_packages['Debian'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_mold | bool
+  failed_when: false
+
 - name: Verify installed tools

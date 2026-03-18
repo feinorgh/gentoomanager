@@ -177,4 +177,14 @@
   changed_when: true
   failed_when: false
 
+- name: Install mold linker (Red Hat)
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      {{ provision_benchmarks_mold_packages['RedHat'] | join(' ') }}
+  become: true
+  when: provision_benchmarks_install_mold | bool
+  changed_when: true
+  failed_when: false
+
 - name: Verify installed tools

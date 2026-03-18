@@ -187,3 +187,20 @@ provision_benchmarks_botan_packages:
     - botan3
   FreeBSD:
     - security/botan3
+
+provision_benchmarks_install_mold: true
+
+# mold package name per OS family (modern fast linker, used by compiler benchmarks)
+provision_benchmarks_mold_packages:
+  Gentoo:
+    - sys-devel/mold
+  RedHat:
+    - mold
+  Debian:
+    - mold
+  Archlinux:
+    - mold
+  Suse:
+    - mold
+  FreeBSD:
+    - devel/mold

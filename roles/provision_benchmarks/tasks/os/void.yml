@@ -44,6 +44,14 @@
   changed_when: true
   failed_when: false
 
+- name: Install mold linker (Void Linux)
+  ansible.builtin.command:
+    cmd: xbps-install -y mold
+  become: true
+  when: provision_benchmarks_install_mold | bool
+  changed_when: true
+  failed_when: false
+
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml
 

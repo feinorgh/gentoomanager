@@ -1,0 +1,5 @@
+minor_changes:
+  - "roles/provision_benchmarks: added mold modern linker to provisioning across all
+    supported OS families (Gentoo, Red Hat, Debian, Arch, SUSE, FreeBSD, NixOS, Void Linux)
+    via the new provision_benchmarks_install_mold / provision_benchmarks_mold_packages
+    variables, enabling linker comparison benchmarks."
