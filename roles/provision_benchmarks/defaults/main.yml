@@ -171,6 +171,8 @@ provision_benchmarks_opencv_packages:
     - python-opencv
   Suse:
     - python3-opencv
+  FreeBSD:
+    - py311-opencv
 provision_benchmarks_install_botan: true
 
 # botan package name per OS family (provides the botan CLI used by the benchmark)
