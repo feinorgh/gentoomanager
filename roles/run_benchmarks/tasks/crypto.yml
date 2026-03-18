@@ -287,63 +287,147 @@
     - run_benchmarks_crypto_speed_result.rc | default(0) != 0
 
 # ── 6. Asymmetric / public-key benchmarks ────────────────────────────────
+#
+# Key types benchmarked and their NIST/industry status (2025):
+#   RSA-2048   — acceptable to 2030 (NIST SP 800-57); legacy threshold
+#   RSA-3072   — NIST minimum for post-2030 security
+#   RSA-4096   — well above requirements; used for long-lived CA keys
+#   ECDSA P-256 — 128-bit security; widely deployed; acceptable for commercial use
+#   ECDSA P-384 — 192-bit security; CNSA Suite 2.0 minimum for new systems
+#   ECDSA P-521 — 260-bit security; maximum classical NIST curve strength
+#   Ed25519    — 128-bit security; FIPS 186-5; fast, constant-time
+#   Ed448      — 224-bit security; FIPS 186-5; constant-time
+#   ML-DSA-44/65/87 — FIPS 204 (post-quantum); 128/192/256-bit PQ security
+#   SLH-DSA-SHA2-128f — FIPS 205 (post-quantum, fast variant); 128-bit PQ
+#
+# Post-quantum algorithms require OpenSSL 3.5+ (April 2025) and are
+# detected at runtime; the benchmark skips them gracefully if unavailable.
+#
+# All algorithms run the same 1000-iteration inner loop so wall-clock totals
+# are directly comparable across key types.
 - name: Run OpenSSL asymmetric benchmarks
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
 
-      # Generate keys if not already present
+      N=1000
+
+      # ── Generate classical keys ──────────────────────────────────────────
       [ -f rsa2048.pem ] || openssl genrsa -out rsa2048.pem 2048 2>/dev/null
+      [ -f rsa3072.pem ] || openssl genrsa -out rsa3072.pem 3072 2>/dev/null
       [ -f rsa4096.pem ] || openssl genrsa -out rsa4096.pem 4096 2>/dev/null
       [ -f ec256.pem ]   || openssl ecparam -genkey -name prime256v1 -out ec256.pem 2>/dev/null
+      [ -f ec384.pem ]   || openssl ecparam -genkey -name secp384r1  -out ec384.pem 2>/dev/null
+      [ -f ec521.pem ]   || openssl ecparam -genkey -name secp521r1  -out ec521.pem 2>/dev/null
       [ -f ed25519.pem ] || openssl genpkey -algorithm Ed25519 -out ed25519.pem 2>/dev/null
+      [ -f ed448.pem ]   || openssl genpkey -algorithm Ed448   -out ed448.pem   2>/dev/null
 
-      # Create data to sign (1 KiB: large enough to be realistic, small enough
-      # that I/O does not dominate the crypto math)
+      # ── Probe and generate post-quantum keys (OpenSSL 3.5+, non-fatal) ──
+      [ -f mldsa44.pem ]    || openssl genpkey -algorithm ML-DSA-44          -out mldsa44.pem    2>/dev/null || true
+      [ -f mldsa65.pem ]    || openssl genpkey -algorithm ML-DSA-65          -out mldsa65.pem    2>/dev/null || true
+      [ -f mldsa87.pem ]    || openssl genpkey -algorithm ML-DSA-87          -out mldsa87.pem    2>/dev/null || true
+      [ -f slhdsa128f.pem ] || openssl genpkey -algorithm SLH-DSA-SHA2-128f  -out slhdsa128f.pem 2>/dev/null || true
+
+      # ── Data to sign (1 KiB: realistic without I/O dominating crypto) ───
       dd if=/dev/urandom of=signdata.bin bs=1k count=1 2>/dev/null
 
+      # ── Derive public keys ───────────────────────────────────────────────
+      openssl rsa  -in rsa2048.pem -pubout -out rsa2048pub.pem 2>/dev/null
+      openssl rsa  -in rsa3072.pem -pubout -out rsa3072pub.pem 2>/dev/null
+      openssl rsa  -in rsa4096.pem -pubout -out rsa4096pub.pem 2>/dev/null
+      openssl ec   -in ec256.pem   -pubout -out ec256pub.pem   2>/dev/null
+      openssl ec   -in ec384.pem   -pubout -out ec384pub.pem   2>/dev/null
+      openssl ec   -in ec521.pem   -pubout -out ec521pub.pem   2>/dev/null
+      openssl pkey -in ed25519.pem -pubout -out ed25519pub.pem 2>/dev/null
+      openssl pkey -in ed448.pem   -pubout -out ed448pub.pem   2>/dev/null
+      [ -f mldsa44.pem ]    && openssl pkey -in mldsa44.pem    -pubout -out mldsa44pub.pem    2>/dev/null || true
+      [ -f mldsa65.pem ]    && openssl pkey -in mldsa65.pem    -pubout -out mldsa65pub.pem    2>/dev/null || true
+      [ -f mldsa87.pem ]    && openssl pkey -in mldsa87.pem    -pubout -out mldsa87pub.pem    2>/dev/null || true
+      [ -f slhdsa128f.pem ] && openssl pkey -in slhdsa128f.pem -pubout -out slhdsa128fpub.pem 2>/dev/null || true
+
+      # ── Pre-generate reference signatures for verify loops ───────────────
+      openssl dgst   -sha256 -sign rsa2048.pem   -out sig_rsa2048.bin   signdata.bin
+      openssl dgst   -sha256 -sign rsa3072.pem   -out sig_rsa3072.bin   signdata.bin
+      openssl dgst   -sha256 -sign rsa4096.pem   -out sig_rsa4096.bin   signdata.bin
+      openssl dgst   -sha256 -sign ec256.pem     -out sig_ec256.bin     signdata.bin
+      openssl dgst   -sha256 -sign ec384.pem     -out sig_ec384.bin     signdata.bin
+      openssl dgst   -sha256 -sign ec521.pem     -out sig_ec521.bin     signdata.bin
+      openssl pkeyutl -sign -inkey ed25519.pem   -in signdata.bin -out sig_ed25519.bin
+      openssl pkeyutl -sign -inkey ed448.pem     -in signdata.bin -out sig_ed448.bin
+      [ -f mldsa44.pem ]    && openssl pkeyutl -sign -inkey mldsa44.pem    -in signdata.bin -out sig_mldsa44.bin    2>/dev/null || true
+      [ -f mldsa65.pem ]    && openssl pkeyutl -sign -inkey mldsa65.pem    -in signdata.bin -out sig_mldsa65.bin    2>/dev/null || true
+      [ -f mldsa87.pem ]    && openssl pkeyutl -sign -inkey mldsa87.pem    -in signdata.bin -out sig_mldsa87.bin    2>/dev/null || true
+      [ -f slhdsa128f.pem ] && openssl pkeyutl -sign -inkey slhdsa128f.pem -in signdata.bin -out sig_slhdsa128f.bin 2>/dev/null || true
+
+      # ── Build hyperfine command list ─────────────────────────────────────
       CMDS=()
 
-      # RSA-2048 sign — ~2-5 ms each; loop 1000× to reach >200 ms per run
-      CMDS+=(--command-name "rsa-2048-sign-1000x"
-        "for _i in \$(seq 1000); do openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "rsa-2048-sign-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "rsa-2048-verify-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin; done")
 
-      # RSA-2048 verify — pre-generate sig so verify loop is clean
-      openssl rsa -in rsa2048.pem -pubout -out rsa2048pub.pem 2>/dev/null
-      openssl dgst -sha256 -sign rsa2048.pem -out sig_rsa2048.bin signdata.bin
-      CMDS+=(--command-name "rsa-2048-verify-1000x"
-        "for _i in \$(seq 1000); do openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin; done")
+      CMDS+=(--command-name "rsa-3072-sign-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -sign rsa3072.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "rsa-3072-verify-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -verify rsa3072pub.pem -signature sig_rsa3072.bin signdata.bin; done")
 
-      # RSA-4096 sign — ~10-20 ms each; loop 1000× to reach >500 ms per run
-      CMDS+=(--command-name "rsa-4096-sign-1000x"
-        "for _i in \$(seq 1000); do openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "rsa-4096-sign-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "rsa-4096-verify-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -verify rsa4096pub.pem -signature sig_rsa4096.bin signdata.bin; done")
 
-      # RSA-4096 verify — pre-generate sig so verify loop is clean
-      openssl rsa -in rsa4096.pem -pubout -out rsa2048pub.pem 2>/dev/null
-      openssl dgst -sha256 -sign rsa4096.pem -out sig_rsa4096.bin signdata.bin
-      CMDS+=(--command-name "rsa-4096-verify-1000x"
-        "for _i in \$(seq 1000); do openssl dgst -sha256 -verify rsa4096pub.pem -signature sig_rsa4096.bin signdata.bin; done")
+      CMDS+=(--command-name "ecdsa-p256-sign-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "ecdsa-p256-verify-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin; done")
 
-      # ECDSA P-256 sign — ~1-3 ms each; loop 1000× to reach >200 ms per run
-      CMDS+=(--command-name "ecdsa-p256-sign-1000x"
-        "for _i in \$(seq 1000); do openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "ecdsa-p384-sign-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -sign ec384.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "ecdsa-p384-verify-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -verify ec384pub.pem -signature sig_ec384.bin signdata.bin; done")
 
-      # ECDSA P-256 verify
-      openssl ec -in ec256.pem -pubout -out ec256pub.pem 2>/dev/null
-      openssl dgst -sha256 -sign ec256.pem -out sig_ec256.bin signdata.bin
-      CMDS+=(--command-name "ecdsa-p256-verify-1000x"
-        "for _i in \$(seq 1000); do openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin; done")
+      CMDS+=(--command-name "ecdsa-p521-sign-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -sign ec521.pem -out sig.bin signdata.bin; done")
+      CMDS+=(--command-name "ecdsa-p521-verify-${N}x"
+        "for _i in \$(seq $N); do openssl dgst -sha256 -verify ec521pub.pem -signature sig_ec521.bin signdata.bin; done")
 
-      # Ed25519 sign — extremely fast (~0.1 ms); loop 1000× to reach >100 ms
-      CMDS+=(--command-name "ed25519-sign-1000x"
-        "for _i in \$(seq 1000); do openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin; done")
+      CMDS+=(--command-name "ed25519-sign-${N}x"
+        "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin; done")
+      CMDS+=(--command-name "ed25519-verify-${N}x"
+        "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin; done")
 
-      # Ed25519 verify
-      openssl pkey -in ed25519.pem -pubout -out ed25519pub.pem 2>/dev/null
-      openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig_ed25519.bin
-      CMDS+=(--command-name "ed25519-verify-1000x"
-        "for _i in \$(seq 1000); do openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin; done")
+      CMDS+=(--command-name "ed448-sign-${N}x"
+        "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey ed448.pem -in signdata.bin -out sig.bin; done")
+      CMDS+=(--command-name "ed448-verify-${N}x"
+        "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey ed448pub.pem -in signdata.bin -sigfile sig_ed448.bin; done")
+
+      # Post-quantum: add only if key generation and pre-signing succeeded
+      if [ -f mldsa44pub.pem ] && [ -f sig_mldsa44.bin ]; then
+        CMDS+=(--command-name "ml-dsa-44-sign-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey mldsa44.pem -in signdata.bin -out sig.bin; done")
+        CMDS+=(--command-name "ml-dsa-44-verify-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey mldsa44pub.pem -in signdata.bin -sigfile sig_mldsa44.bin; done")
+      fi
+      if [ -f mldsa65pub.pem ] && [ -f sig_mldsa65.bin ]; then
+        CMDS+=(--command-name "ml-dsa-65-sign-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey mldsa65.pem -in signdata.bin -out sig.bin; done")
+        CMDS+=(--command-name "ml-dsa-65-verify-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey mldsa65pub.pem -in signdata.bin -sigfile sig_mldsa65.bin; done")
+      fi
+      if [ -f mldsa87pub.pem ] && [ -f sig_mldsa87.bin ]; then
+        CMDS+=(--command-name "ml-dsa-87-sign-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey mldsa87.pem -in signdata.bin -out sig.bin; done")
+        CMDS+=(--command-name "ml-dsa-87-verify-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey mldsa87pub.pem -in signdata.bin -sigfile sig_mldsa87.bin; done")
+      fi
+      if [ -f slhdsa128fpub.pem ] && [ -f sig_slhdsa128f.bin ]; then
+        CMDS+=(--command-name "slh-dsa-sha2-128f-sign-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey slhdsa128f.pem -in signdata.bin -out sig.bin; done")
+        CMDS+=(--command-name "slh-dsa-sha2-128f-verify-${N}x"
+          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey slhdsa128fpub.pem -in signdata.bin -sigfile sig_slhdsa128f.bin; done")
+      fi
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
@@ -506,8 +590,16 @@
     state: absent
   loop:
     - "{{ run_benchmarks_work_dir }}/rsa2048.pem"
+    - "{{ run_benchmarks_work_dir }}/rsa3072.pem"
     - "{{ run_benchmarks_work_dir }}/rsa4096.pem"
     - "{{ run_benchmarks_work_dir }}/ec256.pem"
+    - "{{ run_benchmarks_work_dir }}/ec384.pem"
+    - "{{ run_benchmarks_work_dir }}/ec521.pem"
     - "{{ run_benchmarks_work_dir }}/ed25519.pem"
+    - "{{ run_benchmarks_work_dir }}/ed448.pem"
+    - "{{ run_benchmarks_work_dir }}/mldsa44.pem"
+    - "{{ run_benchmarks_work_dir }}/mldsa65.pem"
+    - "{{ run_benchmarks_work_dir }}/mldsa87.pem"
+    - "{{ run_benchmarks_work_dir }}/slhdsa128f.pem"
     - "{{ run_benchmarks_work_dir }}/gnupg"
   failed_when: false
