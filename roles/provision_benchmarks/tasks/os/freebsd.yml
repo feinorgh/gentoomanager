@@ -1,7 +1,7 @@
 ---
-# FreeBSD – install from ports tree using BSD make.
-# community.general.make uses GNU make which is incompatible with BSD Makefiles;
-# use ansible.builtin.command with /usr/bin/make (BSD make) instead.
+# FreeBSD – install everything from the ports tree using BSD make.
+# Mixing pkg (binary) and ports (source) is bad practice; all packages are
+# built from source via /usr/bin/make install BATCH=yes.
 
 - name: Ensure ports tree is available and up to date
   ansible.builtin.git: # noqa: latest[git]
@@ -20,7 +20,13 @@
     {{ provision_benchmarks_packages['FreeBSD'] +
        [provision_benchmarks_freebsd_hyperfine_port] +
        ([provision_benchmarks_freebsd_ffmpeg_port] if provision_benchmarks_install_ffmpeg | bool else []) +
-       (provision_benchmarks_numpy_packages['FreeBSD'] if provision_benchmarks_install_numpy | bool else []) }}
+       (provision_benchmarks_numpy_packages['FreeBSD'] if provision_benchmarks_install_numpy | bool else []) +
+       (['graphics/gimp'] if provision_benchmarks_install_gimp | bool else []) +
+       (['graphics/inkscape'] if provision_benchmarks_install_inkscape | bool else []) +
+       (provision_benchmarks_opencv_packages['FreeBSD'] if provision_benchmarks_install_opencv | bool else []) +
+       (provision_benchmarks_botan_packages['FreeBSD'] if provision_benchmarks_install_botan | bool else []) +
+       (provision_benchmarks_mold_packages['FreeBSD'] if provision_benchmarks_install_mold | bool else []) +
+       (provision_benchmarks_octave_packages['FreeBSD'] if provision_benchmarks_install_octave | bool else []) }}
   register: provision_benchmarks_freebsd_pkg_check
   failed_when: false
   changed_when: false
@@ -54,55 +60,6 @@
     state: link
     force: true
   become: true
-  failed_when: false
-
-
-- name: Install GIMP (FreeBSD)
-  ansible.builtin.package:
-    name: graphics/gimp
-    state: present
-  become: true
-  when: provision_benchmarks_install_gimp | bool
-  failed_when: false
-
-- name: Install Inkscape (FreeBSD)
-  ansible.builtin.package:
-    name: graphics/inkscape
-    state: present
-  become: true
-  when: provision_benchmarks_install_inkscape | bool
-  failed_when: false
-
-- name: Install OpenCV Python bindings (FreeBSD)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_opencv_packages['FreeBSD'] }}"
-    state: present
-  become: true
-  when: provision_benchmarks_install_opencv | bool
-  failed_when: false
-
-- name: Install Botan CLI (FreeBSD)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_botan_packages['FreeBSD'] }}"
-    state: present
-  become: true
-  when: provision_benchmarks_install_botan | bool
-  failed_when: false
-
-- name: Install mold linker (FreeBSD)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_mold_packages['FreeBSD'] }}"
-    state: present
-  become: true
-  when: provision_benchmarks_install_mold | bool
-  failed_when: false
-
-- name: Install Octave (FreeBSD)
-  ansible.builtin.package:
-    name: "{{ provision_benchmarks_octave_packages['FreeBSD'] }}"
-    state: present
-  become: true
-  when: provision_benchmarks_install_octave | bool
   failed_when: false
 
 - name: Verify installed tools
