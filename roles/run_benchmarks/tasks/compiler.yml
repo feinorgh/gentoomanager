@@ -156,21 +156,21 @@
           CMDS+=(--command-name "{{ cc_label }}-${OPTLABEL}-compile"
             "{{ cc_exe }} $opt -o bench_{{ cc_label }}_${OPTLABEL} bench.c -lm")
         done
-{% if cc_label.startswith('gcc') %}
+      {% if cc_label.startswith('gcc') %}
         # GCC Graphite polyhedral loop optimiser (requires GCC built with --with-isl)
         if {{ cc_exe }} -O3 -floop-nest-optimize -o bench_{{ cc_label }}_graphite_probe bench.c -lm 2>/dev/null; then
           CMDS+=(--command-name "{{ cc_label }}-O3_graphite-compile"
             "{{ cc_exe }} -O3 -floop-nest-optimize -o bench_{{ cc_label }}_O3_graphite bench.c -lm")
         fi
         rm -f bench_{{ cc_label }}_graphite_probe
-{% elif cc_label.startswith('clang') %}
+      {% elif cc_label.startswith('clang') %}
         # Clang Polly polyhedral loop optimiser (requires Clang built with Polly)
         if {{ cc_exe }} -O3 -mllvm -polly -o bench_{{ cc_label }}_polly_probe bench.c -lm 2>/dev/null; then
           CMDS+=(--command-name "{{ cc_label }}-O3_polly-compile"
             "{{ cc_exe }} -O3 -mllvm -polly -o bench_{{ cc_label }}_O3_polly bench.c -lm")
         fi
         rm -f bench_{{ cc_label }}_polly_probe
-{% endif %}
+      {% endif %}
       fi
       {% endif %}
       {% endfor %}
@@ -218,19 +218,19 @@
               "./bench_{{ cc_label }}_${OPTLABEL}")
           fi
         done
-{% if cc_label.startswith('gcc') %}
+      {% if cc_label.startswith('gcc') %}
         # GCC Graphite runtime
         if {{ cc_exe }} -O3 -floop-nest-optimize -o "bench_{{ cc_label }}_O3_graphite" bench.c -lm 2>/dev/null; then
           CMDS+=(--command-name "{{ cc_label }}-O3_graphite-run"
             "./bench_{{ cc_label }}_O3_graphite")
         fi
-{% elif cc_label.startswith('clang') %}
+      {% elif cc_label.startswith('clang') %}
         # Clang Polly runtime
         if {{ cc_exe }} -O3 -mllvm -polly -o "bench_{{ cc_label }}_O3_polly" bench.c -lm 2>/dev/null; then
           CMDS+=(--command-name "{{ cc_label }}-O3_polly-run"
             "./bench_{{ cc_label }}_O3_polly")
         fi
-{% endif %}
+      {% endif %}
       fi
       {% endif %}
       {% endfor %}
