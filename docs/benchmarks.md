@@ -38,6 +38,8 @@ reports with charts.
   - [GIMP](#gimp)
   - [Inkscape](#inkscape)
   - [Application Startup](#application-startup)
+  - [Bash](#bash)
+  - [Boot Time](#boot-time)
   - [Gentoo Build Times](#gentoo-build-times)
 - [Reports](#reports)
   - [Markdown Report](#markdown-report)
@@ -638,25 +640,24 @@ The project is generated at benchmark time by
 
 ### Python
 
-Tests Python interpreter performance on micro-benchmarks.
+Tests Python interpreter performance on micro-benchmarks using a single
+`pybench.py` script.
 
-| Benchmark | Iterations | Description                            |
-|-----------|-----------|----------------------------------------|
-| fibonacci  | —         | Recursive Fibonacci(32)                |
-| json-serde | —         | JSON encode/decode round-trip          |
-| regex      | —         | Regex IP address matching              |
-| hashlib    | —         | MD5 hashing                            |
-| numpy      | —         | NumPy matrix operations (if installed) |
-| bench_json | 200       | JSON encode/decode (inline script)     |
-| bench_regex | 500      | Regex matching (inline script)         |
-| bench_hash | 200       | hashlib hashing (inline script)        |
-| bench_list_comprehension | 500 | List comprehension (inline script) |
-| bench_dict_operations | 500  | Dict operations (inline script)    |
+| Benchmark           | Description                                     |
+|---------------------|-------------------------------------------------|
+| prime-sieve         | Sieve of Eratosthenes to 2 000 000              |
+| json-serde          | JSON encode/decode round-trip (200× over 100-key dict) |
+| regex               | Regex IP-address matching (500× over 1000-repeat string) |
+| sha256-hash         | SHA-256 hash of 1 MiB buffer (200× iterations)  |
+| list-comprehension  | `[x**2 for x in range(10000)]` — 500× iterations |
+| dict-operations     | Dict build + `sum(values())` for 10 000 keys (500×) |
+| python-all          | Composite: all six sub-benchmarks in sequence   |
 
 The `python` report table uses a pivot layout: Python version label (e.g.
 `py3.13`) appears as rows, and benchmark names appear as columns.  The
 benchmark discovers all `python3.X` interpreters on the host, excluding
-`python3.X-config` scripts.
+`python3.X-config` scripts.  NumPy benchmarks are in the separate `numeric`
+category, not here.
 
 ### Octave
 
@@ -679,15 +680,28 @@ benchmark names appear as columns, and results are aggregated per host.
 
 ### Numeric
 
-Tests floating-point performance using NumPy (requires numpy installed).
+Tests floating-point performance using compiled C programs and NumPy.
+Results are written to **two separate JSON files**.
 
-| Benchmark   | Description                             |
-|-------------|-----------------------------------------|
-| matmul      | Matrix multiplication                   |
-| fft         | Fast Fourier Transform                  |
-| svd         | Singular Value Decomposition            |
-| linalg-norm | Linear algebra norm computation         |
-| random-gen  | Random number generation (PCG-64)       |
+**`numeric_compiled.json`** — compiled C benchmarks (no external dependencies):
+
+| Benchmark          | Description                                    |
+|--------------------|------------------------------------------------|
+| nbody-30m          | N-body simulation, 30 000 000 steps            |
+| mandelbrot-6000    | Mandelbrot set, 6 000×6 000 grid               |
+| spectral-norm-1000 | Spectral norm of a 1 000×1 000 matrix          |
+
+**`numeric_numpy.json`** — NumPy benchmarks (skipped if NumPy not installed):
+
+| Benchmark        | Description                                      |
+|------------------|--------------------------------------------------|
+| numpy-matmul-2000| 2 000×2 000 matrix multiplication                |
+| numpy-fft2-2048  | 2D FFT on a 2 048×2 048 array                   |
+| numpy-sort-10m   | Sort 10 000 000 random floats                    |
+
+These benchmarks stress FP vectorisation, FMA, and SIMD instruction generation;
+they are highly sensitive to `-march=native`, LTO, and compiler optimisation
+level.
 
 ### SQLite
 
@@ -813,16 +827,42 @@ measurement:
 
 ### Coreutils
 
-Tests common command-line utilities on multi-megabyte datasets.
+Tests common command-line utilities on multi-megabyte datasets.  Results are
+split across three JSON files.
 
-| Benchmark | Tool  | Description                  |
-|-----------|-------|------------------------------|
-| sort      | sort  | Sort a large text file       |
-| find      | find  | Recursive file search        |
-| sed       | sed   | Stream text transformation   |
-| grep      | grep  | Pattern matching             |
-| wc        | wc    | Line/word/byte counting      |
-| diff      | diff  | File comparison              |
+**`coreutils.json`** — text-processing and file-system utilities:
+
+| Benchmark   | Tool | Description                                      |
+|-------------|------|--------------------------------------------------|
+| sort        | sort | Sort a large text file                           |
+| sort-unique | sort | Sort with deduplication (`-u`)                   |
+| wc-lines    | wc   | Line count of the sort dataset                   |
+| grep-pattern| grep | Count lines matching `^[A-Z].*[0-9]$`            |
+| find-files  | find | Recursive `.txt` search across 10 000-file tree  |
+| find-exec   | find | Recursive find with `wc -c` per file             |
+| tar-create  | tar  | Create archive from 10 000-file tree             |
+| du-summary  | du   | `du -sh` on the 10 000-file tree                 |
+
+**`git.json`** — Git porcelain commands on a synthetic 300-commit repo:
+
+| Benchmark    | Description                                          |
+|--------------|------------------------------------------------------|
+| git-log      | `git log --oneline` (full history)                   |
+| git-log-stat | `git log --stat --quiet`                             |
+| git-diff     | `git diff feature..<main>` across branches           |
+| git-blame    | `git blame file_1.txt`                               |
+| git-status   | `git status`                                         |
+
+Git benchmarks are skipped if `git` is not installed.
+
+**`diff.json`** — text-comparison utilities:
+
+| Benchmark | Tool | Description                           |
+|-----------|------|---------------------------------------|
+| diff      | diff | Compare two 400 000-line half-files   |
+| comm      | comm | Sorted-set operations on same files   |
+
+Diff/comm benchmarks are skipped if `diff` is not installed.
 
 The `findtree` fixture consists of **10 000 files** arranged as
 100 directories × 2 subdirectories × 50 files each.  If an existing tree
@@ -977,6 +1017,52 @@ pipeline at a meaningful resolution.
 
 > **Note:** Uses Inkscape 1.x CLI syntax (`--export-type`, `--export-dpi`, `--export-filename`).
 > Inkscape 0.9x is not supported.
+
+### Bash
+
+Benchmarks bash shell interpreter performance on common build-system workload
+patterns.  All execution benchmarks run with `bash --norc --noprofile` so
+results reflect the interpreter, not rc-file loading overhead.
+
+**File:** `bash.json`  
+**Platform:** Linux/Unix only (not available on Windows).
+
+| Benchmark    | Description                                                   |
+|--------------|---------------------------------------------------------------|
+| startup-bare | Binary load + exit (`bash --norc --noprofile -c true`)        |
+| arith-loop   | Integer arithmetic via `(( ))` — 100 000-iteration loop       |
+| str-concat   | String concatenation via `+=` — 30 000 appends                |
+| str-subst    | Global pattern substitution `${s//x/y}` on 5 000-char string |
+| array-build  | Indexed array: build 3 000 elements + full iteration          |
+| assoc-array  | Associative array (`declare -A`): fill 2 000 keys + key scan  |
+| func-calls   | Function-call overhead — 5 000 calls (no subshells)           |
+| cmd-subst    | `$( )` command substitution — 200 iterations (always forks)   |
+| while-read   | `while IFS= read -r` loop over 3 000 lines                    |
+| regex-match  | `[[ "$s" =~ ERE ]]` in a 5 000-iteration loop                 |
+| glob-match   | `[[ "$s" == *pattern* ]]` in a 10 000-iteration loop          |
+
+### Boot Time
+
+Collects system boot timing metrics.  Prefers `systemd-analyze` for accurate
+phase breakdowns; falls back to `dmesg` timestamp parsing on non-systemd hosts
+(OpenRC, SysVinit, etc.).
+
+**File:** `boot_times.json`  
+**Platform:** Linux/Unix only (not available on Windows).
+
+| Metric        | Source                    | Description                                                    |
+|---------------|---------------------------|----------------------------------------------------------------|
+| firmware_sec  | systemd-analyze only      | UEFI/BIOS firmware initialisation time                         |
+| loader_sec    | systemd-analyze only      | Boot loader (GRUB/systemd-boot) time                           |
+| kernel_sec    | systemd-analyze / dmesg   | Kernel initialisation up to userspace handoff                  |
+| userspace_sec | systemd-analyze / dmesg   | Time from kernel handoff to `graphical.target` (or last entry) |
+| graphical_sec | systemd-analyze only      | Time to reach `graphical.target`                               |
+| total_sec     | systemd-analyze / dmesg   | Total measured boot duration                                   |
+| top_services  | systemd-analyze only      | Top 15 slowest systemd units by activation time                |
+
+On non-systemd hosts only `kernel_sec`, `userspace_sec`, and `total_sec` are
+populated; `firmware_sec`, `loader_sec`, `graphical_sec`, and `top_services`
+are `null`.
 
 ### Application Startup
 
@@ -1247,7 +1333,7 @@ The following categories have Windows-specific task variants (`*_win.yml`):
 | `compression` | Archive compress/decompress (7-Zip, tar) |
 | `crypto` | Hash and cipher throughput (certutil, OpenSSL) |
 | `compiler` | C/Rust/Go compile time (MSVC, gcc/MinGW, rustc, go) |
-| `python` | Python stdlib workloads (fibonacci, JSON, regex, sort) |
+| `python` | Python stdlib workloads (prime-sieve, JSON, regex, SHA-256 hash, list comprehension, dict operations) |
 | `octave` | GNU Octave numerical benchmarks (matrix-multiply, fft, sort, prime-sieve, lu-decomp) |
 | `coreutils` | Sort, grep, find, archive, git operations (PowerShell) |
 | `sqlite` | Bulk INSERT, indexed SELECT, ORDER BY (Python sqlite3) |

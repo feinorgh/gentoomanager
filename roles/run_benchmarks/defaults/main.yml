@@ -40,8 +40,8 @@ run_benchmarks_gimp_timeout_sec: 900
 run_benchmarks_cpu_affinity: ""
 
 # Categories to run (empty list = all)
-# Valid: compression, crypto, compiler, python, octave, ffmpeg, coreutils, opencv, startup, gentoo_build_times,
-#        numeric, sqlite, memory, process, disk, linker
+# Valid: compression, crypto, compiler, python, octave, ffmpeg, imagemagick, coreutils, opencv, gimp, inkscape,
+#        startup, boot_time, bash, gentoo_build_times, numeric, sqlite, memory, process, disk, linker
 run_benchmarks_categories: []
 
 # Categories that have a Windows-specific task file variant (<name>_win.yml).
