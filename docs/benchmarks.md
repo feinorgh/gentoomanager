@@ -624,15 +624,19 @@ Tests compilation speed and the performance of the compiled output.
 | gcc-O3-compile       | gcc   | Compile at -O3                 |
 | gcc-O3-lto-compile   | gcc   | Compile at -O3 with LTO        |
 | gcc-Os-compile       | gcc   | Compile at -Os                 |
+| gcc-O3_graphite-compile | gcc | Compile at -O3 with Graphite polyhedral loop optimiser (`-floop-nest-optimize`); skipped if GCC was not built with ISL |
 | clang-O0-compile     | clang | Compile at -O0                 |
 | clang-O2-compile     | clang | Compile at -O2                 |
 | clang-O3-compile     | clang | Compile at -O3                 |
 | clang-O3-lto-compile | clang | Compile at -O3 with LTO        |
 | clang-Os-compile     | clang | Compile at -Os                 |
+| clang-O3_polly-compile | clang | Compile at -O3 with Polly polyhedral loop optimiser (`-mllvm -polly`); skipped if Clang was not built with Polly |
 | gcc-O2-runtime       | gcc   | Run -O2-compiled binary        |
 | gcc-O3-runtime       | gcc   | Run -O3-compiled binary        |
+| gcc-O3_graphite-run  | gcc   | Run Graphite-optimised binary  |
 | clang-O2-runtime     | clang | Run -O2-compiled binary        |
 | clang-O3-runtime     | clang | Run -O3-compiled binary        |
+| clang-O3_polly-run   | clang | Run Polly-optimised binary     |
 | rust-debug           | rustc | Compile in debug mode          |
 | rust-release         | rustc | Compile in release mode        |
 | go-build             | go    | Compile a Go program           |
