@@ -560,14 +560,52 @@ Command names carry the suffix `-1000x` (e.g. `rsa-2048-sign-1000x`).
 | `ecdsa-p521-sign-1000x` / `ecdsa-p521-verify-1000x` | ECDSA P-521, 260-bit security |
 | `ed25519-sign-1000x` / `ed25519-verify-1000x` | Ed25519, 128-bit security, FIPS 186-5 |
 | `ed448-sign-1000x` / `ed448-verify-1000x` | Ed448, 224-bit security |
-| `mldsa44-sign-1000x` / `mldsa44-verify-1000x` | ML-DSA-44 (FIPS 204, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
-| `mldsa65-sign-1000x` / `mldsa65-verify-1000x` | ML-DSA-65 (FIPS 204, 192-bit PQ security) — skipped if OpenSSL < 3.5 |
-| `mldsa87-sign-1000x` / `mldsa87-verify-1000x` | ML-DSA-87 (FIPS 204, 256-bit PQ security) — skipped if OpenSSL < 3.5 |
-| `slhdsa128f-sign-1000x` / `slhdsa128f-verify-1000x` | SLH-DSA-SHA2-128f (FIPS 205, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `ml-dsa-44-sign-1000x` / `ml-dsa-44-verify-1000x` | ML-DSA-44 (FIPS 204, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `ml-dsa-65-sign-1000x` / `ml-dsa-65-verify-1000x` | ML-DSA-65 (FIPS 204, 192-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `ml-dsa-87-sign-1000x` / `ml-dsa-87-verify-1000x` | ML-DSA-87 (FIPS 204, 256-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `slh-dsa-sha2-128f-sign-1000x` / `slh-dsa-sha2-128f-verify-1000x` | SLH-DSA-SHA2-128f (FIPS 205, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
 
 The input file `signdata.bin` is **1 KiB** of random data.
 Post-quantum algorithms (ML-DSA, SLH-DSA) are silently skipped on hosts
 whose OpenSSL version does not support them.
+
+**SSH asymmetric signing** (output file: `crypto_ssh_sign.json`):
+
+The same 1000-iteration loop methodology is applied to SSH key types using
+`ssh-keygen -Y sign`.  Results are directly comparable to the OpenSSL
+asymmetric benchmarks above.
+
+| Benchmark (sign + verify pair) | Algorithm |
+|---|---|
+| `ssh-ed25519-sign-1000x` / `ssh-ed25519-verify-1000x` | Ed25519 |
+| `ssh-rsa-2048-sign-1000x` / `ssh-rsa-2048-verify-1000x` | RSA-2048 |
+| `ssh-rsa-3072-sign-1000x` / `ssh-rsa-3072-verify-1000x` | RSA-3072 |
+| `ssh-rsa-4096-sign-1000x` / `ssh-rsa-4096-verify-1000x` | RSA-4096 |
+| `ssh-ecdsa-p256-sign-1000x` / `ssh-ecdsa-p256-verify-1000x` | ECDSA P-256 |
+| `ssh-ecdsa-p384-sign-1000x` / `ssh-ecdsa-p384-verify-1000x` | ECDSA P-384 |
+| `ssh-ecdsa-p521-sign-1000x` / `ssh-ecdsa-p521-verify-1000x` | ECDSA P-521 |
+
+**Botan** (output file: `crypto_botan.json`):
+
+Benchmarks the [Botan](https://botan.randombit.net) C++ crypto library as an
+independent cross-check against OpenSSL.  The `botan speed` command is used;
+its ops/sec output is converted to hyperfine-compatible JSON so results are
+directly comparable to `crypto_asymmetric.json`.  Skipped on hosts where
+`botan`, `botan3`, or `botan2` is not installed.
+
+| Benchmark (sign + verify pair) | Algorithm |
+|---|---|
+| `rsa-2048-sign-1000x` / `rsa-2048-verify-1000x` | RSA-2048 |
+| `rsa-3072-sign-1000x` / `rsa-3072-verify-1000x` | RSA-3072 |
+| `rsa-4096-sign-1000x` / `rsa-4096-verify-1000x` | RSA-4096 |
+| `ecdsa-p256-sign-1000x` / `ecdsa-p256-verify-1000x` | ECDSA P-256 |
+| `ecdsa-p384-sign-1000x` / `ecdsa-p384-verify-1000x` | ECDSA P-384 |
+| `ecdsa-p521-sign-1000x` / `ecdsa-p521-verify-1000x` | ECDSA P-521 |
+| `ed25519-sign-1000x` / `ed25519-verify-1000x` | Ed25519 |
+| `ed448-sign-1000x` / `ed448-verify-1000x` | Ed448 |
+| `ml-dsa-44-sign-1000x` / `ml-dsa-44-verify-1000x` | ML-DSA-44 — skipped if Botan < 3.4 |
+| `ml-dsa-65-sign-1000x` / `ml-dsa-65-verify-1000x` | ML-DSA-65 — skipped if Botan < 3.4 |
+| `ml-dsa-87-sign-1000x` / `ml-dsa-87-verify-1000x` | ML-DSA-87 — skipped if Botan < 3.4 |
 
 **HMAC:** `hmac-sha256`, `hmac-sha512`, `hmac-sha3-256`
 
@@ -879,14 +917,16 @@ automatically removed and rebuilt at the start of the next run.
 
 ### Memory
 
-Tests memory allocation, copy, and access patterns.
+Tests memory bandwidth and random-access latency.
 
-| Benchmark     | Description                              |
-|---------------|------------------------------------------|
-| malloc-free   | Repeated allocation and deallocation     |
-| memcpy        | Large block memory copy via `dd`         |
-| sequential    | Sequential memory access pattern         |
-| random-access | Random memory access (cache pressure)    |
+| Benchmark        | Description                                                          |
+|------------------|----------------------------------------------------------------------|
+| shm-write-512m   | Sequential write: 512 MiB to `/dev/shm` tmpfs via `dd` (64 MiB × 8) |
+| shm-read-512m    | Sequential read: 512 MiB from `/dev/shm` tmpfs via `dd` (64 MiB × 8) |
+| pointer-chase-64m | Random pointer-chasing in a 64 MiB heap — measures cache/memory latency |
+
+`shm-write-512m` and `shm-read-512m` are skipped on hosts without `/dev/shm`.
+`pointer-chase-64m` uses a compiled C binary built on first run.
 
 ### Process
 
@@ -1392,8 +1432,8 @@ or in inventory.
 | `run_benchmarks_ffmpeg_audio_warmup` | `1` | Warmup runs for FFmpeg audio benchmarks |
 | `run_benchmarks_ffmpeg_task_timeout_sec` | `5400` | Per-task timeout for FFmpeg benchmarks (s) |
 | `run_benchmarks_ffmpeg_extended_codecs` | `false` | Include extended codecs (slow/experimental/legacy; see [FFmpeg](#ffmpeg)) |
-| `run_benchmarks_startup_runs` | `3` | Hyperfine iterations for application startup benchmarks |
-| `run_benchmarks_startup_warmup` | `2` | Warmup runs for application startup benchmarks |
+| `run_benchmarks_startup_runs` | `10` | Hyperfine iterations for application startup benchmarks |
+| `run_benchmarks_startup_warmup` | `3` | Warmup runs for application startup benchmarks |
 | `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
 | `run_benchmarks_min_disk_mb` | `2048` | Minimum free disk space on work_dir partition (MB) |
 | `run_benchmarks_min_ram_mb` | `4096` | Minimum total RAM when work_dir is on tmpfs (MB) |
