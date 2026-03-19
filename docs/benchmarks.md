@@ -543,23 +543,31 @@ and SHA-NI hardware instructions), LTO, and optimization level.
 `openssl-md5`, `openssl-blake2b512`, `sha256sum`, `sha512sum`, `md5sum`, `b2sum`
 
 **Asymmetric / public key:**
-`rsa-2048-sign`, `rsa-2048-verify`, `rsa-4096-sign`,
-`ecdsa-p256-sign`, `ecdsa-p256-verify`,
-`ed25519-sign`, `ed25519-verify`
 
 Individual asymmetric operations complete in well under 1 ms, making it
 impossible for hyperfine to measure them accurately in a single invocation.
-Each command therefore wraps the `openssl` call in a shell loop to bring the
-total runtime above 100 ms:
+Each command therefore wraps the `openssl` call in a shell loop of **1000
+iterations** so wall-clock totals are directly comparable across algorithms.
+Command names carry the suffix `-1000x` (e.g. `rsa-2048-sign-1000x`).
 
-| Command | Loop count | Reason |
-|---|---|---|
-| `rsa-2048-sign` / `rsa-2048-verify` | 100 | ~1 ms/op on modern hardware |
-| `rsa-4096-sign` / `rsa-4096-verify` | 50 | ~2–4 ms/op |
-| `ecdsa-p256-sign` / `ecdsa-p256-verify` | 200 | ~0.3–0.5 ms/op |
-| `ed25519-sign` / `ed25519-verify` | 1000 | ~0.05–0.1 ms/op |
+| Benchmark (sign + verify pair) | Algorithm / security level |
+|---|---|
+| `rsa-2048-sign-1000x` / `rsa-2048-verify-1000x` | RSA-2048, SHA-256 (acceptable to 2030, NIST SP 800-57) |
+| `rsa-3072-sign-1000x` / `rsa-3072-verify-1000x` | RSA-3072, SHA-256 (NIST minimum for post-2030) |
+| `rsa-4096-sign-1000x` / `rsa-4096-verify-1000x` | RSA-4096, SHA-256 (long-lived CA keys) |
+| `ecdsa-p256-sign-1000x` / `ecdsa-p256-verify-1000x` | ECDSA P-256, 128-bit security |
+| `ecdsa-p384-sign-1000x` / `ecdsa-p384-verify-1000x` | ECDSA P-384, 192-bit security (CNSA Suite 2.0 minimum) |
+| `ecdsa-p521-sign-1000x` / `ecdsa-p521-verify-1000x` | ECDSA P-521, 260-bit security |
+| `ed25519-sign-1000x` / `ed25519-verify-1000x` | Ed25519, 128-bit security, FIPS 186-5 |
+| `ed448-sign-1000x` / `ed448-verify-1000x` | Ed448, 224-bit security |
+| `mldsa44-sign-1000x` / `mldsa44-verify-1000x` | ML-DSA-44 (FIPS 204, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `mldsa65-sign-1000x` / `mldsa65-verify-1000x` | ML-DSA-65 (FIPS 204, 192-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `mldsa87-sign-1000x` / `mldsa87-verify-1000x` | ML-DSA-87 (FIPS 204, 256-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `slhdsa128f-sign-1000x` / `slhdsa128f-verify-1000x` | SLH-DSA-SHA2-128f (FIPS 205, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
 
-The input file `signdata.bin` is **1 KiB** of deterministic random data.
+The input file `signdata.bin` is **1 KiB** of random data.
+Post-quantum algorithms (ML-DSA, SLH-DSA) are silently skipped on hosts
+whose OpenSSL version does not support them.
 
 **HMAC:** `hmac-sha256`, `hmac-sha512`, `hmac-sha3-256`
 
