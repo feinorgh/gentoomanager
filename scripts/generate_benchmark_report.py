@@ -482,6 +482,8 @@ _OPT_LEVEL_ORDER: dict[str, int] = {
     "-Oz": 5,
     "-O3": 6,
     "-O3 -flto": 7,
+    "-O3 -floop-nest-optimize": 8,
+    "-O3 -mllvm -polly": 9,
 }
 
 # Categories that use the compiler pivot layout (opt levels as columns).
@@ -1531,6 +1533,269 @@ def _collect_codec_availability(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Compiler optimization analysis
+# ---------------------------------------------------------------------------
+
+_RUNTIME_ANALYSIS_FLAGS = ["-O3", "-O3 -flto", "-O3 -floop-nest-optimize", "-O3 -mllvm -polly"]
+_COMPILE_ANALYSIS_FLAGS = ["-O3", "-O3 -flto", "-O3 -floop-nest-optimize", "-O3 -mllvm -polly"]
+_O2_BASELINE = "-O2"
+
+
+def _md_compiler_analysis(
+    table: dict[str, dict[str, dict[str, dict[str, float]]]],
+    hostnames: list[str],
+    hosts: dict,
+) -> str:
+    """Generate a Markdown section with compiler optimization analysis.
+
+    Produces a delta table (% change vs -O2 baseline) for both runtime and
+    compile-time, followed by prose commentary and a "best option per host"
+    summary.
+    """
+    compile_benchmarks = table.get("compiler_c_compile", {})
+    runtime_benchmarks = table.get("compiler_c_runtime", {})
+    if not runtime_benchmarks:
+        return ""
+
+    _unused_opt_labels_rt, runtime_rows = _build_compiler_pivot(
+        runtime_benchmarks, hostnames, hosts
+    )
+    _unused_opt_labels_ct, compile_rows = _build_compiler_pivot(
+        compile_benchmarks, hostnames, hosts
+    )
+
+    # Index data by (cc_label, hostname)
+    runtime_data: dict[tuple[str, str], dict[str, float]] = {}
+    ver_display: dict[tuple[str, str], str] = {}
+    for cc_label, ver, hostname, opt_data in runtime_rows:
+        key = (cc_label, hostname)
+        runtime_data[key] = {opt: res["mean"] for opt, res in opt_data.items() if res.get("mean")}
+        ver_display[key] = ver
+
+    compile_data: dict[tuple[str, str], dict[str, float]] = {}
+    for cc_label, _ver, hostname, opt_data in compile_rows:
+        key = (cc_label, hostname)
+        compile_data[key] = {opt: res["mean"] for opt, res in opt_data.items() if res.get("mean")}
+
+    # Determine which analysis flags actually have data
+    all_keys = sorted(runtime_data.keys(), key=lambda k: (_sort_cc_label(k[0]), k[1]))
+    active_rt_flags = [
+        f
+        for f in _RUNTIME_ANALYSIS_FLAGS
+        if any(
+            f in runtime_data.get(k, {}) and _O2_BASELINE in runtime_data.get(k, {})
+            for k in all_keys
+        )
+    ]
+    active_ct_flags = [
+        f
+        for f in _COMPILE_ANALYSIS_FLAGS
+        if any(
+            f in compile_data.get(k, {}) and _O2_BASELINE in compile_data.get(k, {})
+            for k in all_keys
+        )
+    ]
+
+    if not active_rt_flags:
+        return ""
+
+    def _pct_delta(new_val: float, baseline: float) -> str | None:
+        """Return formatted % delta string, or None if inputs are invalid."""
+        if not baseline or not new_val:
+            return None
+        return f"{(new_val - baseline) / baseline * 100:+.1f}%"
+
+    # Build delta table
+    rt_headers = [f"RT {f} vs -O2" for f in active_rt_flags]
+    ct_headers = [f"CT {f} vs -O2" for f in active_ct_flags]
+    headers = ["Compiler", "Host"] + rt_headers + ct_headers
+
+    table_rows: list[list[str]] = []
+    for key in all_keys:
+        cc_label, hostname = key
+        rt = runtime_data.get(key, {})
+        ct = compile_data.get(key, {})
+        rt_baseline = rt.get(_O2_BASELINE)
+        ct_baseline = ct.get(_O2_BASELINE)
+
+        row: list[str] = [ver_display.get(key, cc_label), hostname]
+
+        for flag in active_rt_flags:
+            val = rt.get(flag)
+            delta_str = _pct_delta(val, rt_baseline) if rt_baseline and val else None
+            if delta_str is None:
+                row.append("—")
+            else:
+                # Negative % = faster = improvement; bold if > 2% improvement
+                pct = (val - rt_baseline) / rt_baseline * 100  # type: ignore[operator]
+                if pct < -2.0:
+                    row.append(f"**{delta_str}**")
+                else:
+                    row.append(delta_str)
+
+        for flag in active_ct_flags:
+            val = ct.get(flag)
+            delta_str = _pct_delta(val, ct_baseline) if ct_baseline and val else None
+            row.append(delta_str if delta_str is not None else "—")
+
+        table_rows.append(row)
+
+    lines: list[str] = []
+    lines.append("## Compiler Optimization Analysis")
+    lines.append("")
+    lines.append(
+        "Delta vs -O2 baseline. "
+        "RT = runtime, CT = compile time. "
+        "Negative runtime % = faster. "
+        "**Bold** = >2% runtime improvement."
+    )
+    lines.append("")
+    lines.append(_md_table(headers, table_rows))
+    lines.append("")
+
+    # --- Prose commentary ---
+    # Collect per-(key, flag) deltas for median computation
+    def _collect_deltas(
+        data: dict[tuple[str, str], dict[str, float]],
+        flags: list[str],
+    ) -> dict[str, list[float]]:
+        """Return {flag: [pct_delta, ...]} across all (cc_label, hostname) pairs."""
+        result: dict[str, list[float]] = {f: [] for f in flags}
+        for key in all_keys:
+            d = data.get(key, {})
+            baseline = d.get(_O2_BASELINE)
+            if not baseline:
+                continue
+            for flag in flags:
+                val = d.get(flag)
+                if val:
+                    result[flag].append((val - baseline) / baseline * 100)
+        return result
+
+    rt_deltas = _collect_deltas(runtime_data, active_rt_flags)
+    ct_deltas = _collect_deltas(compile_data, active_ct_flags)
+
+    def _median(values: list[float]) -> float | None:
+        if not values:
+            return None
+        s = sorted(values)
+        mid = len(s) // 2
+        return (s[mid - 1] + s[mid]) / 2.0 if len(s) % 2 == 0 else s[mid]
+
+    lines.append("### Commentary")
+    lines.append("")
+
+    # -O3 vs -O2
+    rt_o3 = _median(rt_deltas.get("-O3", []))
+    ct_o3 = _median(ct_deltas.get("-O3", []))
+    if rt_o3 is not None:
+        rt_str = f"{rt_o3:+.1f}%"
+        ct_str = f"{ct_o3:+.1f}%" if ct_o3 is not None else "unknown"
+        lines.append(
+            f"- **-O3 vs -O2**: Median {rt_str} runtime change; compile time {ct_str}. "
+            "Recommended as the default for optimised builds."
+        )
+
+    # -O3 -flto vs -O2
+    rt_flto = _median(rt_deltas.get("-O3 -flto", []))
+    ct_flto = _median(ct_deltas.get("-O3 -flto", []))
+    if rt_flto is not None:
+        rt_str = f"{rt_flto:+.1f}%"
+        ct_str = f"{ct_flto:+.1f}%" if ct_flto is not None else "unknown"
+        if rt_flto < -2.0:
+            lines.append(
+                f"- **-O3 -flto vs -O3**: LTO adds a median {rt_str} runtime improvement "
+                f"at the cost of {ct_str} longer compile. "
+                "Worthwhile for long-running processes."
+            )
+        else:
+            lines.append(
+                f"- **-O3 -flto vs -O3**: LTO shows minimal benefit on this workload "
+                f"(median {rt_str}). "
+                f"The compile overhead ({ct_str}) is likely not justified unless "
+                "link-time inlining is expected to help."
+            )
+
+    # GCC Graphite
+    rt_graphite = _median(rt_deltas.get("-O3 -floop-nest-optimize", []))
+    ct_graphite = _median(ct_deltas.get("-O3 -floop-nest-optimize", []))
+    if rt_graphite is not None:
+        rt_str = f"{rt_graphite:+.1f}%"
+        magnitude = abs(rt_graphite)
+        if magnitude > 5.0:
+            effect = "a substantial effect"
+        elif magnitude > 2.0:
+            effect = "a moderate effect"
+        else:
+            effect = "minimal effect"
+        ct_str = f"{ct_graphite:+.1f}%" if ct_graphite is not None else "unknown"
+        lines.append(
+            f"- **-O3 -floop-nest-optimize (GCC Graphite)**: "
+            f"Polyhedral loop optimizer shows a median {rt_str} runtime change "
+            f"({effect}; compile overhead {ct_str}). "
+            "Best suited for loop-heavy numeric workloads."
+        )
+
+    # Clang Polly
+    rt_polly = _median(rt_deltas.get("-O3 -mllvm -polly", []))
+    ct_polly = _median(ct_deltas.get("-O3 -mllvm -polly", []))
+    if rt_polly is not None:
+        rt_str = f"{rt_polly:+.1f}%"
+        magnitude = abs(rt_polly)
+        if magnitude > 5.0:
+            effect = "a substantial effect"
+        elif magnitude > 2.0:
+            effect = "a moderate effect"
+        else:
+            effect = "minimal effect"
+        ct_str = f"{ct_polly:+.1f}%" if ct_polly is not None else "unknown"
+        lines.append(
+            f"- **-O3 -mllvm -polly (Clang Polly)**: "
+            f"Polyhedral loop optimizer shows a median {rt_str} runtime change "
+            f"({effect}; compile overhead {ct_str}). "
+            "Best suited for loop-heavy numeric workloads."
+        )
+
+    lines.append("")
+
+    # --- Best option per host ---
+    candidate_flags = [_O2_BASELINE] + active_rt_flags
+    best_rows: list[list[str]] = []
+    for hostname in hostnames:
+        best_mean: float | None = None
+        best_cc = "—"
+        best_flag = "—"
+        best_delta_str = "—"
+
+        for key in all_keys:
+            cc_label, khost = key
+            if khost != hostname:
+                continue
+            rt = runtime_data.get(key, {})
+            o2_mean = rt.get(_O2_BASELINE)
+            for flag in candidate_flags:
+                val = rt.get(flag)
+                if val is not None and (best_mean is None or val < best_mean):
+                    best_mean = val
+                    best_cc = ver_display.get(key, cc_label)
+                    best_flag = flag
+                    if o2_mean and flag != _O2_BASELINE:
+                        best_delta_str = f"{(val - o2_mean) / o2_mean * 100:+.1f}%"
+                    else:
+                        best_delta_str = "baseline"
+
+        best_rows.append([hostname, best_cc, best_flag, best_delta_str])
+
+    if best_rows:
+        lines.append("### Best Option Per Host")
+        lines.append("")
+        lines.append(_md_table(["Host", "Best Compiler", "Best Flag", "Runtime vs -O2"], best_rows))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def generate_markdown(
     hosts: dict[str, dict[str, Any]],
     table: dict[str, dict[str, dict[str, dict[str, float]]]],
@@ -1839,6 +2104,11 @@ def generate_markdown(
                 )
             lines.append(_md_table(bt_headers, bt_rows))
             lines.append("")
+
+    # --- Compiler optimization analysis ---
+    compiler_analysis = _md_compiler_analysis(table, hostnames, hosts)
+    if compiler_analysis:
+        lines.append(compiler_analysis)
 
     # --- System boot times ---
     boot_data = {h: hosts[h]["boot_times"] for h in hostnames if hosts[h].get("boot_times")}
