@@ -713,13 +713,22 @@
 #
 # Botan uses its own PKCS1v15(SHA-256) / EMSA1(SHA-256) padding automatically;
 # the mode suffix is stripped when building the command names.
-- name: Check if botan CLI is available
+- name: Find botan CLI binary (botan, botan3, or botan2)
   ansible.builtin.shell:
-    cmd: command -v botan
+    cmd: |
+      for candidate in botan botan3 botan2; do
+        path=$(command -v "$candidate" 2>/dev/null) && echo "$path" && exit 0
+      done
+      exit 1
     executable: /bin/bash
   register: run_benchmarks_botan_check
   changed_when: false
   failed_when: false
+
+- name: Set botan binary path fact
+  ansible.builtin.set_fact:
+    _run_benchmarks_botan_bin: "{{ run_benchmarks_botan_check.stdout | trim }}"
+  when: run_benchmarks_botan_check.rc == 0
 
 - name: Run Botan speed benchmarks
   ansible.builtin.shell:
@@ -729,7 +738,7 @@
 
       # Run botan speed (1 second per algorithm per operation).
       # Unknown algorithms (e.g. ML-DSA on older Botan) are silently skipped.
-      botan speed --msec=1000 \
+      {{ _run_benchmarks_botan_bin }} speed --msec=1000 \
         RSA-2048 RSA-3072 RSA-4096 \
         ECDSA-256 ECDSA-384 ECDSA-521 \
         Ed25519 Ed448 \
