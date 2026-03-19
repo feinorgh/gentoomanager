@@ -64,6 +64,10 @@
     # Requires hypervisor_host to be set (KVM/libvirt VMs only).
     run_benchmarks_manage_power: false
     run_benchmarks_boot_timeout_sec: 180
+    # Number of hard-reset retries if a VM fails to become reachable after
+    # the initial boot.  Total boot attempts = 1 + run_benchmarks_boot_retries.
+    # A host that still fails after all attempts is skipped via end_host.
+    run_benchmarks_boot_retries: 2
 
   pre_tasks:
     # ── Power management: boot VM if it is off ────────────────────────────
@@ -93,19 +97,74 @@
             _bench_vm_domstate.stdout | default('') | trim != 'running'
           }}
 
-    - name: Boot VM via hypervisor
-      ansible.builtin.command:
-        cmd: virsh --connect qemu:///system start '{{ inventory_hostname }}'
-      delegate_to: "{{ hypervisor_host }}"
-      changed_when: true
+    # Boot the VM and wait for SSH.  On timeout, issue virsh reset and retry.
+    # After run_benchmarks_boot_retries hard-resets still fail, force-off the
+    # VM and skip this host gracefully via end_host (play continues for others).
+    - name: Boot VM and wait for SSH (attempt 1 of {{ 1 + run_benchmarks_boot_retries | int }})
       when: run_benchmarks_vm_was_off | default(false) | bool
+      block:
+        - name: Boot VM via hypervisor
+          ansible.builtin.command:
+            cmd: virsh --connect qemu:///system start '{{ inventory_hostname }}'
+          delegate_to: "{{ hypervisor_host }}"
+          changed_when: true
 
-    - name: Wait for VM to become reachable after boot
-      ansible.builtin.wait_for_connection:
-        timeout: "{{ run_benchmarks_boot_timeout_sec | int }}"
-        sleep: 5
-        connect_timeout: 10
-      when: run_benchmarks_vm_was_off | default(false) | bool
+        - name: Wait for VM to become reachable after boot (attempt 1)
+          ansible.builtin.wait_for_connection:
+            timeout: "{{ run_benchmarks_boot_timeout_sec | int }}"
+            sleep: 5
+            connect_timeout: 10
+
+      rescue:
+        - name: Hard-reset VM (attempt 2)
+          ansible.builtin.command:
+            cmd: virsh --connect qemu:///system reset '{{ inventory_hostname }}'
+          delegate_to: "{{ hypervisor_host }}"
+          changed_when: true
+          failed_when: false
+
+        - name: Wait for VM to become reachable after reset (attempt 2)
+          when: run_benchmarks_boot_retries | int >= 1
+          block:
+            - name: Wait for VM to become reachable after boot (attempt 2)
+              ansible.builtin.wait_for_connection:
+                timeout: "{{ run_benchmarks_boot_timeout_sec | int }}"
+                sleep: 5
+                connect_timeout: 10
+
+          rescue:
+            - name: Hard-reset VM (attempt 3)
+              ansible.builtin.command:
+                cmd: virsh --connect qemu:///system reset '{{ inventory_hostname }}'
+              delegate_to: "{{ hypervisor_host }}"
+              changed_when: true
+              failed_when: false
+
+            - name: Wait for VM to become reachable after reset (attempt 3)
+              when: run_benchmarks_boot_retries | int >= 2
+              block:
+                - name: Wait for VM to become reachable after boot (attempt 3)
+                  ansible.builtin.wait_for_connection:
+                    timeout: "{{ run_benchmarks_boot_timeout_sec | int }}"
+                    sleep: 5
+                    connect_timeout: 10
+
+              rescue:
+                - name: Log repeated boot failure
+                  ansible.builtin.debug:
+                    msg: >-
+                      {{ inventory_hostname }} failed to become reachable after
+                      {{ 1 + run_benchmarks_boot_retries | int }} boot attempts — skipping host.
+
+                - name: Force off VM after repeated boot failure
+                  ansible.builtin.command:
+                    cmd: virsh --connect qemu:///system destroy '{{ inventory_hostname }}'
+                  delegate_to: "{{ hypervisor_host }}"
+                  changed_when: true
+                  failed_when: false
+
+                - name: Skip host after repeated boot failure
+                  ansible.builtin.meta: end_host
 
     # ── Reachability guard for VMs that were already running ──────────────
     - name: Check host is reachable
