@@ -649,6 +649,30 @@ layout: compiler version strings (extracted from `--version` output) appear as
 rows, and optimization levels (`-O0`, `-O2`, `-O3`, `-O3 -flto`, `-Os`, etc.)
 appear as columns.
 
+#### Graphite (GCC) and Polly (Clang)
+
+[Graphite](https://gcc.gnu.org/wiki/Graphite) is GCC's polyhedral loop
+optimiser.  It analyses loop nests as integer polyhedra to perform
+transformations that scalar optimisers cannot — loop interchange, tiling,
+and strip-mining — which can improve cache locality and enable auto-parallelism
+on loop-heavy numeric code.  It is enabled with `-floop-nest-optimize` and
+requires GCC to have been built with ISL (`USE=graphite` on Gentoo;
+`--with-isl` at build time elsewhere).
+
+[Polly](https://polly.llvm.org) is the equivalent for Clang/LLVM.  It uses
+the same polyhedral model and is enabled with `-mllvm -polly`.  It is available
+in official LLVM releases but may be absent from distribution-packaged Clang
+builds.
+
+Both are **silently skipped** when not available: the benchmark task probes
+by compiling `bench.c` with the flags; if the compiler rejects them the
+entry is simply omitted from the hyperfine run.
+
+Comparing `*-O3-runtime` against `*-O3_graphite-run` (or `*-O3_polly-run`)
+isolates the effect of polyhedral optimisation on the benchmark workload,
+which includes integer loops, floating-point computation, and simple memory
+access patterns.
+
 #### SQLite Amalgamation Compile (`compiler_sqlite.json`)
 
 Compiles the SQLite 3.52 amalgamation (`sqlite3.c`, ≈8.5 MiB, ≈230 000 lines)
