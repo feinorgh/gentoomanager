@@ -206,7 +206,7 @@
                       ['compression', 'crypto', 'compiler', 'python', 'numeric',
                        'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
                        'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
-                       'startup', 'boot_time', 'bash']
+                       'startup', 'boot_time', 'bash', 'octave']
                       + (['gentoo_build_times']
                          if inventory_hostname in (groups['gentoo'] | default([]))
                          else []))

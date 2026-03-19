@@ -37,7 +37,7 @@
               'ffmpeg', 'imagemagick', 'coreutils', 'opencv', 'gimp',
               'inkscape', 'startup', 'gentoo_build_times', 'numeric',
               'sqlite', 'memory', 'process', 'disk', 'linker',
-              'boot_time', 'bash']
+              'boot_time', 'bash', 'octave']
       }}
   vars:
     _cats: >-
@@ -87,7 +87,8 @@
             'startup':            'startup.json',
             'boot_time':          'boot_times.json',
             'bash':               'bash.json',
-            'gentoo_build_times': 'gentoo_build_times.json'
+            'gentoo_build_times': 'gentoo_build_times.json',
+            'octave':             'octave.json'
           } -%}
       {%- set existing = run_benchmarks_skip_existing_found.files
                          | default([])
