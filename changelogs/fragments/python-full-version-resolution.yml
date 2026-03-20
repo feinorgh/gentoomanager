@@ -1,0 +1,8 @@
+minor_changes:
+  - "roles/run_benchmarks: resolve Python interpreter aliases to full patch-level versions
+    (e.g. python3.13 → python3.13.5) and deduplicate by version before benchmarking.
+    Write python_versions.json alongside compiler_versions.json."
+  - "roles/run_benchmarks: Windows Python benchmarks now resolve full versions via the
+    Python Launcher and deduplicate aliases before benchmarking."
+  - "scripts/generate_benchmark_report.py: load python_versions.json and display full
+    Python version labels in both Markdown and HTML pivot tables."

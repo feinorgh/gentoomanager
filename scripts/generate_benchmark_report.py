@@ -753,10 +753,11 @@ def _py_label_sort_key(py_label: str) -> tuple[tuple[int, ...], bool, str]:
 
     Examples::
 
-        "py3"           → ((3,),    False, "py3")
-        "py3.13"        → ((3, 13), False, "py3.13")
-        "py3.13-config" → ((3, 13), True,  "py3.13-config")
-        "py3.14"        → ((3, 14), False, "py3.14")
+        "py3"           → ((3,),       False, "py3")
+        "py3.13"        → ((3, 13),    False, "py3.13")
+        "py3.13.5"      → ((3, 13, 5), False, "py3.13.5")
+        "py3.13-config" → ((3, 13),    True,  "py3.13-config")
+        "py3.14"        → ((3, 14),    False, "py3.14")
     """
     is_config = py_label.endswith("-config")
     base = py_label[: -len("-config")] if is_config else py_label
@@ -764,16 +765,42 @@ def _py_label_sort_key(py_label: str) -> tuple[tuple[int, ...], bool, str]:
     return (ver_tuple, is_config, py_label)
 
 
+def _python_display_version(py_label: str, hostname: str, hosts: dict) -> str:
+    """Return a display string for *py_label* on *hostname*.
+
+    Looks up ``python_versions.json`` data to resolve short aliases
+    (e.g. ``py3.13``) to their full version (e.g. ``py3.13.5``).
+    Falls back to *py_label* when no metadata is available.
+
+    Examples::
+
+        py_label="py3.13", version_str="Python 3.13.5"  → "py3.13.5"
+        py_label="py3.14.1"                              → "py3.14.1" (already full)
+    """
+    ver_map: dict[str, str] = hosts.get(hostname, {}).get("metadata", {}).get("python_versions", {})
+    # Labels in the JSON use the "python" prefix (e.g. "python3.13.5")
+    python_label = re.sub(r"^py", "python", py_label)
+    full_ver = ver_map.get(python_label, "")
+    if full_ver:
+        m = re.search(r"(\d+\.\d+\.\d+)", full_ver)
+        if m:
+            return f"py{m.group(1)}"
+    return py_label
+
+
 def _build_python_pivot(
     benchmarks: dict[str, dict[str, dict[str, float]]],
     hostnames: list[str],
+    hosts: dict | None = None,
 ) -> tuple[list[str], list[tuple[str, str, dict[str, dict[str, float]]]]]:
     """Build pivoted Python benchmark data.
 
     Returns:
         bench_labels: benchmark names sorted by ``_PYTHON_BENCH_ORDER``.
-        rows: list of ``(py_label, hostname, {bench: result_dict})``,
+        rows: list of ``(py_display_label, hostname, {bench: result_dict})``,
               sorted by (version tuple, is_config, hostname).
+              When *hosts* is provided, *py_display_label* is resolved to the
+              full patch-level version via ``python_versions.json`` metadata.
     """
     entries: dict[tuple[str, str], dict[str, dict[str, float]]] = {}
     all_benches: set[str] = set()
@@ -793,7 +820,8 @@ def _build_python_pivot(
     for (py_label, hostname), bench_data in sorted(
         entries.items(), key=lambda kv: (_py_label_sort_key(kv[0][0]), kv[0][1])
     ):
-        rows.append((py_label, hostname, bench_data))
+        display = _python_display_version(py_label, hostname, hosts) if hosts else py_label
+        rows.append((display, hostname, bench_data))
 
     return bench_labels, rows
 
@@ -801,13 +829,14 @@ def _build_python_pivot(
 def _md_python_pivot_table(
     benchmarks: dict[str, dict[str, dict[str, float]]],
     hostnames: list[str],
+    hosts: dict | None = None,
 ) -> str:
     """Render Python benchmarks as a pivoted Markdown table.
 
     Rows = (Python label, host); Columns = benchmark names.
     The cell showing the overall fastest time per benchmark is bolded.
     """
-    bench_labels, rows = _build_python_pivot(benchmarks, hostnames)
+    bench_labels, rows = _build_python_pivot(benchmarks, hostnames, hosts)
     if not rows:
         return ""
 
@@ -840,9 +869,10 @@ def _html_python_pivot_table(
     benchmarks: dict[str, dict[str, dict[str, float]]],
     hostnames: list[str],
     footnotes: dict[str, list[str]] | None = None,
+    hosts: dict | None = None,
 ) -> str:
     """Render Python benchmarks as a pivoted HTML table."""
-    bench_labels, rows = _build_python_pivot(benchmarks, hostnames)
+    bench_labels, rows = _build_python_pivot(benchmarks, hostnames, hosts)
     if not rows:
         return ""
 
@@ -1105,6 +1135,9 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
             elif json_file.name == "compiler_versions.json":
                 # Merge per-binary version map into metadata for report access
                 hosts[hostname].setdefault("metadata", {})["compiler_versions"] = data
+            elif json_file.name == "python_versions.json":
+                # Merge per-binary Python version map into metadata
+                hosts[hostname].setdefault("metadata", {})["python_versions"] = data
             elif json_file.name == "boot_times.json":
                 # systemd-analyze boot timing data
                 hosts[hostname]["boot_times"] = data
@@ -1983,7 +2016,7 @@ def generate_markdown(
         if category in _PYTHON_PIVOT_CATEGORIES:
             lines.append("Times in seconds (mean ± stddev). **Lowest** per benchmark is bold.")
             lines.append("")
-            lines.append(_md_python_pivot_table(benchmarks, hostnames))
+            lines.append(_md_python_pivot_table(benchmarks, hostnames, hosts))
             footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
             if footnotes:
                 lines.append("")
@@ -2320,7 +2353,7 @@ def generate_html(
         # Python category uses a pivoted layout: rows=(py_label, host),
         # columns=benchmark names.
         if category in _PYTHON_PIVOT_CATEGORIES:
-            bench_labels, py_pivot_rows = _build_python_pivot(benchmarks, hostnames)
+            bench_labels, py_pivot_rows = _build_python_pivot(benchmarks, hostnames, hosts)
             labels_json = json.dumps(bench_labels)
             py_datasets: list[dict[str, Any]] = []
             for pidx, (py_label, hostname, bench_data) in enumerate(py_pivot_rows):
@@ -2342,7 +2375,7 @@ def generate_html(
             datasets_json = json.dumps(py_datasets, indent=2)
 
             footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
-            table_html = _html_python_pivot_table(benchmarks, hostnames, footnotes)
+            table_html = _html_python_pivot_table(benchmarks, hostnames, footnotes, hosts)
             section = f"""
     <section id="cat-{category}">
       <h2>{title}</h2>

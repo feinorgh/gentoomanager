@@ -12,6 +12,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from generate_benchmark_report import (
+    _build_python_pivot,
+    _python_display_version,
     anonymize_hosts,
     build_comparison_table,
     extract_features,
@@ -933,3 +935,120 @@ class TestBootTimes:
         table = build_comparison_table(hosts)
         html = generate_html(hosts, table)
         assert "cat-boot-times" not in html
+
+
+# ---------------------------------------------------------------------------
+# Python full-version resolution tests
+# ---------------------------------------------------------------------------
+
+
+class TestPythonVersionResolution:
+    """Tests for python_versions.json loading and full-version display."""
+
+    def test_python_display_version_with_metadata(self) -> None:
+        """When python_versions.json provides a full version, the display
+        label should include the patch level."""
+        hosts = {
+            "host-a": {
+                "metadata": {
+                    "python_versions": {
+                        "python3.13.5": "Python 3.13.5",
+                        "python3.12.8": "Python 3.12.8",
+                    }
+                }
+            }
+        }
+        assert _python_display_version("py3.13.5", "host-a", hosts) == "py3.13.5"
+        assert _python_display_version("py3.12.8", "host-a", hosts) == "py3.12.8"
+
+    def test_python_display_version_resolves_alias(self) -> None:
+        """A short alias like py3.13 should resolve to py3.13.5 when the
+        metadata has a matching entry."""
+        hosts = {
+            "host-a": {
+                "metadata": {
+                    "python_versions": {
+                        "python3.13": "Python 3.13.5",
+                    }
+                }
+            }
+        }
+        assert _python_display_version("py3.13", "host-a", hosts) == "py3.13.5"
+
+    def test_python_display_version_fallback_no_metadata(self) -> None:
+        """Without metadata, the original label should be returned."""
+        assert _python_display_version("py3.13", "host-a", {}) == "py3.13"
+        assert _python_display_version("py3.14.1", "host-a", {}) == "py3.14.1"
+
+    def test_python_display_version_fallback_empty_hosts(self) -> None:
+        """When the host has no python_versions metadata, fall back."""
+        hosts = {"host-a": {"metadata": {}}}
+        assert _python_display_version("py3.13", "host-a", hosts) == "py3.13"
+
+    def test_load_results_stores_python_versions(self, tmp_path: Path) -> None:
+        """python_versions.json should be loaded into metadata."""
+        host_dir = tmp_path / "results" / "test-host"
+        host_dir.mkdir(parents=True)
+        (host_dir / "metadata.json").write_text(json.dumps(_make_metadata("test-host")))
+        py_versions = {
+            "python3.13.5": "Python 3.13.5",
+            "python3.12.8": "Python 3.12.8",
+        }
+        (host_dir / "python_versions.json").write_text(json.dumps(py_versions))
+        hosts = load_results(tmp_path)
+        assert hosts["test-host"]["metadata"]["python_versions"] == py_versions
+
+    def test_build_python_pivot_uses_full_version(self) -> None:
+        """When hosts dict is provided, the pivot should use full versions."""
+        benchmarks = {
+            "py3.13-prime-sieve": {
+                "host-a": {"mean": 1.0, "stddev": 0.1, "min": 0.9, "max": 1.1},
+            },
+        }
+        hosts = {
+            "host-a": {
+                "metadata": {
+                    "python_versions": {
+                        "python3.13": "Python 3.13.5",
+                    }
+                }
+            }
+        }
+        bench_labels, rows = _build_python_pivot(benchmarks, ["host-a"], hosts)
+        assert len(rows) == 1
+        py_label, hostname, _data = rows[0]
+        assert py_label == "py3.13.5"
+        assert hostname == "host-a"
+
+    def test_build_python_pivot_without_hosts_keeps_original(self) -> None:
+        """Without hosts dict, original labels should be preserved."""
+        benchmarks = {
+            "py3.13-prime-sieve": {
+                "host-a": {"mean": 1.0, "stddev": 0.1, "min": 0.9, "max": 1.1},
+            },
+        }
+        bench_labels, rows = _build_python_pivot(benchmarks, ["host-a"])
+        assert len(rows) == 1
+        py_label, hostname, _data = rows[0]
+        assert py_label == "py3.13"
+        assert hostname == "host-a"
+
+    def test_markdown_report_contains_full_python_version(self, tmp_path: Path) -> None:
+        """The Markdown report should show full Python version labels."""
+        host_dir = tmp_path / "results" / "test-host"
+        host_dir.mkdir(parents=True)
+        (host_dir / "metadata.json").write_text(json.dumps(_make_metadata("test-host")))
+        py_versions = {"python3.12.1": "Python 3.12.1"}
+        (host_dir / "python_versions.json").write_text(json.dumps(py_versions))
+        (host_dir / "python.json").write_text(
+            json.dumps(
+                _make_hyperfine_json(
+                    ("py3.12.1-prime-sieve", 2.5, 0.1),
+                    ("py3.12.1-json-serde", 1.8, 0.08),
+                )
+            )
+        )
+        hosts = load_results(tmp_path)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        assert "py3.12.1" in md

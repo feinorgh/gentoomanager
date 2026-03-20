@@ -84,18 +84,45 @@
     $runs = {{ run_benchmarks_runs }}
     $warmup = {{ run_benchmarks_warmup }}
 
-    # Discover all installed Python versions using the Windows Python Launcher
+    # Discover all installed Python versions using the Windows Python Launcher,
+    # resolve each to its full version (e.g. 3.14 → 3.14.1), and deduplicate
+    # so aliases pointing to the same patch release are benchmarked only once.
     $pyVersions = @()
+    $seenFullVersions = @{}
+    $versionMap = @{}
     try {
       $pyList = (py -0 2>&1) | Select-String -Pattern '^\s*-V:(\S+)' |
                 ForEach-Object { $_.Matches[0].Groups[1].Value }
       foreach ($v in $pyList) {
-        $pyVersions += "py-$v py -$v"
+        $pyExe = "py -$v"
+        try {
+          $verOutput = (Invoke-Expression "$pyExe --version 2>&1") | Select-Object -First 1
+          if ($verOutput -match '(\d+\.\d+\.\d+)') {
+            $fullVer = $Matches[1]
+          } else {
+            $fullVer = $v
+          }
+        } catch {
+          $fullVer = $v
+        }
+        if (-not $seenFullVersions.ContainsKey($fullVer)) {
+          $seenFullVersions[$fullVer] = $true
+          $pyLabel = "py$fullVer"
+          $pyVersions += "$pyLabel $pyExe"
+          $versionMap[$pyLabel] = "$verOutput"
+        }
       }
     } catch {}
     if ($pyVersions.Count -eq 0) {
+      try {
+        $verOutput = (python --version 2>&1) | Select-Object -First 1
+      } catch { $verOutput = "unknown" }
       $pyVersions += "python python"
+      $versionMap["python"] = "$verOutput"
     }
+
+    # Write python_versions.json
+    $versionMap | ConvertTo-Json | Set-Content "$wd\python_versions.json"
 
     $cmds = @()
     foreach ($pyEntry in $pyVersions) {
