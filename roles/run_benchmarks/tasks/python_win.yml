@@ -95,8 +95,9 @@
                 ForEach-Object { $_.Matches[0].Groups[1].Value }
       foreach ($v in $pyList) {
         $pyExe = "py -$v"
+        $verOutput = "Python $v"
         try {
-          $verOutput = (Invoke-Expression "$pyExe --version 2>&1") | Select-Object -First 1
+          $verOutput = (& py "-$v" --version 2>&1) | Select-Object -First 1
           if ($verOutput -match '(\d+\.\d+\.\d+)') {
             $fullVer = $Matches[1]
           } else {
