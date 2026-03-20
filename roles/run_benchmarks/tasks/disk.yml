@@ -12,7 +12,7 @@
     cmd: |
       set -eo pipefail
       df --output=source {{ run_benchmarks_work_dir }} | tail -1 | tr -d ' '
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_disk_dev
   changed_when: false
   failed_when: false
@@ -52,7 +52,7 @@
         --prepare "${DROP_CMD}" \
         --command-name "seq-read-256m" \
           "dd if=${TESTFILE} of=/dev/null bs=64M count=4 2>&1"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_disk_result
   changed_when: false
   failed_when: false

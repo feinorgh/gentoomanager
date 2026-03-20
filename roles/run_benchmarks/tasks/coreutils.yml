@@ -12,7 +12,7 @@
     cmd: |
       set -o pipefail
       find {{ run_benchmarks_work_dir }}/findtree -type f 2>/dev/null | wc -l || echo 0
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_findtree_count
   changed_when: false
   failed_when: false
@@ -43,7 +43,7 @@
                   with open(os.path.join(d, "file_%02d.dat" % j), "w") as f:
                       f.write("bench dir=%03d sub=%s n=%02d\n" % (i, sub, j) + "y" * 256 + "\n")
       PYEOF
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
     creates: "{{ run_benchmarks_work_dir }}/findtree"
   changed_when: false
   failed_when: false
@@ -111,7 +111,7 @@
         done
         git checkout main 2>/dev/null || git checkout master
       fi
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
     creates: "{{ run_benchmarks_work_dir }}/gitrepo/.git"
 
 - name: Run git benchmarks
@@ -168,7 +168,7 @@
         --command-name 'diff' 'diff diff_a.txt diff_b.txt > /dev/null || true' \
         --command-name 'comm' 'comm <(sort diff_a.txt) <(sort diff_b.txt) > /dev/null'
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_diff_check.rc == 0
   register: run_benchmarks_coreutils_diff_result
   changed_when: false

@@ -125,7 +125,7 @@
         systemctl is-active "$svc" 2>/dev/null | grep -q '^active$' && echo "$svc"
       done
       true
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_active_services
   changed_when: false
   become: true
@@ -150,7 +150,7 @@
       set -eo pipefail
       DISK=$(lsblk -dno NAME | head -1)
       grep -oP '\[\K[^\]]+' "/sys/block/${DISK}/queue/scheduler"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_orig_iosched
   changed_when: false
   failed_when: false
@@ -328,7 +328,7 @@
         systemctl is-active "$timer" 2>/dev/null | grep -q '^active$' && echo "$timer"
       done
       true
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_active_timers
   changed_when: false
   become: true
@@ -366,7 +366,7 @@
         [ "$LOAD" -lt 50 ] && exit 0
         sleep 2
       done
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   changed_when: false
 
 # ── 14. Protect benchmark session from OOM killer ─────────────────────────

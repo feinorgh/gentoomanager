@@ -94,7 +94,7 @@
           real=$(readlink -f "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_cc_versions
   changed_when: false
   failed_when: false
@@ -121,7 +121,7 @@
           versions[label] = ver
       print(json.dumps(versions, indent=2))
       PYEOF
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_compiler_versions_raw
   changed_when: false
   failed_when: false
@@ -180,9 +180,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_c_compile.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_compiler_c_result
   changed_when: false
   failed_when: false
@@ -240,9 +240,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_c_runtime.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_compiler_c_runtime_result
   changed_when: false
   failed_when: false
@@ -347,7 +347,7 @@
           real=$(readlink -f "$cargo_bin" 2>/dev/null || echo "$cargo_bin")
           printf '%s\t%s\t%s\n' "$real" "$label" "$cargo_bin"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_rust_toolchains
   changed_when: false
   failed_when: false
@@ -380,9 +380,9 @@
         --prepare 'cargo clean 2>/dev/null || true' \
         --export-json {{ run_benchmarks_work_dir }}/compiler_rust.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: "'rustc' in run_benchmarks_compilers_available.stdout"
   register: run_benchmarks_compiler_rust_result
   changed_when: false
@@ -412,7 +412,7 @@
           versions[label] = ver
       print(json.dumps(versions, indent=2))
       PYEOF
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_rust_versions_raw
   changed_when: false
   failed_when: false
@@ -515,7 +515,7 @@
           real=$(readlink -f "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_go_toolchains
   changed_when: false
   failed_when: false
@@ -548,9 +548,9 @@
         --prepare 'rm -f bench_*' \
         --export-json {{ run_benchmarks_work_dir }}/compiler_go.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: "'go' in run_benchmarks_compilers_available.stdout"
   register: run_benchmarks_compiler_go_result
   changed_when: false
@@ -578,7 +578,7 @@
           versions[label] = ver
       print(json.dumps(versions, indent=2))
       PYEOF
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_go_versions_raw
   changed_when: false
   failed_when: false
@@ -637,9 +637,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_sqlite.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when:
     - run_benchmarks_sqlite3_copy is not failed
     - run_benchmarks_sqlite3_copy.rc | default(0) == 0
@@ -703,9 +703,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_multifile.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when:
     - run_benchmarks_multifile_gen is not failed
     - run_benchmarks_cc_versions.stdout_lines | default([]) | length > 0

@@ -54,7 +54,7 @@
         --prepare "dd if=/dev/zero of=/dev/shm/bench_bw_read bs=64M count=8 2>/dev/null; true" \
         --command-name "shm-read-512m" \
           "dd if=/dev/shm/bench_bw_read of=/dev/null bs=64M count=8 2>&1"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_memory_bw_result
   changed_when: false
   failed_when: false
@@ -80,7 +80,7 @@
         --export-json {{ run_benchmarks_work_dir }}/memory_latency.json \
         --command-name "pointer-chase-64m" \
           "{{ run_benchmarks_work_dir }}/bench_latency"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_memory_latency_result
   changed_when: false
   failed_when: false

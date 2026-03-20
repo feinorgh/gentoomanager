@@ -49,7 +49,7 @@
           "sh -c 'for i in \$(seq 500); do /bin/true; done'" \
         --command-name "python3-import" \
           "python3 -c 'import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools'"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_process_result
   changed_when: false
   failed_when: false

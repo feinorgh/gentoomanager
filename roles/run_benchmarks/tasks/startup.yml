@@ -74,7 +74,7 @@
       fi
       rm -rf "$XDG_RUNTIME_DIR"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_startup_result
   changed_when: false
   failed_when: false

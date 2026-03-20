@@ -91,7 +91,7 @@
           "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m lu-decomp" \
         --command-name "{{ _run_benchmarks_octave_label }}-octave-all" \
           "octave --norc {{ run_benchmarks_work_dir }}/octavebench.m octave-all"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when:
     - not run_benchmarks_is_windows
     - run_benchmarks_octave_check.rc == 0

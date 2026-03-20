@@ -71,9 +71,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_symmetric.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_symmetric_result
   changed_when: false
   failed_when: false
@@ -129,9 +129,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_hash.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_hash_result
   changed_when: false
   failed_when: false
@@ -175,9 +175,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_hash_coreutils.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_hash_coreutils_result
   changed_when: false
   failed_when: false
@@ -271,7 +271,7 @@
 
       print(f"Wrote {len(results)} result(s) to {OUTFILE}", file=sys.stderr)
       PYEOF
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_speed_result
   changed_when: false
   failed_when: false
@@ -435,9 +435,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_asymmetric_result
   changed_when: false
   failed_when: false
@@ -481,9 +481,9 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_hmac.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_hmac_result
   changed_when: false
   failed_when: false
@@ -514,7 +514,7 @@
           'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:100000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 100000 -in signdata.bin -out /dev/null 2>/dev/null' \
         --command-name 'pbkdf2-sha256-10k' \
           'openssl kdf -keylen 32 -kdfopt digest:sha256 -kdfopt pass:benchmark -kdfopt salt:0123456789abcdef -kdfopt iter:10000 PBKDF2 2>/dev/null || openssl enc -aes-256-cbc -pass pass:benchmark -pbkdf2 -iter 10000 -in signdata.bin -out /dev/null 2>/dev/null'
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_crypto_kdf_result
   changed_when: false
   failed_when: false
@@ -598,7 +598,7 @@
       ver=$(ssh -V 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
       major=$(echo "$ver" | cut -d. -f1)
       [ "${major:-0}" -ge 8 ]
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_ssh_sign_check
   changed_when: false
   failed_when: false
@@ -683,7 +683,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_ssh_sign.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ssh_sign_check.rc == 0
   register: run_benchmarks_crypto_ssh_sign_result
   changed_when: false
@@ -720,7 +720,7 @@
         path=$(command -v "$candidate" 2>/dev/null) && echo "$path" && exit 0
       done
       exit 1
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_botan_check
   changed_when: false
   failed_when: false
@@ -796,7 +796,7 @@
       PYEOF
 
       python3 botan_parse.py > {{ run_benchmarks_work_dir }}/crypto_botan.json
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_botan_check.rc == 0
   register: run_benchmarks_crypto_botan_result
   changed_when: false

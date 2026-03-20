@@ -12,7 +12,7 @@
         0|1|2) echo "$val" > /proc/sys/kernel/randomize_va_space ;;
         *) echo "WARN: unexpected ASLR value: $val" >&2 ;;
       esac
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: true
   failed_when: false
@@ -55,7 +55,7 @@
       else
         echo "WARN: unexpected governor value: $val" >&2
       fi
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: true
   failed_when: false
@@ -135,7 +135,7 @@
       if echo "$val" | grep -qE '^[01]$'; then
         echo "$val" > /sys/devices/system/cpu/intel_pstate/no_turbo
       fi
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: true
   failed_when: false
@@ -152,7 +152,7 @@
       if echo "$val" | grep -qE '^[01]$'; then
         echo "$val" > /sys/devices/system/cpu/cpufreq/boost
       fi
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: true
   failed_when: false
@@ -184,7 +184,7 @@
       if echo "$active" | grep -qE '^(always|madvise|never)$'; then
         echo "$active" > /sys/kernel/mm/transparent_hugepage/enabled
       fi
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: true
   failed_when: false
@@ -202,7 +202,7 @@
       if echo "$val" | grep -qE '^[01]$'; then
         echo "$val" > /sys/kernel/mm/ksm/run
       fi
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: true
   failed_when: false

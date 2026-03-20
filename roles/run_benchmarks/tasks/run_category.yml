@@ -7,7 +7,7 @@
     cmd: |
       set -o pipefail
       sync && echo 3 > /proc/sys/vm/drop_caches
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: false
   ignore_errors: true

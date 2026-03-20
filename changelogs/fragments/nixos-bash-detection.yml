@@ -1,0 +1,4 @@
+bugfixes:
+  - "roles/run_benchmarks: detect bash executable path at runtime to support
+    NixOS and other non-FHS distros where /bin/bash does not exist; all shell
+    tasks now use the detected path via _run_benchmarks_bash variable."

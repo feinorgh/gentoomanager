@@ -55,7 +55,7 @@
       conn.commit()
       conn.close()
       PYEOF
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
     creates: "{{ run_benchmarks_work_dir }}/sqlite_template.db"
   changed_when: false
@@ -78,7 +78,7 @@
         --prepare "cp {{ run_benchmarks_work_dir }}/sqlite_template.db /tmp/sqlite_bench_upd.db" \
         --command-name "update-500k" \
           "sqlite3 /tmp/sqlite_bench_upd.db 'UPDATE bench SET val=1.0-val WHERE id%2=0'"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_sqlite_write_result
   changed_when: false
   failed_when: false
@@ -111,7 +111,7 @@
           "sqlite3 {{ run_benchmarks_work_dir }}/sqlite_template.db 'SELECT COUNT(*), SUM(val) FROM bench WHERE val BETWEEN 0.25 AND 0.75'" \
         --command-name "order-top-100k" \
           "sqlite3 {{ run_benchmarks_work_dir }}/sqlite_template.db 'SELECT id, val FROM bench ORDER BY val LIMIT 100000'"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_sqlite_read_result
   changed_when: false
   failed_when: false

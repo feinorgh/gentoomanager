@@ -145,10 +145,10 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_encode.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_ffmpeg_video_encode_result
   changed_when: false
   failed_when: false
@@ -193,7 +193,7 @@
       if has mpeg2video; then ffmpeg -y -i test_raw.avi -c:v mpeg2video -b:v 8M -an test_mpeg2.mpg                        2>/dev/null || true; fi
       if has mjpeg;      then ffmpeg -y -i test_raw.avi -c:v mjpeg -q:v 10 -an test_mjpeg.avi                             2>/dev/null || true; fi
       {% endif %}
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: true
 
@@ -222,10 +222,10 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_video_decode.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_ffmpeg_video_decode_result
   changed_when: false
   failed_when: false
@@ -271,10 +271,10 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_encode.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_ffmpeg_audio_encode_result
   changed_when: false
   failed_when: false
@@ -311,7 +311,7 @@
       if has wavpack;    then ffmpeg -y -i test_raw.wav -c:a wavpack test_enc_wavpack.wv             2>/dev/null || true; fi
       if has alac;       then ffmpeg -y -i test_raw.wav -c:a alac test_enc_alac.m4a                  2>/dev/null || true; fi
       {% endif %}
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   changed_when: true
 
@@ -338,10 +338,10 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/ffmpeg_audio_decode.json \
         "${CMDS[@]}"
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_ffmpeg_check.rc == 0
   args:
-    executable: /bin/bash
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_ffmpeg_audio_decode_result
   changed_when: false
   failed_when: false
