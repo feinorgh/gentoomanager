@@ -2275,48 +2275,88 @@ def _generate_evaluation_summary(
 
 
 def _md_to_html_simple(md_text: str) -> str:
-    """Convert the subset of Markdown used by _generate_evaluation_summary to HTML."""
+    """Convert the subset of Markdown used by this module to HTML.
+
+    Handles: ## / ### headers, - bullet lists, | pipe tables,
+    **bold**, `code` inline markup, and plain paragraphs.
+    """
     html_lines: list[str] = []
     in_ul = False
+    in_table = False
+    table_header_done = False
+
+    def _close_ul() -> None:
+        nonlocal in_ul
+        if in_ul:
+            html_lines.append("</ul>")
+            in_ul = False
+
+    def _close_table() -> None:
+        nonlocal in_table, table_header_done
+        if in_table:
+            html_lines.append("  </tbody></table>")
+            in_table = False
+            table_header_done = False
+
     for line in md_text.splitlines():
+        # Pipe table rows
+        if line.startswith("|"):
+            _close_ul()
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            # Separator row (|---|---|) — marks end of header
+            if all(re.match(r"^-+$", c.replace(":", "")) for c in cells if c):
+                table_header_done = True
+                continue
+            if not in_table:
+                html_lines.append("<table>")
+                html_lines.append("  <thead><tr>")
+                html_lines.append("".join(f"<th>{_md_inline_to_html(c)}</th>" for c in cells))
+                html_lines.append("  </tr></thead>")
+                html_lines.append("  <tbody>")
+                in_table = True
+                table_header_done = False
+            else:
+                html_lines.append(
+                    "  <tr>" + "".join(f"<td>{_md_inline_to_html(c)}</td>" for c in cells) + "</tr>"
+                )
+            continue
+
+        # Non-table line — close any open table
+        _close_table()
+
         # Headers
         if line.startswith("### "):
-            if in_ul:
-                html_lines.append("</ul>")
-                in_ul = False
+            _close_ul()
             content = line[4:].strip()
-            html_lines.append(f"<h3>{content}</h3>")
+            slug = re.sub(r"[^a-z0-9]+", "-", content.lower()).strip("-")
+            html_lines.append(f'<h3 id="{slug}">{_md_inline_to_html(content)}</h3>')
             continue
         if line.startswith("## "):
-            if in_ul:
-                html_lines.append("</ul>")
-                in_ul = False
+            _close_ul()
             content = line[3:].strip()
-            html_lines.append(f"<h2>{content}</h2>")
+            slug = re.sub(r"[^a-z0-9]+", "-", content.lower()).strip("-")
+            html_lines.append(f'<h2 id="{slug}">{_md_inline_to_html(content)}</h2>')
             continue
+
         # Bullet list items
         if line.startswith("- "):
             if not in_ul:
                 html_lines.append("<ul>")
                 in_ul = True
-            content = line[2:]
-            content = _md_inline_to_html(content)
-            html_lines.append(f"  <li>{content}</li>")
+            html_lines.append(f"  <li>{_md_inline_to_html(line[2:])}</li>")
             continue
-        # Empty line or paragraph
-        if in_ul and line.strip() == "":
-            html_lines.append("</ul>")
-            in_ul = False
-            continue
+
+        # Empty line
         if line.strip() == "":
+            _close_ul()
             continue
-        if in_ul:
-            html_lines.append("</ul>")
-            in_ul = False
-        content = _md_inline_to_html(line)
-        html_lines.append(f"<p>{content}</p>")
-    if in_ul:
-        html_lines.append("</ul>")
+
+        # Close list if open before paragraph
+        _close_ul()
+        html_lines.append(f"<p>{_md_inline_to_html(line)}</p>")
+
+    _close_ul()
+    _close_table()
     return "\n".join(html_lines)
 
 
@@ -2341,6 +2381,24 @@ def _html_evaluation_summary(
         return ""
     html_body = _md_to_html_simple(md_text)
     return f'  <section id="analysis">\n{html_body}\n  </section>'
+
+
+def _html_compiler_analysis(
+    table: dict[str, Any],
+    hosts: dict[str, Any],
+    hostnames: list[str],
+) -> str:
+    """Generate an HTML section with the compiler optimisation analysis.
+
+    Converts the Markdown produced by ``_md_compiler_analysis`` (delta tables,
+    prose commentary, best-option-per-host summary) to HTML and wraps it in a
+    ``<section id="compiler-optimization-analysis">`` element.
+    """
+    md_text = _md_compiler_analysis(table, hostnames, hosts)
+    if not md_text.strip():
+        return ""
+    html_body = _md_to_html_simple(md_text)
+    return f'  <section id="compiler-optimization-analysis">\n{html_body}\n  </section>'
 
 
 def generate_markdown(
@@ -3398,6 +3456,7 @@ def generate_html(
     bench_data_js = json.dumps(bench_data_for_js)
     host_order_js = json.dumps(hostnames)
 
+    compiler_analysis_html = _html_compiler_analysis(table, hosts, hostnames)
     eval_summary_html = _html_evaluation_summary(table, hosts, scores, hostnames)
 
     html = f"""<!DOCTYPE html>
@@ -3627,6 +3686,8 @@ def generate_html(
   {build_times_html}
 
   {boot_times_html}
+
+  {compiler_analysis_html}
 
   {eval_summary_html}
 
@@ -4115,6 +4176,11 @@ def _build_pages_sidebar(
             lines.append(
                 f'    <a href="{slug}.html#cat-{cat}" class="nav-cat-link">{cat_title}</a>'
             )
+        if slug == "compiler":
+            lines.append(
+                '    <a href="compiler.html#compiler-optimization-analysis"'
+                ' class="nav-cat-link">Compiler Optimization Analysis</a>'
+            )
 
     return "\n".join(lines)
 
@@ -4398,6 +4464,9 @@ def generate_html_pages(
 
         sidebar_html = _build_pages_sidebar(slug, table, has_build_times, has_boot_times, has_codec)
         main_content = "\n".join(page_sections)
+        # Append the compiler optimisation analysis section to the compiler page
+        if slug == "compiler":
+            main_content += "\n" + _html_compiler_analysis(table, hosts, hostnames)
 
         page_html = _html_page_wrapper(
             f"Gentoo VM Benchmark Report — {page_title}",
