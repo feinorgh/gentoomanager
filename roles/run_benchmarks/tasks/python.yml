@@ -112,6 +112,76 @@
   failed_when: false
   when: run_benchmarks_python_check.rc == 0
 
+# Resolve each discovered binary to its full version string (e.g.
+# python3.13 → Python 3.13.5 → label "python3.13.5"), then deduplicate so
+# that aliases pointing to the same patch-level release are benchmarked only
+# once.  The output replaces run_benchmarks_py_versions with full-version
+# labels.
+- name: Resolve Python full versions and deduplicate
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import json, subprocess, re, sys
+
+      raw = """{{ run_benchmarks_py_versions.stdout | default('') }}"""
+      lines = raw.strip().splitlines()
+
+      seen_versions = {}   # full_ver → (new_label, exe, ver_string)
+
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          label, exe = parts[0], parts[1]
+          try:
+              out = subprocess.run(
+                  [exe, "--version"], capture_output=True, text=True,
+                  timeout=5, check=False,
+              )
+              ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
+          except Exception:
+              continue
+
+          # Extract full version (e.g. "Python 3.13.5" → "3.13.5")
+          m = re.search(r"(\d+\.\d+\.\d+)", ver_str)
+          if not m:
+              continue
+          full_ver = m.group(1)
+
+          # First occurrence wins — versioned labels appear before the generic
+          # python3 symlink so they are preferred.
+          if full_ver not in seen_versions:
+              seen_versions[full_ver] = (f"python{full_ver}", exe, ver_str)
+
+      # Emit "LABEL EXE" lines and a JSON version map on separate fd
+      version_map = {}
+      for full_ver in sorted(seen_versions):
+          new_label, exe, ver_str = seen_versions[full_ver]
+          print(f"{new_label} {exe}")
+          version_map[new_label] = ver_str
+
+      # Write version map to stderr so we can capture it separately
+      print(json.dumps(version_map), file=sys.stderr)
+      PYEOF
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_py_resolved
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_python_check.rc == 0
+    - run_benchmarks_py_versions.stdout | default('') | length > 0
+
+- name: Write python_versions.json
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/python_versions.json"
+    content: >-
+      {{ run_benchmarks_py_resolved.stderr | default('{}') | from_json | to_nice_json }}
+    mode: "0644"
+  when:
+    - run_benchmarks_py_resolved is not skipped
+    - run_benchmarks_py_resolved.rc | default(1) == 0
+
 - name: Run Python benchmarks
   ansible.builtin.shell:
     cmd: |
@@ -128,7 +198,7 @@
       BENCH_ARGS[python-all]=all
       BENCH_NAMES=(prime-sieve json-serde regex sha256-hash list-comprehension dict-operations python-all)
       CMDS=()
-      {% for py in run_benchmarks_py_versions.stdout_lines | default([]) %}
+      {% for py in run_benchmarks_py_resolved.stdout_lines | default([]) %}
       {% set py_parts = py.split() %}
       {% if py_parts | length >= 2 %}
       {% set py_label = py_parts[0] %}
