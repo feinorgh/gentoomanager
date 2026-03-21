@@ -1,0 +1,10 @@
+minor_changes:
+  - "scripts/generate_benchmark_report.py: add Compiler Optimization Analysis section
+    to HTML report pages (compiler.html and report.html), matching the existing
+    Markdown analysis; pipe tables are now rendered as proper HTML tables."
+  - "scripts/generate_benchmark_report.py: add id= anchor slugs to all h2/h3 headers
+    in converted Markdown content, enabling deep-linking to any section from the
+    sidebar navigation."
+  - "scripts/generate_benchmark_report.py: add missing CATEGORY_TITLES entries for
+    gimp (\"GIMP Image Processing\"), inkscape (\"Inkscape SVG Processing\"), and
+    octave (\"GNU Octave Benchmarks\") so report section headings use correct names."

@@ -66,6 +66,7 @@ _CATEGORY_TOOL_VERSION: dict[str, str | None] = {
     "opencv": "python",
     "gimp": "gimp",
     "inkscape": "inkscape",
+    "octave": None,  # multiple Octave versions; version encoded in command label
 }
 
 CATEGORY_TITLES = {
@@ -109,6 +110,9 @@ CATEGORY_TITLES = {
     "disk": "Disk I/O — Sequential (256 MiB write/read)",
     "linker": "Linker Performance (bfd / lld / gold)",
     "bash": "Bash Shell Performance",
+    "gimp": "GIMP Image Processing",
+    "inkscape": "Inkscape SVG Processing",
+    "octave": "GNU Octave Benchmarks",
 }
 
 # Maps page slug → (page_title, list_of_category_name_prefixes).
