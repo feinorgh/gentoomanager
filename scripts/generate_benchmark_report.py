@@ -1907,7 +1907,7 @@ def _stats_for_category(
         fastest_host, fastest_mean = sorted_hosts[0]
         slowest_host, slowest_mean = sorted_hosts[-1]
         spread_pct = (slowest_mean - fastest_mean) / fastest_mean * 100 if fastest_mean else 0.0
-        sorted_vals = [v for _, v in sorted_hosts]
+        sorted_vals = [v for _host_key, v in sorted_hosts]
         n = len(sorted_vals)
         if n % 2 == 1:
             median_mean = sorted_vals[n // 2]
