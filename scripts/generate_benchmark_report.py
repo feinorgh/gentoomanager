@@ -384,6 +384,13 @@ def _compute_footnotes(
                         reasons.append(f"{bench_name}: {tool} not installed")
 
         if reasons:
+            # Append any distro-specific notes that explain WHY a tool is
+            # missing (e.g. requires a non-default/third-party repository).
+            # Only attach distro_notes when there are already missing-tool
+            # reasons so the notes appear in the same footnote block.
+            for dn in notes.get("distro_notes", []):
+                if dn not in reasons:
+                    reasons.append(dn)
             footnotes[hostname] = reasons
 
     return footnotes

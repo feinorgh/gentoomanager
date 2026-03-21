@@ -180,7 +180,24 @@
     (run_benchmarks_sanity_is_tmpfs and not run_benchmarks_sanity_ram_ok)
 
 # ── 6. Persist sanity-check notes ────────────────────────────────────────
-- name: Write benchmark notes (missing tools)
+# Compute distro-specific notes for tools that are unavailable due to
+# non-default repository policy (e.g. RPM Fusion for ffmpeg on Red Hat).
+- name: Compute distro-specific limitation notes
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_distro_notes: >-
+      {%- set notes = [] -%}
+      {%- set missing = run_benchmarks_sanity_missing_req + run_benchmarks_sanity_missing_opt -%}
+      {%- set os_fam = ansible_os_family | default('') -%}
+      {%- set distro = ansible_distribution | default('') -%}
+      {%- if (os_fam == 'RedHat' or distro == 'Fedora') and 'ffmpeg' in missing -%}
+        {%- set _ = notes.append('ffmpeg: not available in default Red Hat / Fedora repositories; '
+          ~ 'full ffmpeg (with h264/h265) requires RPM Fusion which is a non-default '
+          ~ 'third-party repository — intentionally not used so results reflect the '
+          ~ 'default system package set') -%}
+      {%- endif -%}
+      {{ notes }}
+
+- name: Write benchmark notes (missing tools + distro limitations)
   ansible.builtin.copy:
     dest: "{{ run_benchmarks_work_dir }}/benchmark_notes.json"
     content: "{{ _notes | to_nice_json }}"
@@ -190,5 +207,6 @@
       missing_tools:
         required: "{{ run_benchmarks_sanity_missing_req | default([]) }}"
         optional: "{{ run_benchmarks_sanity_missing_opt | default([]) }}"
+      distro_notes: "{{ run_benchmarks_sanity_distro_notes | default([]) }}"
   changed_when: false
   failed_when: false

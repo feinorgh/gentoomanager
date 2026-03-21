@@ -92,27 +92,5 @@
   when: provision_benchmarks_install_octave | bool
   failed_when: false
 
-# lz4 on Ubuntu 22.04 (jammy) is 1.9.3 compiled without AVX2 optimisations.
-# Enabling jammy-backports gives access to 1.9.4+ which includes better SIMD
-# paths. Only applies to Ubuntu 22.04-derived distros (elementary OS 7,
-# Linux Mint 21.x). If the VM CPU model doesn't expose AVX2, SIMD still won't
-# activate — in that case the VM CPU model must be changed in the hypervisor.
-- name: Enable Ubuntu backports (for SIMD-capable lz4 on jammy)
-  ansible.builtin.apt_repository:
-    repo: "deb http://archive.ubuntu.com/ubuntu jammy-backports main universe"
-    state: present
-  become: true
-  when: ansible_distribution_release | default('') == 'jammy'
-  failed_when: false
-
-- name: Upgrade lz4 from backports on jammy-based hosts
-  ansible.builtin.apt:
-    name: lz4
-    state: latest
-    default_release: "jammy-backports"
-  become: true
-  when: ansible_distribution_release | default('') == 'jammy'
-  failed_when: false
-
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

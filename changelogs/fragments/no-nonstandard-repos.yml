@@ -1,0 +1,15 @@
+minor_changes:
+  - "roles/provision_benchmarks: remove all non-standard/non-recommended
+    repository usage from provisioning — benchmarks now reflect what is
+    available from each distribution's default package sources only."
+  - "roles/provision_benchmarks: remove RPM Fusion repository from Red Hat /
+    Fedora provisioning; ffmpeg is installed from default repos only
+    (Fedora 36+ ships ffmpeg-free in base repos; absent on older RHEL)."
+  - "roles/provision_benchmarks: remove Ubuntu jammy-backports repository
+    from Debian provisioning; lz4 is installed from the default Ubuntu repos."
+  - "roles/run_benchmarks: extend benchmark_notes.json with a distro_notes
+    field that records human-readable explanations when tools are unavailable
+    due to non-standard repository policy."
+  - "scripts/generate_benchmark_report.py: display distro_notes in report
+    footnotes alongside missing-tool notes so readers can see both WHAT is
+    missing and WHY."

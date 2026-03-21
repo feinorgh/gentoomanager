@@ -74,58 +74,20 @@
   changed_when: true
   failed_when: false
 
-- name: Install ffmpeg via RPM Fusion (Fedora)
-  when: >-
-    provision_benchmarks_install_ffmpeg | bool and
-    ansible_distribution | default('') == 'Fedora'
+- name: Install ffmpeg from default repositories (Red Hat / Fedora)
+  # On Fedora 36+ the default repos ship 'ffmpeg-free' (no patent-encumbered
+  # codecs) which is sufficient for benchmark purposes.  On RHEL/CentOS/OL the
+  # full ffmpeg is in EPEL on some versions; if absent the install silently
+  # fails and the video-encoding benchmark is skipped (noted in the report).
+  # RPM Fusion is intentionally NOT used — benchmarks reflect what is
+  # available from the distribution's default package sources.
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y ffmpeg
   become: true
-  block:
-    - name: Install RPM Fusion Free repository (Fedora)
-      ansible.builtin.command:
-        cmd: >-
-          dnf install -y
-          https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{
-          ansible_distribution_major_version }}.noarch.rpm
-      changed_when: true
-      failed_when: false
-
-    - name: Install ffmpeg from RPM Fusion, replacing ffmpeg-free if present (Fedora)
-      # '--allowerasing' lets dnf automatically remove the conflicting
-      # 'ffmpeg-free' package (Fedora 40+ base repo) and install the full
-      # RPM Fusion build which includes libx264/libx265 (h264/h265) support.
-      ansible.builtin.command:
-        cmd: dnf install -y --allowerasing ffmpeg
-      changed_when: true
-      failed_when: false
-
-- name: Install ffmpeg via RPM Fusion (RHEL/CentOS/OL)
-  when: >-
-    provision_benchmarks_install_ffmpeg | bool and
-    ansible_distribution | default('') != 'Fedora'
-  become: true
-  block:
-    - name: Import RPM Fusion Free GPG key (EL)
-      ansible.builtin.rpm_key:
-        key: >-
-          https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-el-{{
-          ansible_distribution_major_version }}
-        state: present
-      failed_when: false
-
-    - name: Install RPM Fusion Free repository (EL)
-      ansible.builtin.command:
-        cmd: >-
-          {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
-          https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{
-          ansible_distribution_major_version }}.noarch.rpm
-      changed_when: true
-      failed_when: false
-
-    - name: Install ffmpeg (EL)
-      ansible.builtin.command:
-        cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y ffmpeg"
-      changed_when: true
-      failed_when: false
+  when: provision_benchmarks_install_ffmpeg | bool
+  changed_when: true
+  failed_when: false
 
 - name: Install numpy (Red Hat)
   ansible.builtin.command:
