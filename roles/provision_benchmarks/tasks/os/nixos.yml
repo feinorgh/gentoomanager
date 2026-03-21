@@ -31,5 +31,35 @@
   changed_when: true
   failed_when: false
 
+# The memory bandwidth benchmark writes to /dev/shm (tmpfs). On NixOS this
+# path may not be mounted as tmpfs by default, causing writes to fall through
+# to the root filesystem (ext4) and producing artificially slow results.
+- name: Check whether /dev/shm is a tmpfs mount (NixOS)
+  ansible.builtin.shell:
+    cmd: findmnt -n -t tmpfs /dev/shm
+    executable: /bin/sh
+  register: provision_benchmarks_nixos_shm_check
+  changed_when: false
+  failed_when: false
+
+- name: Create /dev/shm directory if missing (NixOS)
+  ansible.builtin.file:
+    path: /dev/shm
+    state: directory
+    mode: "01777"
+  become: true
+  when: provision_benchmarks_nixos_shm_check.rc != 0
+
+- name: Mount /dev/shm as tmpfs (NixOS)
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: nosuid,nodev,noexec,size=512m
+    state: mounted
+  become: true
+  failed_when: false
+  when: provision_benchmarks_nixos_shm_check.rc != 0
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

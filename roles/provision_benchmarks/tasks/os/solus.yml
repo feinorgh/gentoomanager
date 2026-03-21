@@ -8,6 +8,15 @@
   changed_when: true
   failed_when: false
 
+# Install the system development component first to ensure gcc/clang/binutils
+# are fully available (individual gcc/clang packages may miss linker or headers).
+- name: Install system.devel component (Solus)
+  ansible.builtin.command:
+    cmd: eopkg install -c system.devel -y
+  become: true
+  changed_when: true
+  failed_when: false
+
 - name: Install benchmark dependencies (Solus)
   ansible.builtin.command:
     cmd: "eopkg install -y {{ item }}"
@@ -29,12 +38,38 @@
     - gnupg
     - diffutils
     - 7zip
-    - ImageMagick
+    - imagemagick
     - ffmpeg
     - sqlite3
-    - python3-numpy
+    - numpy
   changed_when: true
   failed_when: false
+
+# Ensure cc, gcc, clang are on PATH. On Solus they should be in /usr/bin but
+# the benchmark shell tasks need at least one of them reachable as 'cc' or 'gcc'.
+- name: Check gcc binary on PATH (Solus)
+  ansible.builtin.command:
+    cmd: which gcc
+  register: provision_benchmarks_solus_gcc_check
+  changed_when: false
+  failed_when: false
+
+- name: Warn if gcc is not on PATH (Solus)
+  ansible.builtin.debug:
+    msg: "[WARN] gcc not found in PATH on {{ inventory_hostname }} — compiler benchmarks will fail"
+  when: provision_benchmarks_solus_gcc_check.rc != 0
+
+- name: Check ffmpeg binary on PATH (Solus)
+  ansible.builtin.command:
+    cmd: which ffmpeg
+  register: provision_benchmarks_solus_ffmpeg_check
+  changed_when: false
+  failed_when: false
+
+- name: Warn if ffmpeg is not on PATH (Solus)
+  ansible.builtin.debug:
+    msg: "[WARN] ffmpeg not found in PATH on {{ inventory_hostname }} — FFmpeg benchmarks will be skipped"
+  when: provision_benchmarks_solus_ffmpeg_check.rc != 0
 
 - name: Install hyperfine binary (fallback)
   ansible.builtin.include_tasks: hyperfine_fallback.yml

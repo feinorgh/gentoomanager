@@ -154,6 +154,7 @@ provision_benchmarks_numpy_packages:
     - python3-numpy
   Archlinux:
     - python-numpy
+    - openblas  # Explicit BLAS backend; ensures matrix ops don't fall back to pure Python
   Suse:
     - python3-numpy
   FreeBSD:

@@ -1,0 +1,11 @@
+minor_changes:
+  - "roles/provision_benchmarks: add openblas to Arch Linux numpy package list so
+    matrix benchmarks use a BLAS-accelerated backend (cachyos-jessica, manjaro-justene)."
+  - "roles/provision_benchmarks: install system.devel component on Solus before individual
+    packages so gcc, clang, and build toolchain are guaranteed present; add PATH checks
+    for gcc and ffmpeg with warnings."
+  - "roles/provision_benchmarks: ensure /dev/shm is mounted as tmpfs on NixOS so the
+    memory bandwidth benchmark writes to RAM rather than the root filesystem."
+  - "roles/provision_benchmarks: enable Ubuntu jammy-backports and upgrade lz4 on
+    jammy-based hosts (elementary OS 7, Linux Mint 21.x) to obtain the SIMD-optimised
+    1.9.4+ build."
