@@ -11,6 +11,16 @@
 #   ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
 #   ansible-playbook playbooks/provision_benchmarks.yml -e provision_manage_power=true
 #
+# Community repositories (opt-in):
+#   By default only officially supported distribution repositories are used.
+#   Pass -e provision_benchmarks_enable_community_repos=true to also enable
+#   unofficial but curated repositories (EPEL + RPM Fusion on Red Hat/Fedora,
+#   Ubuntu backports on jammy-based systems).  Previously enabled community
+#   repos are automatically removed when this flag is false (the default).
+#
+#   ansible-playbook playbooks/provision_benchmarks.yml \
+#     -e provision_benchmarks_enable_community_repos=true
+#
 # --manage-power:
 #   When provision_manage_power=true, each VM that is powered off when the
 #   playbook starts is booted, provisioned, then shut down again.  VMs that

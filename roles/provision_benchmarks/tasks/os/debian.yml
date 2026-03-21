@@ -1,16 +1,43 @@
 ---
 # Debian family – Ubuntu, Debian, Linux Mint, elementary OS.
 
-# ── Remove non-standard repositories ────────────────────────────────────────
-# An earlier version of this provisioning playbook added Ubuntu backports for
-# an SIMD-optimised lz4. Remove any backports sources we may have left behind
-# so the system uses only default package sources.
-- name: Remove Ubuntu backports apt source if present (Ubuntu/jammy-based)
+# ── Community repositories (opt-in) ──────────────────────────────────────
+# Activated when provision_benchmarks_enable_community_repos=true.
+# Ubuntu backports provide newer package versions (e.g. lz4 1.9.4+ with
+# AVX2 SIMD support vs 1.9.3 in the main Ubuntu 22.04 archive).
+- name: Enable Ubuntu backports (Ubuntu/jammy-based — community repos)
+  ansible.builtin.apt_repository:
+    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-backports main universe"
+    state: present
+  become: true
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - ansible_distribution | default('') == 'Ubuntu'
+  failed_when: false
+
+- name: Upgrade lz4 from backports on jammy-based hosts (community repos)
+  ansible.builtin.apt:
+    name: lz4
+    state: latest  # noqa: package-latest
+    default_release: "{{ ansible_distribution_release }}-backports"
+  become: true
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - ansible_distribution | default('') == 'Ubuntu'
+    - ansible_distribution_release | default('') == 'jammy'
+  failed_when: false
+
+# ── Remove non-standard repositories (default / community repos disabled) ─
+# When community repos are disabled, remove any that may have been added by
+# a previous provisioning run.
+- name: Remove Ubuntu backports apt source if present (community repos disabled)
   ansible.builtin.apt_repository:
     repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-backports main universe"
     state: absent
   become: true
-  when: ansible_distribution | default('') == 'Ubuntu'
+  when:
+    - not (provision_benchmarks_enable_community_repos | bool)
+    - ansible_distribution | default('') == 'Ubuntu'
   failed_when: false
 
 - name: Update apt cache

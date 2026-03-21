@@ -1,0 +1,10 @@
+minor_changes:
+  - "roles/provision_benchmarks: add provision_benchmarks_enable_community_repos
+    flag (default: false) to opt-in to unofficial but curated package
+    repositories — EPEL + RPM Fusion Free on Red Hat/Fedora, Ubuntu backports
+    on jammy-based systems.  When the flag is false (default), any previously
+    enabled community repos are automatically removed so managed systems use
+    only their default distribution package sources."
+  - "playbooks/provision_benchmarks.yml: document the
+    provision_benchmarks_enable_community_repos flag in the playbook header
+    with usage examples."

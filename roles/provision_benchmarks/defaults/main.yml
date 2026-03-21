@@ -125,6 +125,34 @@ provision_benchmarks_hyperfine_sha256: "63ad53934062118f5b0be11785e0bb1603d4b916
 provision_benchmarks_hyperfine_url: >-
   https://github.com/sharkdp/hyperfine/releases/download/v{{ provision_benchmarks_hyperfine_version }}/hyperfine-v{{ provision_benchmarks_hyperfine_version }}-x86_64-unknown-linux-gnu.tar.gz
 
+# Community repository flag ───────────────────────────────────────────────
+# When true, enables unofficial but widely used, curated, and safe
+# third-party package repositories where the distribution's default repos
+# lack certain tools.  The following repos are activated per OS family:
+#
+#   RHEL / CentOS / Oracle Linux:
+#     - EPEL  (Extra Packages for Enterprise Linux, maintained by the Fedora
+#               Project; community-supported, not covered by Red Hat support)
+#     - RPM Fusion Free  (multimedia packages, e.g. full ffmpeg with
+#               h264/h265 support; community-maintained)
+#
+#   Fedora:
+#     - RPM Fusion Free  (full ffmpeg replacing Fedora's codec-stripped
+#               ffmpeg-free build)
+#
+#   Ubuntu 22.04 / jammy-based (elementary OS 7, Linux Mint 21.x):
+#     - Ubuntu backports  (newer upstream packages, e.g. lz4 1.9.4+ with
+#               AVX2 SIMD support vs. 1.9.3 in the main archive)
+#
+# When false (default), only officially supported distribution repositories
+# are used and any previously added community repos are removed.  Benchmark
+# results then reflect the distribution's default package set — some tools
+# may be unavailable and those benchmarks will be noted as skipped in the
+# generated report.
+#
+# Pass at the command line:  -e provision_benchmarks_enable_community_repos=true
+provision_benchmarks_enable_community_repos: false
+
 # Optional: also install ffmpeg (may need extra repos on some distros)
 provision_benchmarks_install_ffmpeg: true
 

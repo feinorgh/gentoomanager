@@ -11,45 +11,16 @@
   changed_when: false
   failed_when: provision_benchmarks_rhel_pkgmgr.rc != 0
 
-# ── Remove non-standard repositories ────────────────────────────────────────
-# RPM Fusion was used by an earlier version of this provisioning playbook.
-# Remove it so the system only uses default/recommended repositories.
-- name: Find RPM Fusion repository files
-  ansible.builtin.find:
-    paths: /etc/yum.repos.d
-    patterns: "rpmfusion*.repo"
-  register: provision_benchmarks_rpmfusion_repo_files
-  become: true
-  failed_when: false
+# ── Community repositories (opt-in) ──────────────────────────────────────
+# Activated when provision_benchmarks_enable_community_repos=true.
 
-- name: Remove RPM Fusion repository files
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: absent
-  become: true
-  loop: "{{ provision_benchmarks_rpmfusion_repo_files.files | default([]) }}"
-
-- name: Remove RPM Fusion release package if installed (Fedora)
-  ansible.builtin.command:
-    cmd: dnf remove -y rpmfusion-free-release rpmfusion-nonfree-release
-  become: true
-  when: ansible_distribution | default('') == 'Fedora'
-  failed_when: false
-  changed_when: true
-
-- name: Remove RPM Fusion release package if installed (EL)
-  ansible.builtin.command:
-    cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} remove -y rpmfusion-free-release rpmfusion-nonfree-release"
-  become: true
-  when: ansible_distribution | default('') != 'Fedora'
-  failed_when: false
-  changed_when: true
-
-- name: Install EPEL release package (RHEL/CentOS/OL)
+- name: Install EPEL release package (RHEL/CentOS/OL — community repos)
   ansible.builtin.command:
     cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y epel-release"
   become: true
-  when: ansible_distribution | default('') != 'Fedora'
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - ansible_distribution | default('') != 'Fedora'
   failed_when: false
   changed_when: true
   register: provision_benchmarks_epel_pkg
@@ -61,13 +32,108 @@
       https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{
       ansible_distribution_major_version }}.noarch.rpm
   become: true
-  when: >-
-    ansible_distribution | default('') != 'Fedora' and
-    ('No package epel-release' in (provision_benchmarks_epel_pkg.stdout | default('')) or
-     'Error' in (provision_benchmarks_epel_pkg.stdout | default('')))
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - ansible_distribution | default('') != 'Fedora'
+    - >-
+      'No package epel-release' in (provision_benchmarks_epel_pkg.stdout | default('')) or
+      'Error' in (provision_benchmarks_epel_pkg.stdout | default(''))
   failed_when: false
   changed_when: true
 
+- name: Install RPM Fusion Free repository (Fedora — community repos)
+  ansible.builtin.command:
+    cmd: >-
+      dnf install -y
+      https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-{{
+      ansible_distribution_major_version }}.noarch.rpm
+  become: true
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - provision_benchmarks_install_ffmpeg | bool
+    - ansible_distribution | default('') == 'Fedora'
+  changed_when: true
+  failed_when: false
+
+- name: Import RPM Fusion Free GPG key (EL — community repos)
+  ansible.builtin.rpm_key:
+    key: >-
+      https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-el-{{
+      ansible_distribution_major_version }}
+    state: present
+  become: true
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - provision_benchmarks_install_ffmpeg | bool
+    - ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+
+- name: Install RPM Fusion Free repository (EL — community repos)
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
+      https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{
+      ansible_distribution_major_version }}.noarch.rpm
+  become: true
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - provision_benchmarks_install_ffmpeg | bool
+    - ansible_distribution | default('') != 'Fedora'
+  changed_when: true
+  failed_when: false
+
+# ── Remove non-standard repositories (default / community repos disabled) ─
+# When community repos are disabled, remove any that may have been added by
+# a previous provisioning run.
+
+- name: Find RPM Fusion repository files
+  ansible.builtin.find:
+    paths: /etc/yum.repos.d
+    patterns: "rpmfusion*.repo"
+  register: provision_benchmarks_rpmfusion_repo_files
+  become: true
+  when: not (provision_benchmarks_enable_community_repos | bool)
+  failed_when: false
+
+- name: Remove RPM Fusion repository files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  become: true
+  loop: "{{ provision_benchmarks_rpmfusion_repo_files.files | default([]) }}"
+  when: not (provision_benchmarks_enable_community_repos | bool)
+
+- name: Remove RPM Fusion release package if installed (Fedora)
+  ansible.builtin.command:
+    cmd: dnf remove -y rpmfusion-free-release rpmfusion-nonfree-release
+  become: true
+  when:
+    - not (provision_benchmarks_enable_community_repos | bool)
+    - ansible_distribution | default('') == 'Fedora'
+  failed_when: false
+  changed_when: true
+
+- name: Remove RPM Fusion release package if installed (EL)
+  ansible.builtin.command:
+    cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} remove -y rpmfusion-free-release rpmfusion-nonfree-release"
+  become: true
+  when:
+    - not (provision_benchmarks_enable_community_repos | bool)
+    - ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+  changed_when: true
+
+- name: Remove EPEL repository if community repos are disabled (RHEL/CentOS/OL)
+  ansible.builtin.command:
+    cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} remove -y epel-release"
+  become: true
+  when:
+    - not (provision_benchmarks_enable_community_repos | bool)
+    - ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+  changed_when: true
+
+# ── CRB / PowerTools (official RHEL repo, always enabled on RHEL 8+) ──────
 - name: Enable CRB/PowerTools for RHEL 8+ dependencies
   ansible.builtin.shell:
     cmd: |
@@ -81,6 +147,8 @@
     ansible_distribution | default('') != 'Fedora' and
     (ansible_distribution_major_version | default('0') | int) >= 8
 
+# ── Package installs ──────────────────────────────────────────────────────
+
 - name: Install benchmark dependencies (Red Hat)
   ansible.builtin.command:
     cmd: >-
@@ -90,13 +158,15 @@
   changed_when: true
   failed_when: false
 
-- name: Install EPEL packages – hyperfine (RHEL/CentOS/OL)
+- name: Install EPEL packages – hyperfine (RHEL/CentOS/OL — community repos)
   ansible.builtin.command:
     cmd: >-
       {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y
       {{ provision_benchmarks_epel_packages | join(' ') }}
   become: true
-  when: ansible_distribution | default('') != 'Fedora'
+  when:
+    - provision_benchmarks_enable_community_repos | bool
+    - ansible_distribution | default('') != 'Fedora'
   changed_when: true
   failed_when: false
 
@@ -108,18 +178,31 @@
   changed_when: true
   failed_when: false
 
-- name: Install ffmpeg from default repositories (Red Hat / Fedora)
+- name: Install ffmpeg via RPM Fusion (community repos — full codec support)
+  # '--allowerasing' replaces ffmpeg-free (Fedora 40+ base repo) with the
+  # full RPM Fusion build that includes h264/h265 codec support.
+  ansible.builtin.command:
+    cmd: >-
+      {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y --allowerasing ffmpeg
+  become: true
+  when:
+    - provision_benchmarks_install_ffmpeg | bool
+    - provision_benchmarks_enable_community_repos | bool
+  changed_when: true
+  failed_when: false
+
+- name: Install ffmpeg from default repositories (no community repos)
   # On Fedora 36+ the default repos ship 'ffmpeg-free' (no patent-encumbered
-  # codecs) which is sufficient for benchmark purposes.  On RHEL/CentOS/OL the
-  # full ffmpeg is in EPEL on some versions; if absent the install silently
-  # fails and the video-encoding benchmark is skipped (noted in the report).
-  # RPM Fusion is intentionally NOT used — benchmarks reflect what is
-  # available from the distribution's default package sources.
+  # codecs) which is sufficient for benchmark purposes.  On RHEL/CentOS/OL
+  # ffmpeg may be absent; the video-encoding benchmark is then skipped and
+  # noted in the report.
   ansible.builtin.command:
     cmd: >-
       {{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y ffmpeg
   become: true
-  when: provision_benchmarks_install_ffmpeg | bool
+  when:
+    - provision_benchmarks_install_ffmpeg | bool
+    - not (provision_benchmarks_enable_community_repos | bool)
   changed_when: true
   failed_when: false
 
