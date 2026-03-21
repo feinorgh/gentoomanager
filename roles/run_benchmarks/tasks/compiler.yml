@@ -99,30 +99,54 @@
   changed_when: false
   failed_when: false
 
-- name: Collect compiler binary version strings
+# Resolves each discovered compiler binary to its full semver label (e.g.
+# gcc-14.3.1, clang-17.0.6) and deduplicates by (family, full_version) so
+# that gcc-14 and a gcc-config slot both referencing the same compiler version
+# are benchmarked only once.
+# stdout: "LABEL EXECUTABLE" lines for benchmark tasks
+# stderr: JSON version map written to compiler_versions.json
+- name: Resolve C compiler full versions and deduplicate
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       python3 - << 'PYEOF'
-      import json, subprocess
-      versions = {}
+      import json, re, subprocess, sys
       lines = """{{ run_benchmarks_cc_versions.stdout | default('') }}""".strip().splitlines()
+      seen: dict = {}   # (family, full_ver) → (new_label, exe, ver_string)
       for line in lines:
           parts = line.split(None, 1)
           if len(parts) < 2:
               continue
           label, exe = parts[0], parts[1]
+          if label.startswith('gcc') or label == 'cc':
+              family = 'gcc'
+          elif label.startswith('clang'):
+              family = 'clang'
+          else:
+              m_fam = re.match(r'^([a-z]+)', label)
+              family = m_fam.group(1) if m_fam else label
           try:
               out = subprocess.run([exe, '--version'], capture_output=True, text=True,
                                    timeout=5, check=False)
-              ver = (out.stdout or out.stderr).splitlines()[0].strip()
+              ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
           except Exception as exc:
-              ver = str(exc)
-          versions[label] = ver
-      print(json.dumps(versions, indent=2))
+              ver_str = str(exc)
+          m = re.search(r'\b(\d+\.\d+\.\d+)\b', ver_str)
+          if not m:
+              continue
+          full_ver = m.group(1)
+          key = (family, full_ver)
+          if key not in seen:
+              new_label = f'{family}-{full_ver}'
+              seen[key] = (new_label, exe, ver_str)
+      version_map: dict = {}
+      for (family, full_ver), (new_label, exe, ver_str) in sorted(seen.items()):
+          print(f'{new_label} {exe}')
+          version_map[new_label] = ver_str
+      print(json.dumps(version_map, indent=2), file=sys.stderr)
       PYEOF
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
-  register: run_benchmarks_compiler_versions_raw
+  register: run_benchmarks_cc_resolved
   changed_when: false
   failed_when: false
 
@@ -131,13 +155,13 @@
     dest: "{{ run_benchmarks_work_dir }}/compiler_versions.json"
     content: >-
       {{
-        (run_benchmarks_compiler_versions_raw.stdout | default('{}') | from_json) |
-        combine(run_benchmarks_rust_versions_raw.stdout | default('{}') | from_json) |
-        combine(run_benchmarks_go_versions_raw.stdout | default('{}') | from_json) |
+        (run_benchmarks_cc_resolved.stderr | default('{}') | from_json) |
+        combine(run_benchmarks_rust_resolved.stderr | default('{}') | from_json) |
+        combine(run_benchmarks_go_resolved.stderr | default('{}') | from_json) |
         to_nice_json
       }}
     mode: "0644"
-  when: run_benchmarks_compiler_versions_raw.rc | default(1) == 0
+  when: run_benchmarks_cc_resolved.rc | default(1) == 0
 
 - name: Run C compiler benchmarks
   ansible.builtin.shell:
@@ -145,7 +169,7 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
       CMDS=()
-      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% for cc in run_benchmarks_cc_resolved.stdout_lines | default([]) %}
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
       {% set cc_label = cc_parts[0] %}
@@ -203,7 +227,7 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
       CMDS=()
-      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% for cc in run_benchmarks_cc_resolved.stdout_lines | default([]) %}
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
       {% set cc_label = cc_parts[0] %}
@@ -353,13 +377,56 @@
   failed_when: false
   when: "'rustc' in run_benchmarks_compilers_available.stdout"
 
+# Resolves each Rust toolchain (stable, nightly, eselect slots) to its full
+# version label (e.g. rustc-1.86.0) and deduplicates by full version.
+# stdout: "LABEL CARGO_PATH" lines for benchmark tasks
+# stderr: JSON version map merged into compiler_versions.json
+- name: Resolve Rust toolchain versions and deduplicate
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import json, os, re, subprocess, sys
+      lines = """{{ run_benchmarks_rust_toolchains.stdout | default('') }}""".strip().splitlines()
+      seen: dict = {}   # full_ver → (new_label, cargo_bin, ver_string)
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          label, cargo_bin = parts[0], parts[1]
+          rustc_bin = os.path.join(os.path.dirname(cargo_bin), 'rustc')
+          cmd = [rustc_bin, '--version'] if os.path.isfile(rustc_bin) else ['rustc', '--version']
+          try:
+              out = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
+              ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
+          except Exception as exc:
+              ver_str = str(exc)
+          m = re.search(r'rustc\s+(\d+\.\d+\.\d+(?:-\w+)?)', ver_str)
+          if not m:
+              continue
+          full_ver = m.group(1)
+          if full_ver not in seen:
+              new_label = f'rustc-{full_ver}'
+              seen[full_ver] = (new_label, cargo_bin, ver_str)
+      version_map: dict = {}
+      for full_ver, (new_label, cargo_bin, ver_str) in sorted(seen.items()):
+          print(f'{new_label} {cargo_bin}')
+          version_map[new_label] = ver_str
+      print(json.dumps(version_map, indent=2), file=sys.stderr)
+      PYEOF
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_rust_resolved
+  changed_when: false
+  failed_when: false
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+
 - name: Run Rust compile benchmark
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}/rust_bench
       CMDS=()
-      {% for tc in run_benchmarks_rust_toolchains.stdout_lines | default([]) %}
+      {% for tc in run_benchmarks_rust_resolved.stdout_lines | default([]) %}
       {% set tc_parts = tc.split() %}
       {% if tc_parts | length >= 2 %}
       {% set tc_label = tc_parts[0] %}
@@ -387,36 +454,6 @@
   register: run_benchmarks_compiler_rust_result
   changed_when: false
   failed_when: false
-
-- name: Collect Rust toolchain version strings
-  ansible.builtin.shell:
-    cmd: |
-      set -eo pipefail
-      python3 - << 'PYEOF'
-      import json, os, subprocess
-      versions = {}
-      lines = """{{ run_benchmarks_rust_toolchains.stdout | default('') }}""".strip().splitlines()
-      for line in lines:
-          parts = line.split(None, 1)
-          if len(parts) < 2:
-              continue
-          label, cargo_bin = parts[0], parts[1]
-          # Derive rustc path from cargo binary (same bin/ directory)
-          rustc_bin = os.path.join(os.path.dirname(cargo_bin), 'rustc')
-          cmd = [rustc_bin, '--version'] if os.path.isfile(rustc_bin) else ['rustc', '--version']
-          try:
-              out = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
-              ver = (out.stdout or out.stderr).splitlines()[0].strip()
-          except Exception as exc:
-              ver = str(exc)
-          versions[label] = ver
-      print(json.dumps(versions, indent=2))
-      PYEOF
-    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
-  register: run_benchmarks_rust_versions_raw
-  changed_when: false
-  failed_when: false
-  when: "'rustc' in run_benchmarks_compilers_available.stdout"
 
 - name: Warn on compiler_rust benchmark failure
   ansible.builtin.debug:
@@ -521,13 +558,55 @@
   failed_when: false
   when: "'go' in run_benchmarks_compilers_available.stdout"
 
+# Resolves each Go toolchain to its full patch-level label (e.g. go1.24.1)
+# and deduplicates by full version.
+# stdout: "LABEL EXECUTABLE" lines for benchmark tasks
+# stderr: JSON version map merged into compiler_versions.json
+- name: Resolve Go toolchain versions and deduplicate
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      python3 - << 'PYEOF'
+      import json, re, subprocess, sys
+      lines = """{{ run_benchmarks_go_toolchains.stdout | default('') }}""".strip().splitlines()
+      seen: dict = {}   # full_ver → (new_label, exe, ver_string)
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          label, exe = parts[0], parts[1]
+          try:
+              out = subprocess.run([exe, 'version'], capture_output=True, text=True,
+                                   timeout=10, check=False)
+              ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
+          except Exception as exc:
+              ver_str = str(exc)
+          m = re.search(r'go(\d+\.\d+(?:\.\d+)?)', ver_str)
+          if not m:
+              continue
+          full_ver = m.group(1)
+          if full_ver not in seen:
+              new_label = f'go{full_ver}'
+              seen[full_ver] = (new_label, exe, ver_str)
+      version_map: dict = {}
+      for full_ver, (new_label, exe, ver_str) in sorted(seen.items()):
+          print(f'{new_label} {exe}')
+          version_map[new_label] = ver_str
+      print(json.dumps(version_map, indent=2), file=sys.stderr)
+      PYEOF
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_go_resolved
+  changed_when: false
+  failed_when: false
+  when: "'go' in run_benchmarks_compilers_available.stdout"
+
 - name: Run Go compile benchmark
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}/go_bench
       CMDS=()
-      {% for go in run_benchmarks_go_toolchains.stdout_lines | default([]) %}
+      {% for go in run_benchmarks_go_resolved.stdout_lines | default([]) %}
       {% set go_parts = go.split() %}
       {% if go_parts | length >= 2 %}
       {% set go_label = go_parts[0] %}
@@ -555,34 +634,6 @@
   register: run_benchmarks_compiler_go_result
   changed_when: false
   failed_when: false
-
-- name: Collect Go toolchain version strings
-  ansible.builtin.shell:
-    cmd: |
-      set -eo pipefail
-      python3 - << 'PYEOF'
-      import json, subprocess
-      versions = {}
-      lines = """{{ run_benchmarks_go_toolchains.stdout | default('') }}""".strip().splitlines()
-      for line in lines:
-          parts = line.split(None, 1)
-          if len(parts) < 2:
-              continue
-          label, exe = parts[0], parts[1]
-          try:
-              out = subprocess.run([exe, 'version'], capture_output=True, text=True,
-                                   timeout=10, check=False)
-              ver = (out.stdout or out.stderr).splitlines()[0].strip()
-          except Exception as exc:
-              ver = str(exc)
-          versions[label] = ver
-      print(json.dumps(versions, indent=2))
-      PYEOF
-    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
-  register: run_benchmarks_go_versions_raw
-  changed_when: false
-  failed_when: false
-  when: "'go' in run_benchmarks_compilers_available.stdout"
 
 - name: Warn on compiler_go benchmark failure
   ansible.builtin.debug:
@@ -617,7 +668,7 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
       CMDS=()
-      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% for cc in run_benchmarks_cc_resolved.stdout_lines | default([]) %}
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
       {% set cc_label = cc_parts[0] %}
@@ -643,7 +694,7 @@
   when:
     - run_benchmarks_sqlite3_copy is not failed
     - run_benchmarks_sqlite3_copy.rc | default(0) == 0
-    - run_benchmarks_cc_versions.stdout_lines | default([]) | length > 0
+    - run_benchmarks_cc_resolved.stdout_lines | default([]) | length > 0
   register: run_benchmarks_compiler_sqlite_result
   changed_when: false
   failed_when: false
@@ -682,7 +733,7 @@
       PROJ={{ run_benchmarks_work_dir }}/multifile_project
       NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
       CMDS=()
-      {% for cc in run_benchmarks_cc_versions.stdout_lines | default([]) %}
+      {% for cc in run_benchmarks_cc_resolved.stdout_lines | default([]) %}
       {% set cc_parts = cc.split() %}
       {% if cc_parts | length >= 2 %}
       {% set cc_label = cc_parts[0] %}
@@ -708,7 +759,7 @@
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when:
     - run_benchmarks_multifile_gen is not failed
-    - run_benchmarks_cc_versions.stdout_lines | default([]) | length > 0
+    - run_benchmarks_cc_resolved.stdout_lines | default([]) | length > 0
   register: run_benchmarks_compiler_multifile_result
   changed_when: false
   failed_when: false

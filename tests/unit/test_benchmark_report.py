@@ -13,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from generate_benchmark_report import (
     _build_python_pivot,
+    _compiler_display_version,
     _python_display_version,
+    _sort_cc_label,
     anonymize_hosts,
     build_comparison_table,
     extract_features,
@@ -1052,3 +1054,49 @@ class TestPythonVersionResolution:
         table = build_comparison_table(hosts)
         md = generate_markdown(hosts, table)
         assert "py3.12.1" in md
+
+
+class TestCompilerDisplayVersion:
+    def test_new_gcc_label(self) -> None:
+        assert _compiler_display_version("gcc-14.3.1", "host-a", {}) == "gcc 14.3.1"
+
+    def test_new_clang_label(self) -> None:
+        assert _compiler_display_version("clang-17.0.6", "host-a", {}) == "clang 17.0.6"
+
+    def test_new_rustc_label(self) -> None:
+        assert _compiler_display_version("rustc-1.86.0", "host-a", {}) == "rustc 1.86.0"
+
+    def test_new_go_label(self) -> None:
+        assert _compiler_display_version("go1.24.1", "host-a", {}) == "go 1.24.1"
+
+    def test_old_gcc_label_with_metadata(self) -> None:
+        hosts = {
+            "host-a": {
+                "metadata": {
+                    "compiler_versions": {
+                        "gcc-14": "gcc-14 (Gentoo Hardened 14.3.1_p20260213 p5) 14.3.1 20260213"
+                    }
+                }
+            }
+        }
+        assert _compiler_display_version("gcc-14", "host-a", hosts) == "gcc 14.3.1"
+
+    def test_fallback_no_metadata(self) -> None:
+        assert _compiler_display_version("gcc-14", "host-a", {}) == "gcc-14"
+
+
+class TestSortCcLabel:
+    def test_full_version_gcc(self) -> None:
+        assert _sort_cc_label("gcc-14.3.1") == ("gcc", (14, 3, 1))
+
+    def test_full_version_clang(self) -> None:
+        assert _sort_cc_label("clang-17.0.6") == ("clang", (17, 0, 6))
+
+    def test_full_version_rustc(self) -> None:
+        assert _sort_cc_label("rustc-1.86.0") == ("rustc", (1, 86, 0))
+
+    def test_go_label(self) -> None:
+        assert _sort_cc_label("go1.24.1") == ("go", (1, 24, 1))
+
+    def test_unknown_label(self) -> None:
+        assert _sort_cc_label("unknown") == ("unknown", (0,))

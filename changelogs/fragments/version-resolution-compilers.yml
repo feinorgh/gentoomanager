@@ -1,0 +1,4 @@
+minor_changes:
+  - "roles/run_benchmarks: resolve full patch-level versions for GCC, Clang, Rust, and Go
+    toolchains before benchmarking; deduplicate by resolved version to avoid double-benchmarking
+    compiler aliases; benchmark result labels now include full semver (e.g. gcc-14.3.1)."

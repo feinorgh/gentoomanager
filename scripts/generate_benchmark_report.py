@@ -516,30 +516,52 @@ def _parse_compiler_bench(command: str) -> tuple[str, str, str] | None:
 def _compiler_display_version(cc_label: str, hostname: str, hosts: dict) -> str:
     """Return a short, human-readable version string for *cc_label* on *hostname*.
 
-    Looks up ``compiler_versions.json`` data (stored in host metadata) and
-    extracts the first semver token.  Falls back to *cc_label* if not found.
+    Handles both new full-version labels (gcc-14.3.1, clang-17.0.6, rustc-1.86.0,
+    go1.24.1) and old short labels (gcc-14, clang-17) via compiler_versions.json
+    fallback.
 
     Examples::
 
-        "gcc-14 (Gentoo Hardened 14.3.1_p20260213 p5) 14.3.1 20260213"  → "gcc 14.3.1"
-        "clang version 21.1.8"                                            → "clang 21.1.8"
+        "gcc-14.3.1"    → "gcc 14.3.1"
+        "clang-17.0.6"  → "clang 17.0.6"
+        "rustc-1.86.0"  → "rustc 1.86.0"
+        "go1.24.1"      → "go 1.24.1"
+        "gcc-14"        → "gcc 14.3.1"  (via compiler_versions.json lookup)
     """
+    # New format: FAMILY-X.Y.Z (gcc-14.3.1, clang-17.0.6, rustc-1.86.0)
+    m = re.match(r"^([a-zA-Z]+)-(\d+\.\d+\.\d+(?:-\w+)?)$", cc_label)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    # Go format: goX.Y.Z or goX.Y
+    m = re.match(r"^go(\d+\.\d+(?:\.\d+)?)$", cc_label)
+    if m:
+        return f"go {m.group(1)}"
+    # Fallback: look up in compiler_versions.json for old-format labels (gcc-14)
     ver_map: dict[str, str] = (
         hosts.get(hostname, {}).get("metadata", {}).get("compiler_versions", {})
     )
     full_ver = ver_map.get(cc_label, "")
     base = re.sub(r"-\d+$", "", cc_label)  # "gcc-14" → "gcc", "clang-21" → "clang"
     if full_ver:
-        m = re.search(r"\b(\d+\.\d+\.\d+)\b", full_ver)
-        if m:
-            return f"{base} {m.group(1)}"
+        m2 = re.search(r"\b(\d+\.\d+\.\d+)\b", full_ver)
+        if m2:
+            return f"{base} {m2.group(1)}"
     return cc_label
 
 
-def _sort_cc_label(cc_label: str) -> tuple[str, int]:
-    """Sort key so ``gcc-14 < gcc-15 < clang-21``."""
-    m = re.match(r"^([A-Za-z]+)-(\d+)$", cc_label)
-    return (m.group(1), int(m.group(2))) if m else (cc_label, 0)
+def _sort_cc_label(cc_label: str) -> tuple[str, tuple[int, ...]]:
+    """Sort key for compiler labels supporting both X.Y.Z and short-N formats."""
+    # New format: FAMILY-X.Y.Z or FAMILY-X.Y
+    m = re.match(r"^([a-zA-Z]+)-(\d+(?:\.\d+)*)$", cc_label)
+    if m:
+        nums = tuple(int(x) for x in m.group(2).split("."))
+        return (m.group(1), nums)
+    # Go format: goX.Y.Z
+    m = re.match(r"^go(\d+(?:\.\d+)*)$", cc_label)
+    if m:
+        nums = tuple(int(x) for x in m.group(1).split("."))
+        return ("go", nums)
+    return (cc_label, (0,))
 
 
 def _build_compiler_pivot(
