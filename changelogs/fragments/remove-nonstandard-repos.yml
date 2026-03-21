@@ -1,0 +1,5 @@
+minor_changes:
+  - "roles/provision_benchmarks: remove non-standard repositories from
+    managed systems during provisioning — RPM Fusion (Fedora/EL) and Ubuntu
+    backports (jammy) are removed if present, ensuring systems use only
+    default distribution repositories."

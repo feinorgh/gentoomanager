@@ -11,6 +11,40 @@
   changed_when: false
   failed_when: provision_benchmarks_rhel_pkgmgr.rc != 0
 
+# ── Remove non-standard repositories ────────────────────────────────────────
+# RPM Fusion was used by an earlier version of this provisioning playbook.
+# Remove it so the system only uses default/recommended repositories.
+- name: Find RPM Fusion repository files
+  ansible.builtin.find:
+    paths: /etc/yum.repos.d
+    patterns: "rpmfusion*.repo"
+  register: provision_benchmarks_rpmfusion_repo_files
+  become: true
+  failed_when: false
+
+- name: Remove RPM Fusion repository files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  become: true
+  loop: "{{ provision_benchmarks_rpmfusion_repo_files.files | default([]) }}"
+
+- name: Remove RPM Fusion release package if installed (Fedora)
+  ansible.builtin.command:
+    cmd: dnf remove -y rpmfusion-free-release rpmfusion-nonfree-release
+  become: true
+  when: ansible_distribution | default('') == 'Fedora'
+  failed_when: false
+  changed_when: true
+
+- name: Remove RPM Fusion release package if installed (EL)
+  ansible.builtin.command:
+    cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} remove -y rpmfusion-free-release rpmfusion-nonfree-release"
+  become: true
+  when: ansible_distribution | default('') != 'Fedora'
+  failed_when: false
+  changed_when: true
+
 - name: Install EPEL release package (RHEL/CentOS/OL)
   ansible.builtin.command:
     cmd: "{{ provision_benchmarks_rhel_pkgmgr.stdout }} install -y epel-release"

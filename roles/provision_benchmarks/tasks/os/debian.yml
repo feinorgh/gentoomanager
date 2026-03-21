@@ -1,6 +1,18 @@
 ---
 # Debian family – Ubuntu, Debian, Linux Mint, elementary OS.
 
+# ── Remove non-standard repositories ────────────────────────────────────────
+# An earlier version of this provisioning playbook added Ubuntu backports for
+# an SIMD-optimised lz4. Remove any backports sources we may have left behind
+# so the system uses only default package sources.
+- name: Remove Ubuntu backports apt source if present (Ubuntu/jammy-based)
+  ansible.builtin.apt_repository:
+    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-backports main universe"
+    state: absent
+  become: true
+  when: ansible_distribution | default('') == 'Ubuntu'
+  failed_when: false
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
