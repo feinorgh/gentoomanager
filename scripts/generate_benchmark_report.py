@@ -111,6 +111,36 @@ CATEGORY_TITLES = {
     "bash": "Bash Shell Performance",
 }
 
+# Maps page slug → (page_title, list_of_category_name_prefixes).
+# Categories are assigned to the first matching page whose prefix list contains
+# a prefix of the category name.  Unmatched categories fall to "system".
+PAGE_GROUPS: dict[str, tuple[str, list[str]]] = {
+    "compiler": ("Compiler Benchmarks", ["compiler"]),
+    "python": ("Python & Numeric", ["python", "octave", "numeric", "opencv"]),
+    "crypto": ("Cryptography", ["crypto"]),
+    "media": ("Media Processing", ["ffmpeg", "imagemagick", "gimp", "inkscape"]),
+    "memory": ("Memory & Disk", ["memory", "disk", "sqlite"]),
+    "system": (
+        "System Performance",
+        ["compression", "coreutils", "git", "diff", "startup", "bash", "process", "linker"],
+    ),
+}
+_DEFAULT_PAGE = "system"  # catch-all for unmatched categories
+
+
+def _category_page(category: str) -> str:
+    """Return the page slug that *category* belongs to."""
+    for slug, (_title, prefixes) in PAGE_GROUPS.items():
+        for prefix in prefixes:
+            if (
+                category == prefix
+                or category.startswith(prefix + "_")
+                or category.startswith(prefix)
+            ):
+                return slug
+    return _DEFAULT_PAGE
+
+
 # Categories not run on Windows (complement of run_benchmarks_windows_categories)
 _WINDOWS_EXCLUDED: frozenset[str] = frozenset(
     {
@@ -2255,6 +2285,153 @@ def _color_for(idx: int) -> str:
     return CHART_COLORS[idx % len(CHART_COLORS)]
 
 
+# Shared CSS block (regular string — single braces are literal CSS braces).
+# Used in the split multi-page HTML output; generate_html() keeps its own
+# inline copy so its behaviour and output remain unchanged.
+_HTML_CSS = """\
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --text: #e0e0e0;
+      --accent: #0f3460;
+      --highlight: #e94560;
+      --border: #333;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      display: flex;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      color: var(--highlight);
+      margin-bottom: 0.5rem;
+      font-size: 2rem;
+    }
+    .timestamp {
+      text-align: center;
+      color: #888;
+      margin-bottom: 2rem;
+    }
+    nav {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: var(--surface);
+      border-radius: 8px;
+    }
+    nav a { color: #4dc9f6; text-decoration: none; padding: 0.3rem 0.6rem; }
+    nav a:hover { text-decoration: underline; }
+    section {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      color: #4dc9f6;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .chart-container {
+      position: relative;
+      height: 400px;
+      margin-bottom: 1.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th { background: var(--accent); color: #fff; position: sticky; top: 0; }
+    tr:hover { background: rgba(255,255,255,0.03); }
+    .fastest { color: #00e676; font-weight: bold; }
+    .host-summary { overflow-x: auto; }
+    .host-summary table { font-size: 0.8rem; }
+    .bench-footnote {
+      font-size: 0.82em;
+      color: #aaa;
+      margin-top: 0.25em;
+      font-style: italic;
+    }
+    .version-row td, .version-row th {
+      font-size: 0.8em;
+      color: #aaa;
+      font-style: italic;
+      background: rgba(255,255,255,0.02);
+    }
+    #page-sidebar {
+      width: 220px;
+      min-width: 180px;
+      flex-shrink: 0;
+      background: var(--surface);
+      padding: 1.2rem;
+      height: 100vh;
+      overflow-y: auto;
+      position: sticky;
+      top: 0;
+      border-right: 1px solid var(--border);
+    }
+    #page-sidebar h3 {
+      color: var(--highlight);
+      font-size: 1rem;
+      margin-bottom: 0.8rem;
+    }
+    #main-content {
+      flex: 1;
+      padding: 2rem;
+      overflow-x: hidden;
+      min-width: 0;
+    }
+    .nav-page-link {
+      display: block;
+      color: #4dc9f6;
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 0.25rem 0.4rem;
+      border-radius: 3px;
+      font-weight: bold;
+      margin-top: 0.5rem;
+    }
+    .nav-page-link:hover, .nav-page-link.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .nav-cat-link {
+      display: block;
+      color: #aaa;
+      text-decoration: none;
+      font-size: 0.78rem;
+      padding: 0.1rem 0.8rem;
+    }
+    .nav-cat-link:hover { color: #fff; }
+    @media (max-width: 900px) {
+      body { flex-direction: column; }
+      #page-sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .chart-container { height: 300px; }
+    }
+  </style>"""
+
+
 # Badge injected next to hypervisor hostnames in HTML tables
 _HV_BADGE = (
     ' <span style="background:#5c4200;color:#ffd600;font-size:0.75em;'
@@ -3121,6 +3298,650 @@ def generate_html(
     return html
 
 
+def _build_category_page_content(
+    categories: list[str],
+    table: dict[str, Any],
+    hosts: dict[str, Any],
+    hostnames: list[str],
+    slug: str = "",
+) -> tuple[list[str], list[str]]:
+    """Build HTML sections and Chart.js blocks for the given list of categories.
+
+    Returns:
+        html_sections: list of <section> HTML strings
+        chart_blocks:  list of Chart.js initialisation JS strings
+    """
+    html_sections: list[str] = []
+    chart_blocks: list[str] = []
+    chart_id = 0
+    all_host_features = {h: extract_features(hosts[h].get("metadata", {})) for h in hostnames}
+    id_prefix = f"{slug}_" if slug else ""
+
+    for category in sorted(categories):
+        if category not in table:
+            continue
+        title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
+        benchmarks = table[category]
+        bench_names = sorted(benchmarks.keys())
+        chart_id += 1
+        canvas_id = f"chart_{id_prefix}{chart_id}"
+
+        if category in _COMPILER_PIVOT_CATEGORIES:
+            opt_labels, pivot_rows = _build_compiler_pivot(benchmarks, hostnames, hosts)
+            labels_json = json.dumps(opt_labels)
+            datasets_pivot: list[dict[str, Any]] = []
+            for pidx, (_cc_label, ver_display, hostname, opt_data) in enumerate(pivot_rows):
+                data_points_p: list[float | None] = []
+                for opt in opt_labels:
+                    if opt in opt_data:
+                        data_points_p.append(round(opt_data[opt]["mean"], 4))
+                    else:
+                        data_points_p.append(None)
+                datasets_pivot.append(
+                    {
+                        "label": f"{ver_display} ({hostname})",
+                        "data": data_points_p,
+                        "backgroundColor": _color_for(pidx) + "cc",
+                        "borderColor": _color_for(pidx),
+                        "borderWidth": 1,
+                    }
+                )
+            datasets_json = json.dumps(datasets_pivot, indent=2)
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            table_html = _html_compiler_pivot_table(benchmarks, hostnames, hosts, footnotes)
+            section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+            html_sections.append(section)
+            chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: true }},
+          title: {{ display: true, text: '{title} (seconds, lower is better)' }}
+        }},
+        scales: {{
+          y: {{ title: {{ display: true, text: 'Time (seconds)' }} }}
+        }}
+      }}
+    }});""")
+            continue
+
+        if category in _PYTHON_PIVOT_CATEGORIES:
+            bench_labels_py, py_pivot_rows = _build_python_pivot(benchmarks, hostnames, hosts)
+            labels_json = json.dumps(bench_labels_py)
+            py_datasets: list[dict[str, Any]] = []
+            for pidx, (py_label, hostname, bench_data_py) in enumerate(py_pivot_rows):
+                data_points_py: list[float | None] = []
+                for bench in bench_labels_py:
+                    if bench in bench_data_py:
+                        data_points_py.append(round(bench_data_py[bench]["mean"], 4))
+                    else:
+                        data_points_py.append(None)
+                py_datasets.append(
+                    {
+                        "label": f"{py_label} ({hostname})",
+                        "data": data_points_py,
+                        "backgroundColor": _color_for(pidx) + "cc",
+                        "borderColor": _color_for(pidx),
+                        "borderWidth": 1,
+                    }
+                )
+            datasets_json = json.dumps(py_datasets, indent=2)
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            table_html = _html_python_pivot_table(benchmarks, hostnames, footnotes, hosts)
+            section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+            html_sections.append(section)
+            chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: true }},
+          title: {{ display: true, text: '{title} (seconds, lower is better)' }}
+        }},
+        scales: {{
+          y: {{ title: {{ display: true, text: 'Time (seconds)' }} }}
+        }}
+      }}
+    }});""")
+            continue
+
+        if category in _OCTAVE_PIVOT_CATEGORIES:
+            bench_labels_oct, oct_pivot_rows = _build_octave_pivot(benchmarks, hostnames)
+            labels_json = json.dumps(bench_labels_oct)
+            oct_datasets: list[dict[str, Any]] = []
+            for oidx, (oct_label, hostname, bench_data_oct) in enumerate(oct_pivot_rows):
+                data_points_oct: list[float | None] = []
+                for bench in bench_labels_oct:
+                    if bench in bench_data_oct:
+                        data_points_oct.append(round(bench_data_oct[bench]["mean"], 4))
+                    else:
+                        data_points_oct.append(None)
+                oct_datasets.append(
+                    {
+                        "label": f"{oct_label} ({hostname})",
+                        "data": data_points_oct,
+                        "backgroundColor": _color_for(oidx) + "cc",
+                        "borderColor": _color_for(oidx),
+                        "borderWidth": 1,
+                    }
+                )
+            datasets_json = json.dumps(oct_datasets, indent=2)
+            footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+            table_html = _html_octave_pivot_table(benchmarks, hostnames, footnotes)
+            section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+            html_sections.append(section)
+            chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: true }},
+          title: {{ display: true, text: '{title} (seconds, lower is better)' }}
+        }},
+        scales: {{
+          y: {{ title: {{ display: true, text: 'Time (seconds)' }} }}
+        }}
+      }}
+    }});""")
+            continue
+
+        # Generic category
+        datasets: list[dict[str, Any]] = []
+        for idx, hostname in enumerate(hostnames):
+            data_points: list[float | None] = []
+            for bench_name in bench_names:
+                if hostname in benchmarks.get(bench_name, {}):
+                    r = benchmarks[bench_name][hostname]
+                    data_points.append(round(r["mean"], 4))
+                else:
+                    data_points.append(None)
+            datasets.append(
+                {
+                    "label": hostname,
+                    "data": data_points,
+                    "backgroundColor": _color_for(idx) + "cc",
+                    "borderColor": _color_for(idx),
+                    "borderWidth": 1,
+                }
+            )
+
+        labels_json = json.dumps(bench_names)
+        datasets_json = json.dumps(datasets, indent=2)
+
+        sample_bench_name = bench_names[0] if bench_names else None
+        higher = False
+        if sample_bench_name and hostnames:
+            sample_r = benchmarks.get(sample_bench_name, {}).get(hostnames[0], {})
+            higher = bool(sample_r.get("higher_is_better", False))
+
+        y_label = "Throughput (KB/s)" if higher else "Time (seconds)"
+        chart_title_suffix = "KB/s, higher is better" if higher else "seconds, lower is better"
+        tooltip_suffix = "KB/s" if higher else "s"
+        tooltip_digits = 2 if higher else 4
+        higher_js = "true" if higher else "false"
+
+        footnotes = _compute_footnotes(category, benchmarks, hostnames, hosts)
+        cat_versions = _get_category_versions(category, all_host_features) or None
+        table_html = _html_benchmark_table(
+            benchmarks, bench_names, hostnames, footnotes, category, cat_versions
+        )
+
+        section = f"""
+    <section id="cat-{category}">
+      <h2>{title}</h2>
+      <div class="chart-container">
+        <canvas id="{canvas_id}"></canvas>
+      </div>
+      {table_html}
+    </section>"""
+        html_sections.append(section)
+
+        chart_blocks.append(f"""
+    CHARTS['{canvas_id}'] = new Chart(document.getElementById('{canvas_id}'), {{
+      type: 'bar',
+      data: {{
+        labels: {labels_json},
+        datasets: {datasets_json}
+      }},
+      options: {{
+        higherIsBetter: {higher_js},
+        responsive: true,
+        plugins: {{
+          title: {{ display: true, text: '{title} ({chart_title_suffix})' }},
+          legend: {{ position: 'bottom' }},
+          tooltip: {{
+            callbacks: {{
+              label: function(ctx) {{
+                const v = ctx.parsed.y.toFixed({tooltip_digits});
+                return ctx.dataset.label + ': ' + v + '{tooltip_suffix}';
+              }}
+            }}
+          }}
+        }},
+        scales: {{
+          y: {{
+            beginAtZero: true,
+            title: {{ display: true, text: '{y_label}' }}
+          }}
+        }}
+      }}
+    }});
+    CHART_CATS['{canvas_id}'] = '{category}';""")
+
+    return html_sections, chart_blocks
+
+
+def _html_page_wrapper(
+    title: str,
+    main_content_html: str,
+    charts_js: str,
+    sidebar_html: str,
+    timestamp: str,
+) -> str:
+    """Return a full self-contained HTML document."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{_HTML_CSS}
+</head>
+<body>
+  <aside id="page-sidebar">
+{sidebar_html}
+  </aside>
+  <div id="main-content">
+  <h1>🖥️ {title}</h1>
+  <p class="timestamp">Generated: {timestamp}</p>
+{main_content_html}
+  </div><!-- #main-content -->
+  <script>
+    const CHARTS = {{}};
+    const CHART_CATS = {{}};
+    Chart.defaults.color = '#e0e0e0';
+    Chart.defaults.borderColor = '#333';
+    {charts_js}
+  </script>
+</body>
+</html>"""
+
+
+def _build_pages_sidebar(
+    current_page: str,
+    table: dict[str, Any],
+    has_build_times: bool,
+    has_boot_times: bool,
+    has_codec: bool,
+) -> str:
+    """Return the sidebar nav HTML for the multi-page layout.
+
+    Groups categories by page. The current page is highlighted.
+    Links use relative paths (e.g. 'compiler.html#cat-compiler_c_compile').
+    """
+    lines: list[str] = []
+    lines.append("    <h3>📊 Navigation</h3>")
+
+    idx_cls = " active" if current_page == "index" else ""
+    lines.append(f'    <a href="index.html" class="nav-page-link{idx_cls}">Overview</a>')
+    lines.append('    <a href="index.html#host-summary" class="nav-cat-link">Host Summary</a>')
+    lines.append('    <a href="index.html#scores" class="nav-cat-link">Scores</a>')
+    if has_codec:
+        lines.append(
+            '    <a href="index.html#cat-codec-avail" class="nav-cat-link">Codec Availability</a>'
+        )
+    if has_boot_times:
+        lines.append('    <a href="index.html#cat-boot-times" class="nav-cat-link">Boot Times</a>')
+    if has_build_times:
+        lines.append(
+            '    <a href="index.html#cat-build-times" class="nav-cat-link">Build Times</a>'
+        )
+
+    for slug, (page_title, _prefixes) in PAGE_GROUPS.items():
+        page_cats = sorted(c for c in table if _category_page(c) == slug)
+        if not page_cats:
+            continue
+        pg_cls = " active" if current_page == slug else ""
+        lines.append(f'    <a href="{slug}.html" class="nav-page-link{pg_cls}">{page_title}</a>')
+        for cat in page_cats:
+            cat_title = CATEGORY_TITLES.get(cat, cat.replace("_", " ").title())
+            lines.append(
+                f'    <a href="{slug}.html#cat-{cat}" class="nav-cat-link">{cat_title}</a>'
+            )
+
+    return "\n".join(lines)
+
+
+def generate_html_pages(
+    hosts: dict[str, Any],
+    table: dict[str, Any],
+    scores: dict[str, float] | None,
+    output_dir: Path,
+) -> None:
+    """Write split HTML report pages to *output_dir*/pages/."""
+    pages_dir = output_dir / "pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+    if scores:
+        hostnames = sorted(hosts.keys(), key=lambda h: scores.get(h, -1), reverse=True)
+    else:
+        hostnames = sorted(hosts.keys())
+
+    codec_avail = _collect_codec_availability(hosts)
+    build_time_data = _collect_build_times(hosts)
+    boot_data = {h: hosts[h]["boot_times"] for h in hostnames if hosts[h].get("boot_times")}
+
+    has_codec = bool(codec_avail)
+    has_build_times = bool(build_time_data)
+    has_boot_times = bool(boot_data)
+
+    # ── index.html ────────────────────────────────────────────────────────────
+    sidebar_index = _build_pages_sidebar("index", table, has_build_times, has_boot_times, has_codec)
+    summary_html = _html_host_summary(hosts, hostnames, scores)
+
+    scores_html = ""
+    if scores:
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        rows_html = ""
+        for rank, (h, s) in enumerate(ranked, 1):
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+            rows_html += (
+                f"          <tr>"
+                f"<td>{medal}</td>"
+                f"<td><strong>{h}</strong></td>"
+                f"<td>{_score_badge_html(s, rank)}</td>"
+                f"</tr>\n"
+            )
+        scores_html = f"""
+    <section id="scores">
+      <h2>Performance Scores Leaderboard</h2>
+      <table>
+        <thead><tr><th>Rank</th><th>Host</th><th>Score</th></tr></thead>
+        <tbody>
+{rows_html}        </tbody>
+      </table>
+    </section>"""
+
+    # Codec availability section
+    codec_avail_html = ""
+    if has_codec:
+        avail_hosts = sorted(codec_avail.keys())
+        ca_groups: list[str] = []
+        for group_key, group_title in [
+            ("video_encoders", "Video Encoders"),
+            ("video_decoders", "Video Decoders"),
+            ("audio_encoders", "Audio Encoders"),
+            ("audio_decoders", "Audio Decoders"),
+        ]:
+            all_codecs: set[str] = set()
+            for hdata in codec_avail.values():
+                all_codecs.update(hdata.get(group_key, []))
+            if not all_codecs:
+                continue
+            host_hdrs = "".join(f"<th>{h}</th>" for h in avail_hosts)
+            ca_rows_html = ""
+            for codec in sorted(all_codecs):
+                cells = ""
+                for h in avail_hosts:
+                    available = codec in codec_avail[h].get(group_key, [])
+                    badge = (
+                        '<span style="color:#00e676">✓</span>'
+                        if available
+                        else '<span style="color:#888">—</span>'
+                    )
+                    cells += f"<td>{badge}</td>"
+                ca_rows_html += f"          <tr><td><code>{codec}</code></td>{cells}</tr>\n"
+            ca_groups.append(f"""
+        <h3>{group_title}</h3>
+        <table>
+          <thead><tr><th>Codec</th>{host_hdrs}</tr></thead>
+          <tbody>
+{ca_rows_html}          </tbody>
+        </table>""")
+        codec_avail_html = f"""
+    <section id="cat-codec-avail">
+      <h2>FFmpeg Codec Availability</h2>
+      {"".join(ca_groups)}
+    </section>"""
+
+    # Build times section
+    build_times_html = ""
+    if has_build_times:
+        bt_sections: list[str] = []
+        for pkg_name in sorted(build_time_data.keys()):
+            entries = sorted(
+                build_time_data[pkg_name],
+                key=lambda e: (e["host"], e["timestamp"]),
+            )
+            rows_html_bt = ""
+            for entry in entries:
+                dur = entry["duration_secs"]
+                dur_str = f"{dur // 60}m {dur % 60:02d}s"
+                ts = entry.get("timestamp", 0)
+                date_str = (
+                    datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") if ts > 0 else "—"
+                )
+                rows_html_bt += f"""          <tr>
+            <td>{entry["host"]}</td>
+            <td>{entry["version"]}</td>
+            <td>{date_str}</td>
+            <td>{dur_str}</td>
+            <td><code>{entry["kernel"]}</code></td>
+            <td><code>{entry["compiler"]}</code></td>
+          </tr>\n"""
+            bt_sections.append(f"""
+        <h3>{pkg_name}</h3>
+        <table>
+          <thead>
+            <tr><th>Host</th><th>Version</th><th>Date</th><th>Duration</th>
+                <th>Kernel</th><th>Compiler</th></tr>
+          </thead>
+          <tbody>
+{rows_html_bt}          </tbody>
+        </table>""")
+        build_times_html = f"""
+    <section id="cat-build-times">
+      <h2>Gentoo Package Build Times</h2>
+      <p>Packages with longest build time &gt; 5 minutes.
+         Last 3 builds shown with kernel and compiler at build time.</p>
+      {"".join(bt_sections)}
+    </section>"""
+
+    # Boot times section
+    boot_times_html = ""
+    if has_boot_times:
+        host_hdrs_bt = "".join(f"<th>{h}</th>" for h in hostnames)
+        phase_rows_html = ""
+        for phase_key, phase_label in [
+            ("firmware_sec", "Firmware"),
+            ("loader_sec", "Loader"),
+            ("kernel_sec", "Kernel"),
+            ("userspace_sec", "Userspace"),
+            ("graphical_sec", "Graphical"),
+            ("total_sec", "Total"),
+        ]:
+            cells = ""
+            phase_vals = {
+                h: d[phase_key]
+                for h, d in boot_data.items()
+                if d.get("available") and d.get(phase_key) is not None
+            }
+            fastest_phase = min(phase_vals, key=phase_vals.__getitem__) if phase_vals else None
+            for hostname in hostnames:
+                d = boot_data.get(hostname)
+                val = d.get(phase_key) if d and d.get("available") else None
+                if val is None:
+                    cells += "<td>—</td>"
+                elif hostname == fastest_phase:
+                    cells += f"<td><strong>{val:.3f}</strong></td>"
+                else:
+                    cells += f"<td>{val:.3f}</td>"
+            phase_rows_html += f"<tr><td>{phase_label}</td>{cells}</tr>\n"
+
+        svc_sections_html = ""
+        for hostname in hostnames:
+            d = boot_data.get(hostname)
+            services = (d.get("top_services") or []) if d and d.get("available") else []
+            if not services:
+                continue
+            svc_rows_html = "".join(
+                f"<tr><td><code>{s['name']}</code></td><td>{s['time_sec']:.3f}</td></tr>"
+                for s in services[:10]
+            )
+            svc_sections_html += f"""
+        <h3>{hostname}</h3>
+        <table>
+          <thead><tr><th>Service</th><th>Time (s)</th></tr></thead>
+          <tbody>{svc_rows_html}</tbody>
+        </table>"""
+
+        method_cells = "".join(
+            f"<td><code>{boot_data.get(h, {}).get('method', '—')}</code></td>" for h in hostnames
+        )
+        boot_times_html = f"""
+    <section id="cat-boot-times">
+      <h2>System Boot Times</h2>
+      <p>Measured at benchmark time. Times in seconds.
+         <strong>Lowest</strong> per row is bold.<br>
+         <code>systemd-analyze</code>: full phase breakdown + per-service blame. &nbsp;
+         <code>dmesg</code>: kernel and early-userspace phases only
+         (firmware/loader/graphical unavailable; service blame not available).</p>
+      <table>
+        <thead><tr><th>Phase</th>{host_hdrs_bt}</tr></thead>
+        <tbody>
+          <tr><td>Method</td>{method_cells}</tr>
+{phase_rows_html}        </tbody>
+      </table>
+      {"<h3>Slowest Services at Boot</h3>" + svc_sections_html if svc_sections_html else ""}
+    </section>"""
+
+    index_content = f"""
+    <section id="host-summary">
+      <h2>Host Configuration Summary</h2>
+      <div class="host-summary">
+        {summary_html}
+      </div>
+    </section>
+    {scores_html}
+    {codec_avail_html}
+    {build_times_html}
+    {boot_times_html}"""
+
+    index_html = _html_page_wrapper(
+        "Gentoo VM Benchmark Report — Overview",
+        index_content,
+        "",
+        sidebar_index,
+        timestamp,
+    )
+    index_path = pages_dir / "index.html"
+    index_path.write_text(index_html)
+    print(f"  {index_path}")
+
+    # ── Per-page group pages ───────────────────────────────────────────────────
+    for slug, (page_title, _prefixes) in PAGE_GROUPS.items():
+        page_cats = sorted(c for c in table if _category_page(c) == slug)
+        if not page_cats:
+            continue
+
+        page_sections, page_chart_blocks = _build_category_page_content(
+            page_cats, table, hosts, hostnames, slug=slug
+        )
+
+        # Embed per-page bench data for client-side host filtering
+        host_meta_for_js: dict[str, dict] = {}
+        for hostname in hostnames:
+            meta = hosts[hostname].get("metadata", {})
+            host_meta_for_js[hostname] = {
+                "os_family": meta.get("os_family", "Unknown"),
+                "os": meta.get("os", "Unknown"),
+            }
+        bench_data_for_page: dict[str, dict] = {}
+        for cat in page_cats:
+            bench_data_for_page[cat] = {}
+            for _bench, _host_results in table[cat].items():
+                bench_data_for_page[cat][_bench] = {
+                    h: {
+                        "mean": round(r["mean"], 6),
+                        "stddev": round(r["stddev"], 6),
+                        "higher_is_better": r.get("higher_is_better", False),
+                    }
+                    for h, r in _host_results.items()
+                }
+
+        host_meta_js = json.dumps(host_meta_for_js)
+        bench_data_js = json.dumps(bench_data_for_page)
+        host_order_js = json.dumps(hostnames)
+
+        charts_js = "\n".join(page_chart_blocks)
+        full_js = f"""
+    const HOST_META = {host_meta_js};
+    const BENCH_DATA = {bench_data_js};
+    const HOST_ORDER = {host_order_js};
+
+    function getSelectedHosts() {{
+      const sel = new Set();
+      document.querySelectorAll('#host-filter-groups input[data-host]:checked')
+        .forEach(cb => sel.add(cb.dataset.host));
+      return sel;
+    }}
+    {charts_js}"""
+
+        sidebar_html = _build_pages_sidebar(slug, table, has_build_times, has_boot_times, has_codec)
+        main_content = "\n".join(page_sections)
+
+        page_html = _html_page_wrapper(
+            f"Gentoo VM Benchmark Report — {page_title}",
+            main_content,
+            full_js,
+            sidebar_html,
+            timestamp,
+        )
+        page_path = pages_dir / f"{slug}.html"
+        page_path.write_text(page_html)
+        print(f"  {page_path}")
+
+
 def _html_runtime_env_rows(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -> str:
     """Build HTML <tr> rows for the runtime environment table."""
     rows: list[str] = []
@@ -3374,6 +4195,11 @@ def main() -> None:
     html_path = base_dir / "report.html"
     html_path.write_text(html)
     print(f"HTML report: {html_path}")
+
+    # Also generate split pages for easier browser rendering
+    pages_dir = base_dir / "pages"
+    generate_html_pages(hosts, table, scores, base_dir)
+    print(f"Split HTML pages: {pages_dir}/")
 
 
 if __name__ == "__main__":
