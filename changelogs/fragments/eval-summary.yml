@@ -1,0 +1,4 @@
+minor_changes:
+  - "scripts/generate_benchmark_report.py: add programmatic evaluation summary
+    with data-driven commentary, outlier detection, and per-category analysis
+    for all benchmark categories; available in report.md and pages/analysis.html."

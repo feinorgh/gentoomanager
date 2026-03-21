@@ -1888,6 +1888,461 @@ def _md_compiler_analysis(
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Evaluation summary helpers
+# ---------------------------------------------------------------------------
+
+
+def _stats_for_category(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+) -> dict[str, dict[str, Any]]:
+    """Return per-benchmark statistics for one category."""
+    result: dict[str, dict[str, Any]] = {}
+    for bench_name, host_results in benchmarks.items():
+        means = {h: host_results[h]["mean"] for h in hostnames if h in host_results}
+        if len(means) < 2:
+            continue
+        sorted_hosts = sorted(means.items(), key=lambda kv: kv[1])
+        fastest_host, fastest_mean = sorted_hosts[0]
+        slowest_host, slowest_mean = sorted_hosts[-1]
+        spread_pct = (slowest_mean - fastest_mean) / fastest_mean * 100 if fastest_mean else 0.0
+        sorted_vals = [v for _, v in sorted_hosts]
+        n = len(sorted_vals)
+        if n % 2 == 1:
+            median_mean = sorted_vals[n // 2]
+        else:
+            median_mean = (sorted_vals[n // 2 - 1] + sorted_vals[n // 2]) / 2.0
+        # higher_is_better from any result for this bench
+        sample = next(iter(host_results.values()))
+        higher_is_better = bool(sample.get("higher_is_better", False))
+        result[bench_name] = {
+            "fastest_host": fastest_host,
+            "fastest_mean": fastest_mean,
+            "slowest_host": slowest_host,
+            "slowest_mean": slowest_mean,
+            "spread_pct": spread_pct,
+            "median_mean": median_mean,
+            "higher_is_better": higher_is_better,
+            "means": means,
+        }
+    return result
+
+
+def _find_outliers(
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    threshold_pct: float = 30.0,
+) -> list[dict[str, Any]]:
+    """Return notable findings for one category (hosts >threshold_pct from median)."""
+    stats = _stats_for_category(benchmarks, hostnames)
+    findings: list[dict[str, Any]] = []
+    for bench_name, s in stats.items():
+        median = s["median_mean"]
+        if not median:
+            continue
+        higher = s["higher_is_better"]
+        for host, mean in s["means"].items():
+            if not mean:
+                continue
+            deviation = (mean - median) / median
+            if abs(deviation) * 100 > threshold_pct:
+                # For higher-is-better, being above median is "fast"
+                if higher:
+                    direction = "fast" if deviation > 0 else "slow"
+                else:
+                    direction = "fast" if deviation < 0 else "slow"
+                findings.append(
+                    {
+                        "bench": bench_name,
+                        "host": host,
+                        "direction": direction,
+                        "pct": abs(deviation) * 100,
+                        "mean": mean,
+                        "median": median,
+                    }
+                )
+    return findings
+
+
+def _host_metadata_note(hostname: str, hosts: dict[str, Any]) -> str:
+    """Return a short explanatory note based on host metadata."""
+    meta = hosts.get(hostname, {}).get("metadata", {})
+    feat = extract_features(meta)
+    notes: list[str] = []
+    governor = feat.get("cpu_governor", "—")
+    if governor and governor not in ("—", "unknown"):
+        if "performance" in governor.lower():
+            notes.append("no CPU frequency scaling (performance governor)")
+        elif "powersave" in governor.lower():
+            notes.append("power-saving CPU governor")
+    virt = feat.get("virt_type", "—")
+    if virt and virt not in ("—", "none", "unknown"):
+        notes.append(f"running under virtualisation ({virt})")
+    smt = feat.get("smt", "—")
+    if smt == "no":
+        notes.append("SMT disabled")
+    hardening = feat.get("hardening", "—")
+    if hardening == "—":
+        notes.append("no hardening flags")
+    mitigations = feat.get("mitigations", "default")
+    if mitigations and mitigations.lower() == "off":
+        notes.append("CPU mitigations disabled")
+    return "; ".join(notes) if notes else ""
+
+
+def _analyse_category(
+    category: str,
+    benchmarks: dict[str, dict[str, dict[str, float]]],
+    hostnames: list[str],
+    hosts: dict[str, Any],
+) -> list[str]:
+    """Produce Markdown bullet points for one category."""
+    bullets: list[str] = []
+    stats = _stats_for_category(benchmarks, hostnames)
+    if not stats:
+        return bullets
+
+    # Overall spread
+    spreads = [s["spread_pct"] for s in stats.values()]
+    avg_spread = sum(spreads) / len(spreads) if spreads else 0.0
+
+    if avg_spread < 10.0:
+        bullets.append(
+            "Results are tightly clustered (< 10% spread) — hardware differences have "
+            "minimal effect here."
+        )
+
+    # Outlier detection
+    outliers = _find_outliers(benchmarks, hostnames)
+    seen: set[tuple[str, str]] = set()
+    for finding in sorted(outliers, key=lambda f: f["pct"], reverse=True)[:8]:
+        key = (finding["bench"], finding["host"])
+        if key in seen:
+            continue
+        seen.add(key)
+        note = _host_metadata_note(finding["host"], hosts)
+        note_str = f" ({note})" if note else ""
+        direction_word = "faster" if finding["direction"] == "fast" else "slower"
+        bullets.append(
+            f"**{finding['host']}** is {finding['pct']:.0f}% {direction_word} than median on "
+            f"`{finding['bench']}` (mean: {finding['mean']:.3f}s, median: "
+            f"{finding['median']:.3f}s){note_str}."
+        )
+
+    # OS family dominance at top-3
+    if len(hostnames) >= 3 and stats:
+        # For each bench pick fastest host; count OS families
+        os_family_counts: dict[str, int] = defaultdict(int)
+        for s in stats.values():
+            top_hosts = sorted(s["means"].items(), key=lambda kv: kv[1])[:3]
+            for h, _val in top_hosts:
+                fam = hosts.get(h, {}).get("metadata", {}).get("os_family", "Unknown")
+                os_family_counts[fam] += 1
+        if os_family_counts:
+            top_fam, top_count = max(os_family_counts.items(), key=lambda kv: kv[1])
+            total_slots = len(stats) * min(3, len(hostnames))
+            pct_dom = top_count / total_slots * 100 if total_slots else 0
+            if pct_dom >= 50 and top_fam not in ("Unknown", ""):
+                bullets.append(
+                    f"**{top_fam}** hosts dominate top-3 positions "
+                    f"({top_count}/{total_slots} slots, {pct_dom:.0f}%)."
+                )
+
+    # Category-specific observations
+    cat_lower = category.lower()
+
+    if "compression" in cat_lower:
+        # Find fastest algorithm across all hosts
+        algo_means: dict[str, list[float]] = defaultdict(list)
+        for bench_name, bench_stats in stats.items():
+            algo = bench_name.split("_")[0] if "_" in bench_name else bench_name
+            algo_means[algo].append(bench_stats["median_mean"])
+        if algo_means:
+            algo_avgs = {a: sum(v) / len(v) for a, v in algo_means.items()}
+            fastest_algo = min(algo_avgs, key=algo_avgs.__getitem__)
+            bullets.append(
+                f"**{fastest_algo}** has the lowest median time across hosts "
+                f"(avg {algo_avgs[fastest_algo]:.3f}s); "
+                "for compression/speed tradeoffs consider also zstd."
+            )
+
+    elif "memory" in cat_lower:
+        for bench_name, s in stats.items():
+            if s["spread_pct"] > 50:
+                bullets.append(
+                    f"`{bench_name}` shows >50% spread — possible NUMA effects, "
+                    "tmpfs placement differences, or virtualisation overhead."
+                )
+                break
+
+    elif "crypto" in cat_lower:
+        # Find fastest algorithm family by prefix
+        algo_families: dict[str, list[float]] = defaultdict(list)
+        for bench_name, bench_stats in stats.items():
+            parts = bench_name.split("-")
+            family = parts[0] if parts else bench_name
+            algo_families[family].append(bench_stats["median_mean"])
+        if algo_families:
+            fam_avgs = {f: sum(v) / len(v) for f, v in algo_families.items()}
+            fastest_fam = min(fam_avgs, key=fam_avgs.__getitem__)
+            bullets.append(
+                f"**{fastest_fam}** is the fastest algorithm family in this category "
+                f"(avg median {fam_avgs[fastest_fam]:.3f}s)."
+            )
+        if "botan" in cat_lower:
+            bullets.append(
+                "Botan results can be compared against `crypto_asymmetric` (OpenSSL) "
+                "for a cross-library performance picture."
+            )
+
+    elif "compiler" in cat_lower:
+        bullets.append(
+            "See the **Compiler Optimization Analysis** section for full delta table and "
+            "tradeoff commentary."
+        )
+
+    elif "python" in cat_lower or "numeric" in cat_lower:
+        # Check if any host is >2× slower than fastest
+        for bench_name, s in stats.items():
+            if s["fastest_mean"] and s["slowest_mean"] / s["fastest_mean"] > 2.0:
+                bullets.append(
+                    f"`{bench_name}`: **{s['slowest_host']}** is "
+                    f"{s['slowest_mean'] / s['fastest_mean']:.1f}× slower than "
+                    f"**{s['fastest_host']}** — possible missing BLAS optimisation or "
+                    "Python version difference."
+                )
+
+    elif any(kw in cat_lower for kw in ("ffmpeg", "imagemagick", "media")):
+        # Fastest encoder/decoder
+        if stats:
+            fastest_bench = min(stats.items(), key=lambda kv: kv[1]["fastest_mean"])
+            bullets.append(
+                f"Fastest result: **{fastest_bench[1]['fastest_host']}** on "
+                f"`{fastest_bench[0]}` ({fastest_bench[1]['fastest_mean']:.3f}s)."
+            )
+
+    return bullets
+
+
+def _generate_evaluation_summary(
+    table: dict[str, Any],
+    hosts: dict[str, Any],
+    scores: dict[str, float] | None,
+    hostnames: list[str],
+) -> str:
+    """Generate a full programmatic evaluation summary as Markdown."""
+    lines: list[str] = []
+    lines.append("## Evaluation Summary")
+    lines.append("")
+
+    # Overall ranking paragraph
+    if scores and hostnames:
+        ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+        top_host, top_score = ranked[0]
+        bottom_host, bottom_score = ranked[-1]
+        top_note = _host_metadata_note(top_host, hosts)
+        bottom_note = _host_metadata_note(bottom_host, hosts)
+
+        # Count categories where top host is fastest
+        top_wins = 0
+        total_cats = 0
+        for cat_benchmarks in table.values():
+            cat_stats = _stats_for_category(cat_benchmarks, hostnames)
+            for s in cat_stats.values():
+                total_cats += 1
+                if s.get("fastest_host") == top_host:
+                    top_wins += 1
+
+        top_note_str = f" ({top_note})" if top_note else ""
+        lines.append(
+            f"**{top_host}** achieved the highest overall score ({top_score:.1f}/100){top_note_str}"
+            f", leading in {top_wins} of {total_cats} individual benchmarks."
+        )
+        if len(ranked) >= 3:
+            spread = ranked[0][1] - ranked[2][1]
+            if spread < 5:
+                lines.append(
+                    f"The top 3 hosts are separated by only {spread:.1f} points, "
+                    "suggesting comparable hardware."
+                )
+        bottom_note_str = f" ({bottom_note})" if bottom_note else ""
+        lines.append(f"**{bottom_host}** scored {bottom_score:.1f}/100{bottom_note_str}.")
+        lines.append("")
+
+    # Per-category analysis grouped by page
+    category_order = [
+        "system",
+        "compiler",
+        "crypto",
+        "python",
+        "media",
+        "memory",
+    ]
+    # Map categories to page groups
+    page_to_cats: dict[str, list[str]] = defaultdict(list)
+    for cat in sorted(table.keys()):
+        slug = _category_page(cat)
+        page_to_cats[slug].append(cat)
+
+    group_labels = {
+        "system": "System Performance",
+        "compiler": "Compiler Benchmarks",
+        "crypto": "Cryptography",
+        "python": "Python & Numeric",
+        "media": "Media Processing",
+        "memory": "Memory & Disk",
+    }
+    processed: set[str] = set()
+    ordered_slugs = category_order + [s for s in page_to_cats if s not in category_order]
+    for slug in ordered_slugs:
+        cats = page_to_cats.get(slug, [])
+        if not cats:
+            continue
+        group_label = group_labels.get(slug, slug.replace("_", " ").title())
+        lines.append(f"### {group_label}")
+        lines.append("")
+        for cat in cats:
+            if cat in processed:
+                continue
+            processed.add(cat)
+            benchmarks = table[cat]
+            title = CATEGORY_TITLES.get(cat, cat.replace("_", " ").title())
+            bullets = _analyse_category(cat, benchmarks, hostnames, hosts)
+            if bullets:
+                lines.append(f"**{title}**")
+                lines.append("")
+                for bullet in bullets:
+                    lines.append(f"- {bullet}")
+                lines.append("")
+            else:
+                lines.append(f"*{title}: No significant outliers.*")
+                lines.append("")
+
+    # Recommendations
+    lines.append("### Recommendations")
+    lines.append("")
+
+    # Best OS family overall
+    if scores and hostnames:
+        os_family_scores: dict[str, list[float]] = defaultdict(list)
+        for h, s in scores.items():
+            fam = hosts.get(h, {}).get("metadata", {}).get("os_family", "Unknown")
+            os_family_scores[fam].append(s)
+        if os_family_scores:
+            fam_avgs = {f: sum(v) / len(v) for f, v in os_family_scores.items()}
+            best_fam = max(fam_avgs, key=fam_avgs.__getitem__)
+            lines.append(
+                f"- **{best_fam}** hosts achieve the highest average score "
+                f"({fam_avgs[best_fam]:.1f}/100 mean across {len(os_family_scores[best_fam])} "
+                "host(s)) in this benchmark run."
+            )
+
+    # LTO recommendation from compiler data
+    compiler_rt = table.get("compiler_c_runtime", {})
+    if compiler_rt:
+        lto_gains: list[float] = []
+        for bench_name, host_results in compiler_rt.items():
+            for _host, result in host_results.items():
+                label = bench_name
+                if "-flto" in label and "-O3" in label:
+                    base_label = label.replace("-flto", "").replace("  ", " ").strip()
+                    base = host_results.get(base_label, {})
+                    if base.get("mean") and result.get("mean"):
+                        gain = (base["mean"] - result["mean"]) / base["mean"] * 100
+                        lto_gains.append(gain)
+        if lto_gains:
+            avg_lto_gain = sum(lto_gains) / len(lto_gains)
+            if avg_lto_gain > 2:
+                lines.append(
+                    f"- LTO (`-flto`) provides an average {avg_lto_gain:.1f}% runtime speedup "
+                    "over -O3 across measured benchmarks — recommended for performance-critical "
+                    "builds."
+                )
+            else:
+                lines.append(
+                    "- LTO gains are marginal in this benchmark set; "
+                    "weigh longer compile times against runtime benefits."
+                )
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# HTML conversion helpers for evaluation summary
+# ---------------------------------------------------------------------------
+
+
+def _md_to_html_simple(md_text: str) -> str:
+    """Convert the subset of Markdown used by _generate_evaluation_summary to HTML."""
+    html_lines: list[str] = []
+    in_ul = False
+    for line in md_text.splitlines():
+        # Headers
+        if line.startswith("### "):
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            content = line[4:].strip()
+            html_lines.append(f"<h3>{content}</h3>")
+            continue
+        if line.startswith("## "):
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            content = line[3:].strip()
+            html_lines.append(f"<h2>{content}</h2>")
+            continue
+        # Bullet list items
+        if line.startswith("- "):
+            if not in_ul:
+                html_lines.append("<ul>")
+                in_ul = True
+            content = line[2:]
+            content = _md_inline_to_html(content)
+            html_lines.append(f"  <li>{content}</li>")
+            continue
+        # Empty line or paragraph
+        if in_ul and line.strip() == "":
+            html_lines.append("</ul>")
+            in_ul = False
+            continue
+        if line.strip() == "":
+            continue
+        if in_ul:
+            html_lines.append("</ul>")
+            in_ul = False
+        content = _md_inline_to_html(line)
+        html_lines.append(f"<p>{content}</p>")
+    if in_ul:
+        html_lines.append("</ul>")
+    return "\n".join(html_lines)
+
+
+def _md_inline_to_html(text: str) -> str:
+    """Convert inline Markdown (bold, code) to HTML."""
+    # **bold**
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    # `code`
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    return text
+
+
+def _html_evaluation_summary(
+    table: dict[str, Any],
+    hosts: dict[str, Any],
+    scores: dict[str, float] | None,
+    hostnames: list[str],
+) -> str:
+    """Generate an HTML section with the evaluation summary."""
+    md_text = _generate_evaluation_summary(table, hosts, scores, hostnames)
+    if not md_text.strip():
+        return ""
+    html_body = _md_to_html_simple(md_text)
+    return f'  <section id="analysis">\n{html_body}\n  </section>'
+
+
 def generate_markdown(
     hosts: dict[str, dict[str, Any]],
     table: dict[str, dict[str, dict[str, dict[str, float]]]],
@@ -2273,6 +2728,11 @@ def generate_markdown(
                 svc_rows = [[s["name"], f"{s['time_sec']:.3f}"] for s in services[:10]]
                 lines.append(_md_table(["Service", "Time (s)"], svc_rows))
                 lines.append("")
+
+    # --- Full evaluation summary ---
+    eval_summary = _generate_evaluation_summary(table, hosts, scores, hostnames)
+    if eval_summary:
+        lines.append(eval_summary)
 
     return "\n".join(lines)
 
@@ -2938,6 +3398,8 @@ def generate_html(
     bench_data_js = json.dumps(bench_data_for_js)
     host_order_js = json.dumps(hostnames)
 
+    eval_summary_html = _html_evaluation_summary(table, hosts, scores, hostnames)
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3165,6 +3627,8 @@ def generate_html(
   {build_times_html}
 
   {boot_times_html}
+
+  {eval_summary_html}
 
   </div><!-- #main-content -->
 
@@ -3635,6 +4099,11 @@ def _build_pages_sidebar(
             '    <a href="index.html#cat-build-times" class="nav-cat-link">Build Times</a>'
         )
 
+    analysis_cls = " active" if current_page == "analysis" else ""
+    lines.append(
+        f'    <a href="analysis.html" class="nav-page-link{analysis_cls}">📊 Evaluation Summary</a>'
+    )
+
     for slug, (page_title, _prefixes) in PAGE_GROUPS.items():
         page_cats = sorted(c for c in table if _category_page(c) == slug)
         if not page_cats:
@@ -3940,6 +4409,23 @@ def generate_html_pages(
         page_path = pages_dir / f"{slug}.html"
         page_path.write_text(page_html)
         print(f"  {page_path}")
+
+    # ── analysis.html ─────────────────────────────────────────────────────────
+    analysis_content = _html_evaluation_summary(table, hosts, scores, hostnames)
+    if analysis_content:
+        analysis_sidebar = _build_pages_sidebar(
+            "analysis", table, has_build_times, has_boot_times, has_codec
+        )
+        analysis_html = _html_page_wrapper(
+            "Gentoo VM Benchmark Report — Evaluation Summary",
+            analysis_content,
+            "",
+            analysis_sidebar,
+            timestamp,
+        )
+        analysis_path = pages_dir / "analysis.html"
+        analysis_path.write_text(analysis_html)
+        print(f"  {analysis_path}")
 
 
 def _html_runtime_env_rows(hosts: dict[str, dict[str, Any]], hostnames: list[str]) -> str:
