@@ -1,0 +1,4 @@
+minor_changes:
+  - "scripts/generate_benchmark_report.py: split HTML output into per-category-group
+    pages under pages/ for faster browser rendering; single-file report.html retained
+    for backward compatibility."
