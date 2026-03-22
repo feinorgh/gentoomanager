@@ -109,6 +109,15 @@
           delegate_to: "{{ hypervisor_host }}"
           changed_when: true
 
+        # Windows takes significantly longer than Linux to start the OpenSSH
+        # service.  A short initial pause avoids flooding SSH with connection
+        # attempts while the Windows kernel is still initialising, which can
+        # exhaust the boot_timeout budget before auth is even possible.
+        - name: Wait for initial OS boot (Windows only)
+          ansible.builtin.pause:
+            seconds: 60
+          when: inventory_hostname in groups.get('mswindows', [])
+
         - name: Wait for VM to become reachable after boot (attempt 1)
           ansible.builtin.wait_for_connection:
             timeout: "{{ run_benchmarks_boot_timeout_sec | int }}"

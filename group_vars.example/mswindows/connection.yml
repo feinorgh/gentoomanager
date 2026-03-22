@@ -29,3 +29,8 @@ ansible_user: ansible
 # ansible_password: !vault |             # Use ansible-vault for passwords
 #   $ANSIBLE_VAULT;1.1;AES256
 #   ...
+
+# Disable SSH pipelining for Windows.  Ansible's global pipelining=True in
+# ansible.cfg works for Linux/Unix hosts, but Windows OpenSSH + PowerShell
+# can exhibit auth failures and unexpected behaviour with pipelining enabled.
+ansible_pipelining: false

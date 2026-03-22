@@ -1,0 +1,11 @@
+---
+bugfixes:
+  - >-
+    playbooks/run_benchmarks.yml: increase Windows boot timeout to 360 s
+    (via group_vars) and add a 60 s initial pause after ``virsh start`` for
+    Windows hosts to allow the OpenSSH service to initialise before
+    ``wait_for_connection`` begins polling.
+  - >-
+    group_vars/mswindows/connection.yml: disable SSH pipelining for Windows
+    hosts (``ansible_pipelining: false``) to prevent auth failures during
+    the boot phase when using Windows OpenSSH with PowerShell.

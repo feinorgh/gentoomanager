@@ -1,0 +1,12 @@
+---
+# Benchmark tuning for Windows hosts.
+#
+# Windows VMs take significantly longer to boot than Linux VMs — the OS
+# kernel, driver stack, and OpenSSH service all need to initialise before
+# SSH authentication is possible.  The defaults below override the
+# play-level values in playbooks/run_benchmarks.yml.
+
+# Seconds to wait for SSH to become reachable after virsh start/reset.
+# Windows 10/11 typically needs 3–5 minutes from cold boot in a QEMU VM.
+# 360 seconds (6 minutes) gives ample headroom.
+run_benchmarks_boot_timeout_sec: 360
