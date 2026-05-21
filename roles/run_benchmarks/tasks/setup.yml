@@ -149,11 +149,11 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      echo "::gcc::$(gcc --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::gcc::$({{ run_benchmarks_gcc_cmd }} --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::clang::$(clang --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::rustc::$(rustc --version 2>/dev/null || echo 'not installed')"
       echo "::go::$(go version 2>/dev/null || echo 'not installed')"
-      echo "::python::$(python3 --version 2>/dev/null || echo 'not installed')"
+      echo "::python::$({{ run_benchmarks_python_cmd }} --version 2>/dev/null || echo 'not installed')"
       echo "::ffmpeg::$(ffmpeg -version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::openssl::$(openssl version 2>/dev/null || echo 'not installed')"
       echo "::kernel::$(uname -r)"
@@ -162,7 +162,7 @@
       echo "::imagemagick::$(magick --version 2>/dev/null | head -1 || convert --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::lld::$(lld --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::sqlite3::$(sqlite3 --version 2>/dev/null | head -1 || echo 'not installed')"
-      echo "::numpy::$(python3 -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo 'not installed')"
+      echo "::numpy::$({{ run_benchmarks_python_cmd }} -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo 'not installed')"
       echo "::gimp::$(gimp --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::inkscape::$(inkscape --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::perl::$(perl --version 2>/dev/null | grep -m1 'This is perl' || echo 'not installed')"

@@ -33,8 +33,14 @@ def test_verify_yml_openbsd_friendly_commands(worktree_root):
     # Verify that the command checks for both python and python3
     # OpenBSD typically has 'python' or 'python3' depending on version
     cmd = tool_check_task.get("ansible.builtin.shell", {}).get("cmd", "")
-    assert "python3" in cmd or "python" in cmd, (
-        "verify.yml should check for python/python3 availability"
+    assert "python3" in cmd and "python" in cmd, (
+        "verify.yml should check for both python3 and python availability"
+    )
+
+    # It should NOT hardcode python3 in the essential tools loop
+    assert "for tool in hyperfine gcc python3 openssl git" not in cmd, (
+        "verify.yml should not hardcode python3 in the essential tools list; "
+        "it should handle python/python3 separately for OpenBSD compatibility"
     )
 
     # Verify executable is /bin/sh (POSIX-compatible, works on OpenBSD)
@@ -162,13 +168,41 @@ def test_setup_yml_version_gathering_uses_resolved_commands(worktree_root):
 
     assert version_task is not None, "Version gathering task not found"
 
-    # The version gathering should ideally use resolved commands
-    # For now, just verify the task exists and can be extended later
+    # The version gathering should use resolved commands
     cmd_module = None
     if "ansible.builtin.shell" in version_task:
         cmd_module = version_task["ansible.builtin.shell"]
 
     assert cmd_module is not None, "Version gathering should use shell module"
+
+    # The command should use resolved variables for gcc, python, and numpy
+    cmd = cmd_module.get("cmd", "")
+    assert "python" in cmd.lower(), (
+        "Version gathering should check Python version"
+    )
+
+    # Verify it uses the resolved variable, not hardcoded commands
+    assert "{{ run_benchmarks_gcc_cmd }}" in cmd, (
+        "Version gathering should use {{ run_benchmarks_gcc_cmd }} for gcc version"
+    )
+    assert "{{ run_benchmarks_python_cmd }}" in cmd, (
+        "Version gathering should use {{ run_benchmarks_python_cmd }} for python version"
+    )
+
+    # Count occurrences - should use the variable twice (python version + numpy)
+    python_var_count = cmd.count("{{ run_benchmarks_python_cmd }}")
+    assert python_var_count >= 2, (
+        f"Version gathering should use {{{{ run_benchmarks_python_cmd }}}} at least twice "
+        f"(python version + numpy), found {python_var_count} uses"
+    )
+
+    # Verify it does NOT hardcode python3 anymore
+    assert "$(python3 --version" not in cmd, (
+        "Version gathering should not hardcode 'python3', use resolved variable instead"
+    )
+    assert "$(python3 -c 'import numpy" not in cmd, (
+        "Numpy check should not hardcode 'python3', use resolved variable instead"
+    )
 
     # The command should have python3 version gathering
     cmd = cmd_module.get("cmd", "")
