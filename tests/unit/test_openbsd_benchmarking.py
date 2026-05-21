@@ -460,7 +460,11 @@ def test_setup_yml_openbsd_metadata_branch(worktree_root):
     cpu_freq_openbsd_task = None
     for task in setup_tasks:
         task_name = task.get("name", "").lower()
-        if "openbsd" in task_name and "cpu" in task_name and ("clock" in task_name or "freq" in task_name):
+        if (
+            "openbsd" in task_name
+            and "cpu" in task_name
+            and ("clock" in task_name or "freq" in task_name)
+        ):
             cpu_freq_openbsd_task = task
             break
 
@@ -540,8 +544,7 @@ def test_setup_yml_category_prepare_cmd_fact(worktree_root):
                 break
 
     assert prepare_cmd_fact_task is not None, (
-        "setup.yml should have a set_fact task that defines "
-        "run_benchmarks_category_prepare_cmd"
+        "setup.yml should have a set_fact task that defines run_benchmarks_category_prepare_cmd"
     )
 
 
@@ -562,7 +565,9 @@ def test_setup_yml_metadata_cpu_frequency_includes_openbsd(worktree_root):
     assert metadata_task is not None, "Parse host metadata task not found"
 
     # Check that cpu_mhz includes OpenBSD branch
-    metadata_dict = metadata_task.get("ansible.builtin.set_fact", {}).get("run_benchmarks_metadata", {})
+    metadata_dict = metadata_task.get("ansible.builtin.set_fact", {}).get(
+        "run_benchmarks_metadata", {}
+    )
     cpu_mhz_expr = str(metadata_dict.get("cpu_mhz", ""))
 
     assert "OpenBSD" in cpu_mhz_expr, (
@@ -663,12 +668,15 @@ def test_setup_yml_category_prepare_cmd_only_linux_openbsd(worktree_root):
     # The task should be conditional on Linux or OpenBSD ONLY
     # It should NOT set the variable for FreeBSD or other platforms
     when_clause = str(prepare_cmd_task.get("when", ""))
-    
-    # Check that the when clause restricts to Linux or OpenBSD
-    # This prevents unintended per-category prep on FreeBSD and other platforms
-    assert ("Linux" in when_clause or "OpenBSD" in when_clause), (
-        "run_benchmarks_category_prepare_cmd should only be set when ansible_system "
-        "is Linux or OpenBSD, to avoid unintended per-category prep on other platforms"
+
+    assert "Linux" in when_clause, (
+        "run_benchmarks_category_prepare_cmd should explicitly allow Linux"
+    )
+    assert "OpenBSD" in when_clause, (
+        "run_benchmarks_category_prepare_cmd should explicitly allow OpenBSD"
+    )
+    assert "FreeBSD" not in when_clause, (
+        "run_benchmarks_category_prepare_cmd should not be set for FreeBSD"
     )
 
 
@@ -680,11 +688,12 @@ def test_setup_yml_category_prepare_cmd_linux_has_cache_drop(worktree_root):
 
     # Find the set_fact for run_benchmarks_category_prepare_cmd
     import re
+
     # Look for the Jinja2 template that sets the command for Linux
     linux_prep_match = re.search(
         r"run_benchmarks_category_prepare_cmd.*?Linux.*?drop_caches",
         content,
-        re.DOTALL | re.IGNORECASE
+        re.DOTALL | re.IGNORECASE,
     )
 
     assert linux_prep_match is not None, (
@@ -699,21 +708,28 @@ def test_setup_yml_category_prepare_cmd_openbsd_sync_only(worktree_root):
     with open(setup_path, encoding="utf-8") as file_handle:
         content = file_handle.read()
 
-    # Find the set_fact for run_benchmarks_category_prepare_cmd
-    import re
-    # Look for the OpenBSD branch - should have sync but NOT drop_caches
-    openbsd_prep_match = re.search(
-        r"OpenBSD.*?sync",
-        content,
-        re.DOTALL | re.IGNORECASE
+    setup_tasks = yaml.safe_load(content)
+
+    prepare_cmd_task = None
+    for task in setup_tasks:
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_category_prepare_cmd" in facts:
+                prepare_cmd_task = task
+                break
+
+    assert prepare_cmd_task is not None, (
+        "setup.yml should define run_benchmarks_category_prepare_cmd"
     )
 
-    assert openbsd_prep_match is not None, (
-        "OpenBSD category_prepare_cmd should include sync"
+    prepare_cmd_template = prepare_cmd_task["ansible.builtin.set_fact"][
+        "run_benchmarks_category_prepare_cmd"
+    ]
+    assert "OpenBSD" in prepare_cmd_template and "sync" in prepare_cmd_template, (
+        "OpenBSD category_prepare_cmd should include a sync-only branch"
     )
 
-    # Verify OpenBSD branch doesn't have cache drop (safe subset)
-    openbsd_section = openbsd_prep_match.group(0)
+    openbsd_section = prepare_cmd_template.split("OpenBSD", 1)[1]
     assert "drop_caches" not in openbsd_section.lower(), (
         "OpenBSD category_prepare_cmd should NOT include cache drop (safe subset)"
     )
