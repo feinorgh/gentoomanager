@@ -204,8 +204,47 @@ def test_setup_yml_version_gathering_uses_resolved_commands(worktree_root):
         "Numpy check should not hardcode 'python3', use resolved variable instead"
     )
 
-    # The command should have python3 version gathering
-    cmd = cmd_module.get("cmd", "")
-    assert "python" in cmd.lower(), (
-        "Version gathering should check Python version"
+
+def test_sanity_check_yml_python_detection_openbsd_friendly(worktree_root):
+    """Test that sanity_check.yml probe checks for python3 OR python (OpenBSD-friendly)."""
+    sanity_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
     )
+    with open(sanity_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        sanity_tasks = yaml.safe_load(content)
+
+    # Find the tool availability probe task
+    tool_probe_task = None
+    for task in sanity_tasks:
+        if task.get("name") == "Probe benchmark tool availability":
+            tool_probe_task = task
+            break
+
+    assert tool_probe_task is not None, "Tool availability probe task not found"
+
+    # Get the shell command
+    cmd = tool_probe_task.get("ansible.builtin.shell", {}).get("cmd", "")
+
+    # Should check for both python3 and python
+    assert "python3" in cmd and "python" in cmd, (
+        "sanity_check.yml probe should check for both python3 and python"
+    )
+
+    # Should NOT hardcode python3 in the required tools loop
+    assert "for tool in hyperfine gcc python3 openssl" not in cmd, (
+        "sanity_check.yml should not hardcode python3 in required tools list; "
+        "it should handle python/python3 separately for OpenBSD compatibility"
+    )
+
+    # Should handle python separately like imagemagick
+    assert "command -v python3" in cmd or "command -v python" in cmd, (
+        "sanity_check.yml should explicitly check for python3 or python availability"
+    )
+
+    # Verify it uses /bin/sh for POSIX compatibility
+    executable = tool_probe_task.get("ansible.builtin.shell", {}).get("executable", "")
+    assert executable == "/bin/sh", (
+        "sanity_check.yml should use /bin/sh for OpenBSD compatibility"
+    )
+

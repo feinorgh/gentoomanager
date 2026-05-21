@@ -9,9 +9,13 @@
       set -e
       missing_req=""
       missing_opt=""
-      for tool in hyperfine gcc python3 openssl; do
+      for tool in hyperfine gcc openssl; do
         command -v "$tool" >/dev/null 2>&1 || missing_req="$missing_req $tool"
       done
+      # Python: check for python3 or python (OpenBSD may have either)
+      if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+        missing_req="$missing_req python"
+      fi
       for tool in clang rustc go ffmpeg; do
         command -v "$tool" >/dev/null 2>&1 || missing_opt="$missing_opt $tool"
       done
