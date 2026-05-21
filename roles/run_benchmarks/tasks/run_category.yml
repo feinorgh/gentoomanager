@@ -1,17 +1,17 @@
 ---
-# Per-category wrapper: drop caches then include the category task file.
+# Per-category wrapper: prepare system state then include the category task file.
 # Called from main.yml with loop_var: run_benchmarks_current_category.
 
-- name: Drop filesystem caches before benchmark category (Linux)
+- name: Prepare system state before benchmark category
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      sync && echo 3 > /proc/sys/vm/drop_caches
+      {{ run_benchmarks_category_prepare_cmd }}
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   become: true
   changed_when: false
   ignore_errors: true
-  when: ansible_system | default('Linux') == 'Linux'
+  when: run_benchmarks_category_prepare_cmd is defined
 
 - name: Include benchmark category tasks
   ansible.builtin.include_tasks:

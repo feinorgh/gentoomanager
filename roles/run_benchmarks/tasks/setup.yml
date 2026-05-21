@@ -143,6 +143,20 @@
     run_benchmarks_priv_cmd: "{{ run_benchmarks_priv_cmd_probe.stdout | default('sudo') | trim }}"
 
 # ---------------------------------------------------------------------------
+# Set OpenBSD capability and per-category preparation command
+# ---------------------------------------------------------------------------
+- name: Set OpenBSD normalization capability and category prepare command
+  ansible.builtin.set_fact:
+    run_benchmarks_openbsd_safe_normalization: >-
+      {{ ansible_system | default('Linux') == 'OpenBSD' }}
+    run_benchmarks_category_prepare_cmd: >-
+      {%- if ansible_system | default('Linux') == 'Linux' -%}
+      sync && echo 3 > /proc/sys/vm/drop_caches{%- elif ansible_system | default('Linux') == 'FreeBSD' -%}
+      sync{%- elif ansible_system | default('Linux') == 'OpenBSD' -%}
+      sync{%- else -%}
+      sync{%- endif -%}
+
+# ---------------------------------------------------------------------------
 # Collect host metadata (OS-agnostic, uses Ansible gathered facts)
 # ---------------------------------------------------------------------------
 - name: Gather compiler and tool versions
@@ -199,6 +213,14 @@
   changed_when: false
   failed_when: false
   when: ansible_system | default('') == 'FreeBSD'
+
+- name: Get CPU max clock speed (OpenBSD)
+  ansible.builtin.command:
+    cmd: sysctl -n hw.cpuspeed
+  register: run_benchmarks_cpu_freq_openbsd
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'OpenBSD'
 
 # ---------------------------------------------------------------------------
 # Detect distro default build flags (non-Gentoo)
@@ -653,6 +675,9 @@
           else
           (run_benchmarks_cpu_freq_bsd.stdout | default('0') | trim | int)
           if (ansible_system | default('') == 'FreeBSD')
+          else
+          (run_benchmarks_cpu_freq_openbsd.stdout | default('0') | trim | int)
+          if (ansible_system | default('') == 'OpenBSD')
           else 0
         }}
       march_native: "{{ run_benchmarks_march_native_raw.stdout | default('') | trim }}"

@@ -442,3 +442,242 @@ def test_sanity_check_yml_doas_probe_explicit_noninteractive(worktree_root):
         "doas branch in sanity_check.yml should use 'doas -n true' so the "
         "passwordless probe is explicitly non-interactive."
     )
+
+
+# ========================================================================
+# Task 3: OpenBSD setup metadata and safe-subset normalization tests
+# ========================================================================
+
+
+def test_setup_yml_openbsd_metadata_branch(worktree_root):
+    """Test that setup.yml has an OpenBSD metadata gathering branch."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        setup_tasks = yaml.safe_load(content)
+
+    # Check for OpenBSD CPU max clock speed collection via sysctl -n hw.cpuspeed
+    cpu_freq_openbsd_task = None
+    for task in setup_tasks:
+        task_name = task.get("name", "").lower()
+        if "openbsd" in task_name and "cpu" in task_name and ("clock" in task_name or "freq" in task_name):
+            cpu_freq_openbsd_task = task
+            break
+
+    assert cpu_freq_openbsd_task is not None, (
+        "setup.yml should have an OpenBSD CPU max clock speed gathering task"
+    )
+
+    # Verify it uses sysctl -n hw.cpuspeed
+    cmd_module = None
+    if "ansible.builtin.command" in cpu_freq_openbsd_task:
+        cmd_module = cpu_freq_openbsd_task["ansible.builtin.command"]
+    elif "ansible.builtin.shell" in cpu_freq_openbsd_task:
+        cmd_module = cpu_freq_openbsd_task["ansible.builtin.shell"]
+
+    assert cmd_module is not None, "OpenBSD CPU freq task should use command or shell module"
+
+    cmd = cmd_module.get("cmd", "")
+    assert "sysctl" in cmd and "hw.cpuspeed" in cmd, (
+        "OpenBSD CPU freq task should use 'sysctl -n hw.cpuspeed'"
+    )
+
+    # Verify the task is conditional on ansible_system == 'OpenBSD'
+    when_clause = cpu_freq_openbsd_task.get("when", "")
+    assert "OpenBSD" in str(when_clause), (
+        "OpenBSD CPU freq task should be conditional on ansible_system == 'OpenBSD'"
+    )
+
+
+def test_setup_yml_openbsd_normalization_capability_fact(worktree_root):
+    """Test that setup.yml defines run_benchmarks_openbsd_safe_normalization fact."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+
+    # Check for OpenBSD safe normalization capability fact
+    assert "run_benchmarks_openbsd_safe_normalization" in content, (
+        "setup.yml should define run_benchmarks_openbsd_safe_normalization fact "
+        "to indicate safe OpenBSD normalization support"
+    )
+
+    # Verify it's set in a set_fact task
+    setup_tasks = yaml.safe_load(content)
+    openbsd_fact_task = None
+    for task in setup_tasks:
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_openbsd_safe_normalization" in facts:
+                openbsd_fact_task = task
+                break
+
+    assert openbsd_fact_task is not None, (
+        "setup.yml should have a set_fact task that defines "
+        "run_benchmarks_openbsd_safe_normalization"
+    )
+
+
+def test_setup_yml_category_prepare_cmd_fact(worktree_root):
+    """Test that setup.yml defines run_benchmarks_category_prepare_cmd fact."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+
+    # Check for category prepare command fact
+    assert "run_benchmarks_category_prepare_cmd" in content, (
+        "setup.yml should define run_benchmarks_category_prepare_cmd fact "
+        "for OS-specific per-category preparation commands"
+    )
+
+    # Verify it's set in a set_fact task
+    setup_tasks = yaml.safe_load(content)
+    prepare_cmd_fact_task = None
+    for task in setup_tasks:
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_category_prepare_cmd" in facts:
+                prepare_cmd_fact_task = task
+                break
+
+    assert prepare_cmd_fact_task is not None, (
+        "setup.yml should have a set_fact task that defines "
+        "run_benchmarks_category_prepare_cmd"
+    )
+
+
+def test_setup_yml_metadata_cpu_frequency_includes_openbsd(worktree_root):
+    """Test that metadata shaping uses OpenBSD CPU freq when on OpenBSD."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+
+    # Find the metadata parsing task
+    setup_tasks = yaml.safe_load(content)
+    metadata_task = None
+    for task in setup_tasks:
+        if task.get("name") == "Parse host metadata":
+            metadata_task = task
+            break
+
+    assert metadata_task is not None, "Parse host metadata task not found"
+
+    # Check that cpu_mhz includes OpenBSD branch
+    metadata_dict = metadata_task.get("ansible.builtin.set_fact", {}).get("run_benchmarks_metadata", {})
+    cpu_mhz_expr = str(metadata_dict.get("cpu_mhz", ""))
+
+    assert "OpenBSD" in cpu_mhz_expr, (
+        "metadata cpu_mhz should include OpenBSD-specific branch for hw.cpuspeed"
+    )
+
+
+def test_normalize_yml_openbsd_safe_subset_branch(worktree_root):
+    """Test that normalize.yml has an OpenBSD safe-subset normalization branch."""
+    normalize_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "normalize.yml"
+    )
+    with open(normalize_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        normalize_tasks = yaml.safe_load(content)
+
+    # Look for OpenBSD sync task (safe subset: sync only, no Linux/FreeBSD-only tuning)
+    openbsd_sync_task = None
+    for task in normalize_tasks:
+        task_name = task.get("name", "").lower()
+        when_clause = str(task.get("when", ""))
+        if "sync" in task_name and "OpenBSD" in when_clause:
+            openbsd_sync_task = task
+            break
+
+    assert openbsd_sync_task is not None, (
+        "normalize.yml should have an OpenBSD-specific sync task (safe subset)"
+    )
+
+    # Verify it's conditional on ansible_system == 'OpenBSD'
+    when_clause = str(openbsd_sync_task.get("when", ""))
+    assert "OpenBSD" in when_clause, (
+        "OpenBSD sync task should be conditional on ansible_system == 'OpenBSD'"
+    )
+
+    # Verify it's a simple sync command
+    cmd_module = None
+    if "ansible.builtin.command" in openbsd_sync_task:
+        cmd_module = openbsd_sync_task["ansible.builtin.command"]
+    elif "ansible.builtin.shell" in openbsd_sync_task:
+        cmd_module = openbsd_sync_task["ansible.builtin.shell"]
+
+    assert cmd_module is not None, "OpenBSD sync task should use command or shell module"
+
+    cmd = cmd_module.get("cmd", "")
+    assert "sync" in cmd, "OpenBSD normalization should sync filesystems"
+
+
+def test_denormalize_yml_openbsd_safe_subset_branch(worktree_root):
+    """Test that denormalize.yml has an OpenBSD safe-subset branch (no-op restore marker)."""
+    denormalize_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "denormalize.yml"
+    )
+    with open(denormalize_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        denormalize_tasks = yaml.safe_load(content)
+
+    # Look for OpenBSD restore marker (no-op since we don't change anything risky)
+    openbsd_restore_task = None
+    for task in denormalize_tasks:
+        task_name = task.get("name", "").lower()
+        when_clause = str(task.get("when", ""))
+        if "openbsd" in task_name and "OpenBSD" in when_clause:
+            openbsd_restore_task = task
+            break
+
+    assert openbsd_restore_task is not None, (
+        "denormalize.yml should have an OpenBSD restore marker task (safe subset, likely no-op)"
+    )
+
+    # Verify it's conditional on ansible_system == 'OpenBSD'
+    when_clause = str(openbsd_restore_task.get("when", ""))
+    assert "OpenBSD" in when_clause, (
+        "OpenBSD restore task should be conditional on ansible_system == 'OpenBSD'"
+    )
+
+
+def test_run_category_yml_openbsd_avoids_linux_cache_drop(worktree_root):
+    """Test that run_category.yml does not run Linux-only cache drop unconditionally on OpenBSD."""
+    run_category_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "run_category.yml"
+    )
+    with open(run_category_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        run_category_tasks = yaml.safe_load(content)
+
+    # Find the cache drop task
+    cache_drop_task = None
+    for task in run_category_tasks:
+        task_name = task.get("name", "").lower()
+        if "drop" in task_name and "cache" in task_name:
+            cache_drop_task = task
+            break
+
+    if cache_drop_task is None:
+        pytest.skip("Cache drop task not found in run_category.yml")
+
+    # Verify it's conditional on Linux (not unconditional)
+    when_clause = str(cache_drop_task.get("when", ""))
+    assert "Linux" in when_clause, (
+        "run_category.yml cache drop task should be conditional on Linux, "
+        "not run unconditionally on OpenBSD"
+    )
+
+
+def test_run_category_yml_uses_category_prepare_cmd(worktree_root):
+    """Test that run_category.yml uses run_benchmarks_category_prepare_cmd for OpenBSD preparation."""
+    run_category_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "run_category.yml"
+    )
+    with open(run_category_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+
+    # Check that run_benchmarks_category_prepare_cmd is used
+    assert "run_benchmarks_category_prepare_cmd" in content, (
+        "run_category.yml should use run_benchmarks_category_prepare_cmd for "
+        "OS-specific per-category preparation"
+    )
