@@ -770,3 +770,123 @@ def test_run_category_yml_prep_guard_matches_setup_intent(worktree_root):
     assert "run_benchmarks_category_prepare_cmd is defined" in when_clause, (
         "Preparation task should guard with 'run_benchmarks_category_prepare_cmd is defined'"
     )
+
+
+# ========================================================================
+# Task 4: Gate unsupported categories and preserve skip reasons
+# ========================================================================
+
+
+def test_disk_yml_gates_openbsd_explicitly(worktree_root):
+    """Test that disk.yml explicitly gates OpenBSD and defines skip reason."""
+    disk_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "disk.yml")
+    with open(disk_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        disk_tasks = yaml.safe_load(content)
+
+    # Look for an OpenBSD skip task that sets run_benchmarks_disk_skip
+    openbsd_skip_task = None
+    for task in disk_tasks:
+        task_name = task.get("name", "").lower()
+        when_clause = str(task.get("when", ""))
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_disk_skip" in facts and "OpenBSD" in when_clause:
+                openbsd_skip_task = task
+                break
+
+    assert openbsd_skip_task is not None, (
+        "disk.yml should have an OpenBSD skip gate task that sets run_benchmarks_disk_skip"
+    )
+
+    # The task should also set run_benchmarks_disk_skip_reason
+    facts = openbsd_skip_task["ansible.builtin.set_fact"]
+    assert "run_benchmarks_disk_skip_reason" in facts, (
+        "disk.yml OpenBSD skip gate should define run_benchmarks_disk_skip_reason"
+    )
+
+    # Verify the reason is descriptive
+    skip_reason = str(facts["run_benchmarks_disk_skip_reason"])
+    assert len(skip_reason) > 10, (
+        "disk.yml skip reason should be a descriptive message, not a placeholder"
+    )
+
+
+def test_boot_time_yml_openbsd_unsupported_policy(worktree_root):
+    """Test that boot_time.yml has an OpenBSD policy branch with unsupported semantics."""
+    boot_time_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "boot_time.yml"
+    )
+    with open(boot_time_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        boot_time_tasks = yaml.safe_load(content)
+
+    # Look for an OpenBSD unsupported result writing task
+    openbsd_unsupported_task = None
+    for task in boot_time_tasks:
+        task_name = task.get("name", "").lower()
+        when_clause = str(task.get("when", ""))
+        if (
+            "openbsd" in task_name
+            and ("unsupported" in task_name or "write" in task_name)
+            and "OpenBSD" in when_clause
+        ):
+            openbsd_unsupported_task = task
+            break
+
+    assert openbsd_unsupported_task is not None, (
+        "boot_time.yml should have an OpenBSD unsupported result writing task"
+    )
+
+    # The task should write boot_times.json with method='unsupported'
+    if "ansible.builtin.copy" in openbsd_unsupported_task:
+        copy_module = openbsd_unsupported_task["ansible.builtin.copy"]
+        assert "boot_times.json" in str(copy_module.get("dest", "")), (
+            "OpenBSD unsupported task should write to boot_times.json"
+        )
+
+        # Check content structure
+        content_str = str(copy_module.get("content", ""))
+        assert "unsupported" in content_str.lower(), (
+            "OpenBSD boot result should indicate method=unsupported"
+        )
+        assert "error" in content_str.lower(), (
+            "OpenBSD boot result should include an error/reason message"
+        )
+
+
+def test_sanity_check_yml_preserves_openbsd_skip_reasons(worktree_root):
+    """Test that sanity_check.yml preserves OpenBSD category skip reasons in notes."""
+    sanity_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
+    )
+    with open(sanity_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        sanity_tasks = yaml.safe_load(content)
+
+    # Find the task that writes benchmark_notes.json
+    notes_task = None
+    for task in sanity_tasks:
+        if "ansible.builtin.copy" in task:
+            copy_module = task["ansible.builtin.copy"]
+            if "benchmark_notes.json" in str(copy_module.get("dest", "")):
+                notes_task = task
+                break
+
+    assert notes_task is not None, "sanity_check.yml should write benchmark_notes.json"
+
+    # Check that the notes structure includes category skip reasons
+    # Look at the vars section to see what's being captured
+    vars_section = notes_task.get("vars", {})
+    notes_structure = vars_section.get("_notes", {})
+
+    # The notes should preserve category-level skip information
+    assert "category_skip_reasons" in notes_structure, (
+        "benchmark_notes.json should have a category_skip_reasons section"
+    )
+
+    # The disk skip reason should be captured
+    category_skip_reasons = notes_structure.get("category_skip_reasons", {})
+    assert "disk" in category_skip_reasons, (
+        "category_skip_reasons should include disk skip reason"
+    )

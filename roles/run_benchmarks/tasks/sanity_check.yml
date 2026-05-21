@@ -221,5 +221,7 @@
         required: "{{ run_benchmarks_sanity_missing_req | default([]) }}"
         optional: "{{ run_benchmarks_sanity_missing_opt | default([]) }}"
       distro_notes: "{{ run_benchmarks_sanity_distro_notes | default([]) }}"
+      category_skip_reasons:
+        disk: "{{ run_benchmarks_disk_skip_reason | default('') }}"
   changed_when: false
   failed_when: false

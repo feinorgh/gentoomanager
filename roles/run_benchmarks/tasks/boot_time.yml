@@ -205,3 +205,17 @@
   when:
     - run_benchmarks_boot_sa_check.rc != 0
     - run_benchmarks_boot_dmesg_result.stdout | default('') | length > 0
+
+# ── OpenBSD unsupported marker (Tier 3: requires explicit review) ─────────
+
+- name: Write boot_times unsupported result for OpenBSD
+  ansible.builtin.copy:
+    content: |
+      {
+        "available": false,
+        "method": "unsupported",
+        "error": "Boot timing collection is Tier 3 on OpenBSD (requires explicit review). Neither systemd-analyze nor dmesg timestamp parsing have been verified as accurate or safe for OpenBSD boot process measurement."
+      }
+    dest: "{{ run_benchmarks_work_dir }}/boot_times.json"
+    mode: '0644'
+  when: ansible_system | default('Linux') == 'OpenBSD'

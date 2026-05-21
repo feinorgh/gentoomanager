@@ -5,6 +5,18 @@
 # Results are intentionally NOT comparable across runs if the work directory
 # changes filesystems.
 
+# ── OpenBSD gate (Tier 3: requires explicit review) ──────────────────────
+
+- name: Skip disk benchmark on OpenBSD (unsupported tier 3)
+  ansible.builtin.set_fact:
+    run_benchmarks_disk_skip: true
+    run_benchmarks_disk_skip_reason: >-
+      Disk benchmark category is Tier 3 on OpenBSD (requires explicit review
+      before safe OpenBSD-native implementation is confirmed). The Linux-specific
+      df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no
+      direct OpenBSD equivalent verified as safe for benchmark use.
+  when: ansible_system | default('Linux') == 'OpenBSD'
+
 # ── Detect work directory filesystem ─────────────────────────────────────
 
 - name: Detect work directory device
