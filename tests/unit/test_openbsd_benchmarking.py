@@ -669,11 +669,8 @@ def test_setup_yml_category_prepare_cmd_only_linux_openbsd(worktree_root):
     # It should NOT set the variable for FreeBSD or other platforms
     when_clause = str(prepare_cmd_task.get("when", ""))
 
-    assert "Linux" in when_clause, (
-        "run_benchmarks_category_prepare_cmd should explicitly allow Linux"
-    )
-    assert "OpenBSD" in when_clause, (
-        "run_benchmarks_category_prepare_cmd should explicitly allow OpenBSD"
+    assert "in ['Linux', 'OpenBSD']" in when_clause, (
+        "run_benchmarks_category_prepare_cmd should only be set for Linux and OpenBSD"
     )
     assert "FreeBSD" not in when_clause, (
         "run_benchmarks_category_prepare_cmd should not be set for FreeBSD"
@@ -685,18 +682,26 @@ def test_setup_yml_category_prepare_cmd_linux_has_cache_drop(worktree_root):
     setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
     with open(setup_path, encoding="utf-8") as file_handle:
         content = file_handle.read()
+        setup_tasks = yaml.safe_load(content)
 
-    # Find the set_fact for run_benchmarks_category_prepare_cmd
-    import re
+    prepare_cmd_task = None
+    for task in setup_tasks:
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_category_prepare_cmd" in facts:
+                prepare_cmd_task = task
+                break
 
-    # Look for the Jinja2 template that sets the command for Linux
-    linux_prep_match = re.search(
-        r"run_benchmarks_category_prepare_cmd.*?Linux.*?drop_caches",
-        content,
-        re.DOTALL | re.IGNORECASE,
+    assert prepare_cmd_task is not None, (
+        "setup.yml should define run_benchmarks_category_prepare_cmd"
     )
 
-    assert linux_prep_match is not None, (
+    prepare_cmd_template = prepare_cmd_task["ansible.builtin.set_fact"][
+        "run_benchmarks_category_prepare_cmd"
+    ]
+    linux_section = prepare_cmd_template.split("== 'Linux'", 1)[1].split("elif", 1)[0]
+
+    assert "drop_caches" in linux_section, (
         "Linux category_prepare_cmd should include cache drop command "
         "(preserve existing Linux per-category prep behavior)"
     )
