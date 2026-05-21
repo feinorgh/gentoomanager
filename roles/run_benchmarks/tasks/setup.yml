@@ -587,7 +587,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      (sudo -n dmidecode -t 17 2>/dev/null || true) \
+      ({{ run_benchmarks_priv_cmd }} -n dmidecode -t 17 2>/dev/null || true) \
         | awk -F': ' '/^\s+Speed:/ && !/Unknown/{gsub(/^ +/,"",$2); print $2; exit}'
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_mem_speed_raw

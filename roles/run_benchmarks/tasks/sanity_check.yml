@@ -61,8 +61,7 @@
       if command -v sudo >/dev/null 2>&1; then
         sudo -n true
       elif command -v doas >/dev/null 2>&1; then
-        # doas has no -n flag; passwordless access must be configured in /etc/doas.conf with 'nopass'
-        doas true
+        doas -n true
       else
         exit 1
       fi

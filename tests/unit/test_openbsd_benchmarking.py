@@ -360,14 +360,11 @@ def test_setup_yml_gcc_probes_use_resolved_command(worktree_root):
 
 def test_setup_yml_privilege_probes_use_inline_detection(worktree_root):
     """
-    Test that privilege-sensitive probes in setup.yml use inline detection, not hardcoded sudo.
+    Test that privilege-sensitive probes in setup.yml do not hardcode sudo.
 
-    Background: setup.yml defines run_benchmarks_priv_cmd (sudo||doas), but this runs
-    AFTER sanity_check.yml in the playbook workflow. Any privilege-sensitive probe in
-    setup.yml that runs before the fact is defined must use inline detection.
-
-    The dmidecode task (~line 590) was still using hardcoded 'sudo -n', which breaks
-    on OpenBSD systems that only have doas.
+    Task 2 resolves privilege-escalation commands explicitly. Any setup probe that
+    still hardcodes ``sudo -n`` bypasses that resolution and can drift back toward
+    Linux-only assumptions.
     """
     setup_yml = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
     with open(setup_yml, encoding="utf-8") as file:
@@ -393,33 +390,15 @@ def test_setup_yml_privilege_probes_use_inline_detection(worktree_root):
 
     dmidecode_block = dmidecode_match.group(0)
 
-    # Check if it has when condition restricting to Linux
-    has_linux_guard = bool(
-        re.search(r"when:.*ansible_system.*==.*['\"]Linux['\"]", dmidecode_block)
-    )
-
     # Check for hardcoded sudo (not in a variable reference or inline detection)
     has_hardcoded_sudo = bool(re.search(r"\bsudo\s+-n\s+dmidecode", dmidecode_block))
 
-    # Also check for proper inline detection pattern
-    has_inline_detection = bool(
-        re.search(r"if command -v sudo.*elif command -v doas", dmidecode_block, re.DOTALL)
-    )
-
     if has_hardcoded_sudo:
-        if has_linux_guard:
-            # Acceptable: hardcoded sudo with Linux guard
-            pass
-        elif has_inline_detection:
-            # Good: uses inline detection for cross-platform
-            pass
-        else:
-            pytest.fail(
-                "dmidecode task in setup.yml uses hardcoded 'sudo -n' without:\n"
-                "  (a) inline sudo||doas detection, or\n"
-                "  (b) 'when: ansible_system == Linux' guard.\n"
-                "This breaks OpenBSD compatibility where only doas is available."
-            )
+        pytest.fail(
+            "dmidecode task in setup.yml should not hardcode 'sudo -n'. "
+            "It should use the resolved privilege command or equivalent "
+            "non-interactive privilege handling."
+        )
 
 
 def test_sanity_check_yml_doas_probe_explicit_noninteractive(worktree_root):
@@ -429,12 +408,6 @@ def test_sanity_check_yml_doas_probe_explicit_noninteractive(worktree_root):
     Background: The privilege probe checks both sudo and doas. The sudo branch uses
     'sudo -n true' where -n means non-interactive/passwordless. The doas branch
     should be similarly explicit that it's testing passwordless access.
-
-    On OpenBSD, 'doas true' will prompt for password if configured to require one,
-    which is not what we want in a probe. We should either:
-    - Use 'doas -n true' if doas supports -n
-    - Document that doas must be configured for passwordless access
-    - Use a different approach to test non-interactive doas
     """
     sanity_check_yml = os.path.join(
         worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
@@ -465,26 +438,7 @@ def test_sanity_check_yml_doas_probe_explicit_noninteractive(worktree_root):
 
     doas_command = doas_branch_match.group(1).strip()
 
-    # Check that it's not just 'doas true' without any flags or documentation
-    is_bare_doas_true = bool(re.match(r"^doas\s+true\s*$", doas_command))
-
-    if is_bare_doas_true:
-        # Check if there's a comment explaining passwordless requirement
-        has_passwordless_comment = bool(
-            re.search(
-                r"#.*password.*less|#.*non.*interactive|#.*configured.*nopass",
-                priv_probe_block,
-                re.IGNORECASE,
-            )
-        )
-
-        # Check if using doas -n (if that flag exists)
-        has_n_flag = "doas -n" in priv_probe_block
-
-        if not (has_passwordless_comment or has_n_flag):
-            pytest.fail(
-                "doas branch in sanity_check.yml uses bare 'doas true' without:\n"
-                "  (a) explicit non-interactive flag (e.g., -n), or\n"
-                "  (b) comment documenting passwordless requirement.\n"
-                "This probe should be explicitly non-interactive like 'sudo -n true'."
-            )
+    assert "doas -n true" in doas_command, (
+        "doas branch in sanity_check.yml should use 'doas -n true' so the "
+        "passwordless probe is explicitly non-interactive."
+    )
