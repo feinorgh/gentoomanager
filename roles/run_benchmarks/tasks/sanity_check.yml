@@ -55,8 +55,17 @@
 
 # ── 2. Probe privilege escalation / become access ───────────────────────
 - name: Probe passwordless privilege escalation
-  ansible.builtin.command:
-    cmd: "{{ run_benchmarks_priv_cmd | default('sudo') }} -n true"
+  ansible.builtin.shell:
+    cmd: |
+      # Detect sudo or doas inline (runs before setup.yml defines run_benchmarks_priv_cmd)
+      if command -v sudo >/dev/null 2>&1; then
+        sudo -n true
+      elif command -v doas >/dev/null 2>&1; then
+        doas true
+      else
+        exit 1
+      fi
+    executable: /bin/sh
   register: run_benchmarks_sanity_sudo
   changed_when: false
   failed_when: false

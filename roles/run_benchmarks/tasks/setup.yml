@@ -236,9 +236,9 @@
         [ -n "$fl" ] && LDFLAGS="$fl"
       fi
       # Fallback: extract GCC default flags from its spec/config
-      if [ -z "$CFLAGS" ] && command -v gcc >/dev/null 2>&1; then
-        specs=$(gcc -dumpspecs 2>/dev/null || true)
-        config=$(gcc -v 2>&1 | grep '^Configured with:' | sed 's/Configured with: //' || true)
+      if [ -z "$CFLAGS" ] && command -v {{ run_benchmarks_gcc_cmd }} >/dev/null 2>&1; then
+        specs=$({{ run_benchmarks_gcc_cmd }} -dumpspecs 2>/dev/null || true)
+        config=$({{ run_benchmarks_gcc_cmd }} -v 2>&1 | grep '^Configured with:' | sed 's/Configured with: //' || true)
         # Extract --with-arch and optimization defaults
         march=$(echo "$config" | grep -oP '(?<=--with-arch=)\S+' || true)
         mtune=$(echo "$config" | grep -oP '(?<=--with-tune=)\S+' || true)
@@ -277,7 +277,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      gcc -march=native -Q --help=target 2>/dev/null |
+      {{ run_benchmarks_gcc_cmd }} -march=native -Q --help=target 2>/dev/null |
         grep -m1 '^\s*-march=' | awk '{print $2}' || echo ''
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_march_native_raw
@@ -325,8 +325,8 @@
     cmd: |
       set +e
       set -o pipefail
-      cfg=$(gcc -v 2>&1 | grep '^Configured with:' | sed 's/^Configured with: //' || true)
-      [ -z "$cfg" ] && cfg=$(gcc -v 2>&1 | grep '^COLLECT_GCC' | head -1 || true)
+      cfg=$({{ run_benchmarks_gcc_cmd }} -v 2>&1 | grep '^Configured with:' | sed 's/^Configured with: //' || true)
+      [ -z "$cfg" ] && cfg=$({{ run_benchmarks_gcc_cmd }} -v 2>&1 | grep '^COLLECT_GCC' | head -1 || true)
       # Emit key=value lines for fields we care about
       for field in --with-arch= --with-tune= --with-cpu=; do
         val=$(printf '%s' "$cfg" | grep -oE "${field}[^ ]+" | head -1 | sed "s/${field}//")
