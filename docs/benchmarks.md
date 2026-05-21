@@ -1403,25 +1403,25 @@ platform capabilities.
 
 Most categories run successfully on OpenBSD:
 
-- **Fully supported (with reduced normalization):** compression, crypto, compiler,
-  python, numeric, sqlite, coreutils, memory, process, linker, startup, bash
-- **Reduced normalization:** OpenBSD does not support system-wide cache drops
-  (no `/proc/sys/vm/drop_caches`). The suite falls back to `sync`-only
-  normalization. This is recorded in benchmark metadata (`normalization_capability`
-  and category-level `notes`).
-- **Unsupported categories:** disk I/O benchmarks (require `fio`, unavailable
-  on OpenBSD), boot-time (requires `systemd-analyze`), Gentoo build times
-  (Gentoo-specific).
+- **Fully supported (with sync-only normalization):** compression, crypto,
+  compiler, python, numeric, sqlite, coreutils, memory, process, linker, startup, bash
+- **Sync-only normalization:** OpenBSD does not support system-wide cache drops
+  (no `/proc/sys/vm/drop_caches`). The suite uses `sync`-only preparation
+  between benchmark runs.
+- **Unsupported categories (Tier 3):** disk I/O benchmarks (Linux-specific
+  df/dd commands and cache-drop mechanism not yet verified as safe for OpenBSD
+  use), boot-time (systemd-analyze unavailable; dmesg timestamp parsing not
+  yet verified for OpenBSD boot process), Gentoo build times (Gentoo-specific).
 
 ### Category Skip Reasons
 
 When a category is skipped on OpenBSD, the reason is recorded in
-`benchmark_notes.json` under `category_skip_reasons`. For example:
+`benchmark_notes.json` under `category_skip_reasons`. Example:
 
 ```json
 {
   "category_skip_reasons": {
-    "disk": "fio is unavailable on OpenBSD; disk category skipped."
+    "disk": "Disk benchmark category is Tier 3 on OpenBSD (requires explicit review before safe OpenBSD-native implementation is confirmed). The Linux-specific df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no direct OpenBSD equivalent verified as safe for benchmark use."
   }
 }
 ```
@@ -1432,17 +1432,25 @@ some categories are unavailable.
 ### Privilege Escalation
 
 OpenBSD's default privilege escalation tool is **doas**, not `sudo`.
-The suite auto-detects this during setup and uses the appropriate command.
+The suite auto-detects this during sanity checks and uses the appropriate command.
 
 ### Provisioning
 
 Provisioning on OpenBSD uses `pkg_add` to install required packages. The
-following categories have reduced or no support for optional heavy packages:
+following packages are included in the default OpenBSD provisioning list:
 
-- **FFmpeg:** Not installed by default (large dependency tree; opt-in).
-- **GIMP, Inkscape, OpenCV:** Not available in standard OpenBSD packages.
-- **mold linker:** Not available; GNU ld and LLVM lld are used instead.
-- **Octave:** Not installed by default (opt-in).
+- **Core tools:** gcc, llvm, python3, rust, go, openssl, git, compression tools
+- **Optional tools (controlled by role variables):**
+  - FFmpeg: Installed by default (`provision_benchmarks_install_ffmpeg: true`)
+  - NumPy: Installed by default (`provision_benchmarks_install_numpy: true`)
+  - OpenCV: Installed by default (`provision_benchmarks_install_opencv: true`)
+  - Botan: Installed by default (`provision_benchmarks_install_botan: true`)
+  - mold linker: Installed by default (`provision_benchmarks_install_mold: true`)
+  - Octave: Installed by default (`provision_benchmarks_install_octave: true`)
+  - GIMP: Not installed by default (`provision_benchmarks_install_gimp: false`)
+  - Inkscape: Not installed by default (`provision_benchmarks_install_inkscape: false`)
+
+All of these packages are available in OpenBSD's standard package repositories.
 
 ## Windows Support
 

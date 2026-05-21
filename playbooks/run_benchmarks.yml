@@ -9,9 +9,9 @@
 #
 # OpenBSD notes:
 #   - Most categories run successfully.
-#   - Some categories have reduced normalization (sync-only, no cache drop).
-#   - Some categories are unsupported (disk I/O, boot-time).
-#   - Category skips and reduced normalization are recorded in benchmark metadata.
+#   - Uses sync-only normalization (no /proc/sys/vm/drop_caches).
+#   - Some categories are unsupported (disk I/O is Tier 3, boot-time is Tier 3).
+#   - Category skip reasons are recorded in benchmark_notes.json.
 #
 # Usage:
 #   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py

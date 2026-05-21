@@ -1001,6 +1001,10 @@ def test_openbsd_support_is_documented(worktree_root):
     assert "OpenBSD" in readme_content, (
         "roles/run_benchmarks/README.md should mention OpenBSD as a supported platform"
     )
+    # Check that reduced normalization is mentioned
+    assert "sync" in readme_content.lower() or "normalization" in readme_content.lower(), (
+        "roles/run_benchmarks/README.md should mention normalization behavior"
+    )
 
     # Test 2: docs/benchmarks.md should document OpenBSD support and caveats
     benchmarks_doc_path = os.path.join(worktree_root, "docs", "benchmarks.md")
@@ -1009,6 +1013,26 @@ def test_openbsd_support_is_documented(worktree_root):
 
     assert "OpenBSD" in benchmarks_doc_content, (
         "docs/benchmarks.md should document OpenBSD support"
+    )
+
+    # Check concrete facts about provisioning defaults (based on defaults/main.yml)
+    # These packages ARE in the OpenBSD provisioning list
+    assert "ffmpeg" in benchmarks_doc_content.lower(), (
+        "docs/benchmarks.md should mention FFmpeg provisioning for OpenBSD"
+    )
+    assert "octave" in benchmarks_doc_content.lower(), (
+        "docs/benchmarks.md should mention Octave for OpenBSD"
+    )
+
+    # Check that skip reasons are documented with accurate wording
+    # The actual disk skip reason mentions "Tier 3" and verification requirements
+    assert "tier 3" in benchmarks_doc_content.lower() or "Tier 3" in benchmarks_doc_content, (
+        "docs/benchmarks.md should mention Tier 3 category classification for unsupported items"
+    )
+
+    # Check that benchmark_notes.json is mentioned (not aspirational metadata fields)
+    assert "benchmark_notes" in benchmarks_doc_content.lower(), (
+        "docs/benchmarks.md should reference benchmark_notes.json for skip reasons"
     )
 
     # Test 3: playbooks/run_benchmarks.yml should mention OpenBSD in supported platforms
@@ -1020,3 +1044,26 @@ def test_openbsd_support_is_documented(worktree_root):
         "playbooks/run_benchmarks.yml should mention OpenBSD in "
         "its supported platforms documentation"
     )
+    # Check that the comment mentions reduced normalization
+    assert "sync" in playbook_content.lower() or "normalization" in playbook_content.lower(), (
+        "playbooks/run_benchmarks.yml should mention normalization behavior for OpenBSD"
+    )
+
+    # Test 4: Changelog should correctly attribute doas to run_benchmarks
+    changelog_path = os.path.join(
+        worktree_root, "changelogs", "fragments", "openbsd-benchmarking.yml"
+    )
+    with open(changelog_path, encoding="utf-8") as file_handle:
+        changelog_content = file_handle.read()
+
+    # doas auto-detection happens in run_benchmarks, not provision_benchmarks
+    if "doas" in changelog_content.lower():
+        # If doas is mentioned, it should be attributed to run_benchmarks
+        doas_in_run_benchmarks = "roles/run_benchmarks" in changelog_content or (
+            "run_benchmarks" in changelog_content
+            and "provision_benchmarks" not in changelog_content
+        )
+        assert doas_in_run_benchmarks, (
+            "Changelog should attribute doas auto-detection to roles/run_benchmarks, "
+            "not roles/provision_benchmarks"
+        )

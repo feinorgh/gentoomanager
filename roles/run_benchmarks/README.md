@@ -8,11 +8,11 @@ memory bandwidth, Python interpreter, and coreutils categories.
 Supports Linux (all major distributions), macOS, FreeBSD, OpenBSD, and Windows.
 
 **OpenBSD support:** Most benchmark categories run successfully on OpenBSD.
-Some categories have reduced normalization (system-wide cache drop is not
-available; sync-only is used) or are unsupported (disk I/O benchmarks require
-`fio`, which is unavailable; boot-time requires `systemd-analyze`). Category
-skips and reduced normalization are automatically detected and recorded in
-benchmark metadata.
+The suite uses sync-only normalization (system-wide cache drop via
+`/proc/sys/vm/drop_caches` is unavailable). Some categories are unsupported
+(disk I/O benchmarks require `fio` or Linux-specific df/dd commands not yet
+verified for OpenBSD; boot-time requires systemd-analyze or verified dmesg
+parsing). Category skip reasons are recorded in `benchmark_notes.json`.
 
 ## Requirements
 

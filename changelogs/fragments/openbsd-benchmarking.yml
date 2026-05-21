@@ -1,5 +1,5 @@
 ---
 minor_changes:
-  - "roles/run_benchmarks: added OpenBSD runtime support with category-level detection and reduced normalization for unsupported system-wide cache drops."
-  - "roles/provision_benchmarks: added OpenBSD provisioning support with pkg_add and doas privilege escalation auto-detection."
-  - "docs: documented OpenBSD as a supported runtime target with category-level caveats and reduced normalization behavior."
+  - "roles/run_benchmarks: added OpenBSD runtime support with category-level detection, sync-only normalization for categories without system-wide cache drop, and doas privilege escalation auto-detection."
+  - "roles/provision_benchmarks: added OpenBSD provisioning support with pkg_add package management."
+  - "docs: documented OpenBSD as a supported runtime target with category-level caveats, sync-only normalization behavior, and Tier 3 unsupported categories."
