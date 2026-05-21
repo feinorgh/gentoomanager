@@ -49,10 +49,10 @@
           | regex_replace('^missing_opt=', '')
          ).split() | select | list }}
 
-# ── 2. Probe sudo / become access ────────────────────────────────────────
-- name: Probe passwordless sudo access
+# ── 2. Probe privilege escalation / become access ───────────────────────
+- name: Probe passwordless privilege escalation
   ansible.builtin.command:
-    cmd: sudo -n true
+    cmd: "{{ run_benchmarks_priv_cmd | default('sudo') }} -n true"
   register: run_benchmarks_sanity_sudo
   changed_when: false
   failed_when: false
@@ -138,9 +138,9 @@
           {{ run_benchmarks_sanity_missing_opt | join(', ') }}
       {% endif %}
       {% if run_benchmarks_sanity_sudo.rc | default(1) != 0 %}
-      ✗ Passwordless sudo NOT available — CPU governor pinning and swap
-          disable/restore steps will be skipped or may fail.
-          Ensure the Ansible user is in the sudoers file with NOPASSWD.
+      ✗ Passwordless privilege escalation NOT available — CPU governor pinning
+          and swap disable/restore steps will be skipped or may fail.
+          Ensure the Ansible user has passwordless sudo/doas access configured.
       {% endif %}
       {% if not run_benchmarks_sanity_disk_ok %}
       ✗ Low disk space on partition '{{ run_benchmarks_sanity_disk_mount }}'

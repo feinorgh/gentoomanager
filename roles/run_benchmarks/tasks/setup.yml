@@ -110,6 +110,39 @@
     _run_benchmarks_bash: "{{ run_benchmarks_bash_probe.stdout | default('/bin/bash') | trim }}"
 
 # ---------------------------------------------------------------------------
+# Detect resolved commands (python/python3, gcc/cc, sudo/doas)
+# ---------------------------------------------------------------------------
+- name: Detect resolved Python command
+  ansible.builtin.raw: command -v python3 2>/dev/null || command -v python 2>/dev/null || echo python3
+  register: run_benchmarks_python_cmd_probe
+  changed_when: false
+  failed_when: false
+
+- name: Set resolved Python command variable
+  ansible.builtin.set_fact:
+    run_benchmarks_python_cmd: "{{ run_benchmarks_python_cmd_probe.stdout | default('python3') | trim }}"
+
+- name: Detect resolved GCC command
+  ansible.builtin.raw: command -v gcc 2>/dev/null || command -v cc 2>/dev/null || echo gcc
+  register: run_benchmarks_gcc_cmd_probe
+  changed_when: false
+  failed_when: false
+
+- name: Set resolved GCC command variable
+  ansible.builtin.set_fact:
+    run_benchmarks_gcc_cmd: "{{ run_benchmarks_gcc_cmd_probe.stdout | default('gcc') | trim }}"
+
+- name: Detect resolved privilege escalation command
+  ansible.builtin.raw: command -v sudo 2>/dev/null || command -v doas 2>/dev/null || echo sudo
+  register: run_benchmarks_priv_cmd_probe
+  changed_when: false
+  failed_when: false
+
+- name: Set resolved privilege escalation command variable
+  ansible.builtin.set_fact:
+    run_benchmarks_priv_cmd: "{{ run_benchmarks_priv_cmd_probe.stdout | default('sudo') | trim }}"
+
+# ---------------------------------------------------------------------------
 # Collect host metadata (OS-agnostic, uses Ansible gathered facts)
 # ---------------------------------------------------------------------------
 - name: Gather compiler and tool versions
