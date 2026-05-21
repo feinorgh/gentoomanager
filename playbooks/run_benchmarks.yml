@@ -5,7 +5,13 @@
 # scaled to the VM's max configured memory for the benchmark run, then
 # restored to its minimal allocation — even if the benchmark fails.
 #
-# Supported: Linux (all distros), FreeBSD.  Windows VMs are optional.
+# Supported: Linux (all distros), FreeBSD, OpenBSD.  Windows VMs are optional.
+#
+# OpenBSD notes:
+#   - Most categories run successfully.
+#   - Some categories have reduced normalization (sync-only, no cache drop).
+#   - Some categories are unsupported (disk I/O, boot-time).
+#   - Category skips and reduced normalization are recorded in benchmark metadata.
 #
 # Usage:
 #   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py

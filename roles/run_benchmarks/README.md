@@ -5,7 +5,14 @@ Runs a comprehensive cross-platform benchmark suite using
 cryptography, compiler (C/C++ compile and runtime), linker, disk I/O,
 memory bandwidth, Python interpreter, and coreutils categories.
 
-Supports Linux (all major distributions), macOS, FreeBSD, and Windows.
+Supports Linux (all major distributions), macOS, FreeBSD, OpenBSD, and Windows.
+
+**OpenBSD support:** Most benchmark categories run successfully on OpenBSD.
+Some categories have reduced normalization (system-wide cache drop is not
+available; sync-only is used) or are unsupported (disk I/O benchmarks require
+`fio`, which is unavailable; boot-time requires `systemd-analyze`). Category
+skips and reduced normalization are automatically detected and recorded in
+benchmark metadata.
 
 ## Requirements
 

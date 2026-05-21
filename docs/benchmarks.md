@@ -50,6 +50,7 @@ reports with charts.
   - [Fixture Corpus Details](#fixture-corpus-details)
   - [Fallback Behaviour](#fallback-behaviour)
 - [RAM Management](#ram-management)
+- [OpenBSD Support](#openbsd-support)
 - [Windows Support](#windows-support)
 - [Configuration Reference](#configuration-reference)
   - [run\_benchmarks Role](#run_benchmarks-role)
@@ -1391,6 +1392,57 @@ To disable RAM scaling:
 
 `hypervisor_host` must be set in each VM's inventory variables so the
 playbook knows which hypervisor to delegate `virsh` commands to.
+
+## OpenBSD Support
+
+OpenBSD is supported as a runtime target for most benchmark categories.
+The suite automatically detects OpenBSD and adapts its behavior to match
+platform capabilities.
+
+### Supported Categories
+
+Most categories run successfully on OpenBSD:
+
+- **Fully supported (with reduced normalization):** compression, crypto, compiler,
+  python, numeric, sqlite, coreutils, memory, process, linker, startup, bash
+- **Reduced normalization:** OpenBSD does not support system-wide cache drops
+  (no `/proc/sys/vm/drop_caches`). The suite falls back to `sync`-only
+  normalization. This is recorded in benchmark metadata (`normalization_capability`
+  and category-level `notes`).
+- **Unsupported categories:** disk I/O benchmarks (require `fio`, unavailable
+  on OpenBSD), boot-time (requires `systemd-analyze`), Gentoo build times
+  (Gentoo-specific).
+
+### Category Skip Reasons
+
+When a category is skipped on OpenBSD, the reason is recorded in
+`benchmark_notes.json` under `category_skip_reasons`. For example:
+
+```json
+{
+  "category_skip_reasons": {
+    "disk": "fio is unavailable on OpenBSD; disk category skipped."
+  }
+}
+```
+
+This ensures transparency and facilitates cross-platform comparisons where
+some categories are unavailable.
+
+### Privilege Escalation
+
+OpenBSD's default privilege escalation tool is **doas**, not `sudo`.
+The suite auto-detects this during setup and uses the appropriate command.
+
+### Provisioning
+
+Provisioning on OpenBSD uses `pkg_add` to install required packages. The
+following categories have reduced or no support for optional heavy packages:
+
+- **FFmpeg:** Not installed by default (large dependency tree; opt-in).
+- **GIMP, Inkscape, OpenCV:** Not available in standard OpenBSD packages.
+- **mold linker:** Not available; GNU ld and LLVM lld are used instead.
+- **Octave:** Not installed by default (opt-in).
 
 ## Windows Support
 

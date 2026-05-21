@@ -989,3 +989,34 @@ def test_sanity_check_yml_preserves_openbsd_skip_reasons(worktree_root):
     # The disk skip reason should be captured
     category_skip_reasons = notes_structure.get("category_skip_reasons", {})
     assert "disk" in category_skip_reasons, "category_skip_reasons should include disk skip reason"
+
+
+def test_openbsd_support_is_documented(worktree_root):
+    """Test that OpenBSD support is documented in user-facing docs and playbook."""
+    # Test 1: README.md should mention OpenBSD as a supported platform
+    readme_path = os.path.join(worktree_root, "roles", "run_benchmarks", "README.md")
+    with open(readme_path, encoding="utf-8") as file_handle:
+        readme_content = file_handle.read()
+
+    assert "OpenBSD" in readme_content, (
+        "roles/run_benchmarks/README.md should mention OpenBSD as a supported platform"
+    )
+
+    # Test 2: docs/benchmarks.md should document OpenBSD support and caveats
+    benchmarks_doc_path = os.path.join(worktree_root, "docs", "benchmarks.md")
+    with open(benchmarks_doc_path, encoding="utf-8") as file_handle:
+        benchmarks_doc_content = file_handle.read()
+
+    assert "OpenBSD" in benchmarks_doc_content, (
+        "docs/benchmarks.md should document OpenBSD support"
+    )
+
+    # Test 3: playbooks/run_benchmarks.yml should mention OpenBSD in supported platforms
+    playbook_path = os.path.join(worktree_root, "playbooks", "run_benchmarks.yml")
+    with open(playbook_path, encoding="utf-8") as file_handle:
+        playbook_content = file_handle.read()
+
+    assert "OpenBSD" in playbook_content, (
+        "playbooks/run_benchmarks.yml should mention OpenBSD in "
+        "its supported platforms documentation"
+    )
