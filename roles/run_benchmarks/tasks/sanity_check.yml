@@ -210,6 +210,20 @@
       {%- endif -%}
       {{ notes }}
 
+# ── 7. Set OpenBSD tier 3 category skip reasons ───────────────────────────
+# These must be set HERE (before benchmark_notes.json write) because
+# sanity_check.yml runs BEFORE category task files in the playbook flow.
+# The category task files (disk.yml, boot_time.yml) still have their own
+# OpenBSD gates but do NOT set skip_reason variables (too late by then).
+- name: Set OpenBSD tier 3 category skip reasons (disk)
+  ansible.builtin.set_fact:
+    run_benchmarks_disk_skip_reason: >-
+      Disk benchmark category is Tier 3 on OpenBSD (requires explicit review
+      before safe OpenBSD-native implementation is confirmed). The Linux-specific
+      df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no
+      direct OpenBSD equivalent verified as safe for benchmark use.
+  when: ansible_system | default('Linux') == 'OpenBSD'
+
 - name: Write benchmark notes (missing tools + distro limitations)
   ansible.builtin.copy:
     dest: "{{ run_benchmarks_work_dir }}/benchmark_notes.json"

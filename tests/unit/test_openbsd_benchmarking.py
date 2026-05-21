@@ -778,42 +778,101 @@ def test_run_category_yml_prep_guard_matches_setup_intent(worktree_root):
 
 
 def test_disk_yml_gates_openbsd_explicitly(worktree_root):
-    """Test that disk.yml explicitly gates OpenBSD and defines skip reason."""
+    """Test that disk category skip reason is available before disk.yml runs.
+    
+    Critical timing check: sanity_check.yml runs BEFORE category task files in
+    the playbook flow, so the disk skip reason must be set earlier (e.g., in
+    sanity_check.yml itself when detecting OpenBSD) to be captured in
+    benchmark_notes.json. This test ensures the skip reason is NOT set late in
+    disk.yml where it would miss the notes write.
+    """
     disk_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "disk.yml")
+    sanity_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
+    )
+    
     with open(disk_path, encoding="utf-8") as file_handle:
-        content = file_handle.read()
-        disk_tasks = yaml.safe_load(content)
+        disk_content = file_handle.read()
+        disk_tasks = yaml.safe_load(disk_content)
+    
+    with open(sanity_path, encoding="utf-8") as file_handle:
+        sanity_content = file_handle.read()
+        sanity_tasks = yaml.safe_load(sanity_content)
 
-    # Look for an OpenBSD skip task that sets run_benchmarks_disk_skip
-    openbsd_skip_task = None
-    for task in disk_tasks:
-        task_name = task.get("name", "").lower()
-        when_clause = str(task.get("when", ""))
-        if "ansible.builtin.set_fact" in task:
-            facts = task["ansible.builtin.set_fact"]
-            if "run_benchmarks_disk_skip" in facts and "OpenBSD" in when_clause:
-                openbsd_skip_task = task
+    # The disk skip reason must be set BEFORE sanity_check writes benchmark_notes.json
+    # Since sanity_check runs before disk.yml, the skip reason must be in sanity_check.yml
+    
+    # Find where benchmark_notes.json is written in sanity_check.yml
+    notes_write_task = None
+    notes_task_index = None
+    for idx, task in enumerate(sanity_tasks):
+        if "ansible.builtin.copy" in task:
+            copy_module = task["ansible.builtin.copy"]
+            if "benchmark_notes.json" in str(copy_module.get("dest", "")):
+                notes_write_task = task
+                notes_task_index = idx
                 break
-
-    assert openbsd_skip_task is not None, (
-        "disk.yml should have an OpenBSD skip gate task that sets run_benchmarks_disk_skip"
+    
+    assert notes_write_task is not None, (
+        "sanity_check.yml should write benchmark_notes.json"
     )
-
-    # The task should also set run_benchmarks_disk_skip_reason
-    facts = openbsd_skip_task["ansible.builtin.set_fact"]
-    assert "run_benchmarks_disk_skip_reason" in facts, (
-        "disk.yml OpenBSD skip gate should define run_benchmarks_disk_skip_reason"
+    
+    # Find where disk skip reason is set in sanity_check.yml (must be BEFORE notes write)
+    disk_skip_set_task = None
+    disk_skip_task_index = None
+    for idx, task in enumerate(sanity_tasks):
+        if idx < notes_task_index and "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_disk_skip_reason" in facts:
+                disk_skip_set_task = task
+                disk_skip_task_index = idx
+                break
+    
+    assert disk_skip_set_task is not None, (
+        "sanity_check.yml must set run_benchmarks_disk_skip_reason BEFORE writing "
+        "benchmark_notes.json (playbook runs sanity_check.yml before disk.yml)"
     )
-
+    
+    assert disk_skip_task_index < notes_task_index, (
+        f"Disk skip reason must be set (task {disk_skip_task_index}) BEFORE "
+        f"benchmark_notes.json is written (task {notes_task_index})"
+    )
+    
+    # The skip reason should be conditional on OpenBSD
+    when_clause = str(disk_skip_set_task.get("when", ""))
+    assert "OpenBSD" in when_clause, (
+        "Disk skip reason setting should be conditional on OpenBSD"
+    )
+    
     # Verify the reason is descriptive
+    facts = disk_skip_set_task["ansible.builtin.set_fact"]
     skip_reason = str(facts["run_benchmarks_disk_skip_reason"])
     assert len(skip_reason) > 10, (
-        "disk.yml skip reason should be a descriptive message, not a placeholder"
+        "Disk skip reason should be a descriptive message"
+    )
+    
+    # disk.yml should NOT set run_benchmarks_disk_skip_reason (would be too late)
+    disk_sets_skip_reason = False
+    for task in disk_tasks:
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_disk_skip_reason" in facts:
+                disk_sets_skip_reason = True
+                break
+    
+    assert not disk_sets_skip_reason, (
+        "disk.yml should NOT set run_benchmarks_disk_skip_reason (too late in playbook "
+        "flow - sanity_check.yml already wrote benchmark_notes.json)"
     )
 
 
 def test_boot_time_yml_openbsd_unsupported_policy(worktree_root):
-    """Test that boot_time.yml has an OpenBSD policy branch with unsupported semantics."""
+    """Test that boot_time.yml short-circuits OpenBSD before probing.
+    
+    Critical path check: OpenBSD should take the explicit unsupported path
+    BEFORE systemd-analyze/dmesg probing runs. The unsupported result write
+    must come first and the probe tasks must have when guards to skip OpenBSD.
+    """
     boot_time_path = os.path.join(
         worktree_root, "roles", "run_benchmarks", "tasks", "boot_time.yml"
     )
@@ -821,9 +880,10 @@ def test_boot_time_yml_openbsd_unsupported_policy(worktree_root):
         content = file_handle.read()
         boot_time_tasks = yaml.safe_load(content)
 
-    # Look for an OpenBSD unsupported result writing task
+    # Find the OpenBSD unsupported result writing task
     openbsd_unsupported_task = None
-    for task in boot_time_tasks:
+    openbsd_task_index = None
+    for idx, task in enumerate(boot_time_tasks):
         task_name = task.get("name", "").lower()
         when_clause = str(task.get("when", ""))
         if (
@@ -832,6 +892,7 @@ def test_boot_time_yml_openbsd_unsupported_policy(worktree_root):
             and "OpenBSD" in when_clause
         ):
             openbsd_unsupported_task = task
+            openbsd_task_index = idx
             break
 
     assert openbsd_unsupported_task is not None, (
@@ -839,20 +900,71 @@ def test_boot_time_yml_openbsd_unsupported_policy(worktree_root):
     )
 
     # The task should write boot_times.json with method='unsupported'
-    if "ansible.builtin.copy" in openbsd_unsupported_task:
-        copy_module = openbsd_unsupported_task["ansible.builtin.copy"]
-        assert "boot_times.json" in str(copy_module.get("dest", "")), (
-            "OpenBSD unsupported task should write to boot_times.json"
-        )
+    assert "ansible.builtin.copy" in openbsd_unsupported_task, (
+        "OpenBSD unsupported task should use ansible.builtin.copy"
+    )
+    
+    copy_module = openbsd_unsupported_task["ansible.builtin.copy"]
+    assert "boot_times.json" in str(copy_module.get("dest", "")), (
+        "OpenBSD unsupported task should write to boot_times.json"
+    )
 
-        # Check content structure
-        content_str = str(copy_module.get("content", ""))
-        assert "unsupported" in content_str.lower(), (
-            "OpenBSD boot result should indicate method=unsupported"
-        )
-        assert "error" in content_str.lower(), (
-            "OpenBSD boot result should include an error/reason message"
-        )
+    # Check content structure
+    content_str = str(copy_module.get("content", ""))
+    assert "unsupported" in content_str.lower(), (
+        "OpenBSD boot result should indicate method=unsupported"
+    )
+    assert "error" in content_str.lower(), (
+        "OpenBSD boot result should include an error/reason message"
+    )
+    
+    # CRITICAL: The OpenBSD task must come BEFORE the systemd-analyze check
+    # Find the systemd-analyze check task
+    systemd_check_task_index = None
+    for idx, task in enumerate(boot_time_tasks):
+        task_name = task.get("name", "").lower()
+        if "systemd-analyze" in task_name and "check" in task_name:
+            systemd_check_task_index = idx
+            break
+    
+    assert systemd_check_task_index is not None, (
+        "boot_time.yml should have a systemd-analyze check task"
+    )
+    
+    assert openbsd_task_index < systemd_check_task_index, (
+        f"OpenBSD unsupported task (index {openbsd_task_index}) must come BEFORE "
+        f"systemd-analyze check (index {systemd_check_task_index}) to short-circuit probe"
+    )
+    
+    # The systemd-analyze check and subsequent probe tasks must exclude OpenBSD
+    systemd_check_task = boot_time_tasks[systemd_check_task_index]
+    systemd_when = str(systemd_check_task.get("when", ""))
+    
+    # Should explicitly exclude OpenBSD or be Linux-only
+    assert ("!= 'OpenBSD'" in systemd_when or "== 'Linux'" in systemd_when), (
+        "systemd-analyze check should exclude OpenBSD (use != 'OpenBSD' or == 'Linux')"
+    )
+    
+    # Find all tasks between systemd check and OpenBSD unsupported task
+    # These are the probe tasks - they should all exclude OpenBSD
+    for idx in range(systemd_check_task_index, len(boot_time_tasks)):
+        task = boot_time_tasks[idx]
+        task_name = task.get("name", "").lower()
+        
+        # Skip the OpenBSD task itself
+        if idx == openbsd_task_index:
+            continue
+        
+        # If it's a systemd or dmesg related task, it must exclude OpenBSD
+        if "systemd" in task_name or "dmesg" in task_name or "boot" in task_name:
+            when_clause = str(task.get("when", ""))
+            if when_clause and "OpenBSD" not in when_clause:
+                # This probe task might run on OpenBSD - that's wrong
+                pytest.fail(
+                    f"Probe task '{task.get('name', '')}' at index {idx} may run on OpenBSD. "
+                    f"All probe tasks after systemd-analyze check should exclude OpenBSD or "
+                    f"the OpenBSD unsupported task should come first."
+                )
 
 
 def test_sanity_check_yml_preserves_openbsd_skip_reasons(worktree_root):
