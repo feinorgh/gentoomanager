@@ -45,16 +45,12 @@ def test_verify_yml_openbsd_friendly_commands(worktree_root):
 
     # Verify executable is /bin/sh (POSIX-compatible, works on OpenBSD)
     executable = tool_check_task.get("ansible.builtin.shell", {}).get("executable", "")
-    assert executable == "/bin/sh", (
-        "verify.yml should use /bin/sh for OpenBSD compatibility"
-    )
+    assert executable == "/bin/sh", "verify.yml should use /bin/sh for OpenBSD compatibility"
 
 
 def test_setup_yml_defines_resolved_command_facts(worktree_root):
     """Test that setup.yml defines resolved command facts for OpenBSD."""
-    setup_path = os.path.join(
-        worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml"
-    )
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
     with open(setup_path, encoding="utf-8") as file_handle:
         content = file_handle.read()
 
@@ -154,9 +150,7 @@ def test_sanity_check_yml_uses_resolved_privilege_command(worktree_root):
 
 def test_setup_yml_version_gathering_uses_resolved_commands(worktree_root):
     """Test that setup.yml version gathering uses resolved commands where relevant."""
-    setup_path = os.path.join(
-        worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml"
-    )
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
     with open(setup_path, encoding="utf-8") as file_handle:
         content = file_handle.read()
         setup_tasks = yaml.safe_load(content)
@@ -179,9 +173,7 @@ def test_setup_yml_version_gathering_uses_resolved_commands(worktree_root):
 
     # The command should use resolved variables for gcc, python, and numpy
     cmd = cmd_module.get("cmd", "")
-    assert "python" in cmd.lower(), (
-        "Version gathering should check Python version"
-    )
+    assert "python" in cmd.lower(), "Version gathering should check Python version"
 
     # Verify it uses the resolved variable, not hardcoded commands
     assert "{{ run_benchmarks_gcc_cmd }}" in cmd, (
@@ -246,9 +238,7 @@ def test_sanity_check_yml_python_detection_openbsd_friendly(worktree_root):
 
     # Verify it uses /bin/sh for POSIX compatibility
     executable = tool_probe_task.get("ansible.builtin.shell", {}).get("executable", "")
-    assert executable == "/bin/sh", (
-        "sanity_check.yml should use /bin/sh for OpenBSD compatibility"
-    )
+    assert executable == "/bin/sh", "sanity_check.yml should use /bin/sh for OpenBSD compatibility"
 
 
 def test_sanity_check_yml_privilege_probe_detects_inline(worktree_root):
@@ -292,8 +282,8 @@ def test_sanity_check_yml_privilege_probe_detects_inline(worktree_root):
     # because that defaults to sudo and fails on OpenBSD-only-doas systems.
 
     # Check for Jinja2 variable usage (not in comments)
-    cmd_lines = [line for line in cmd.split('\n') if not line.strip().startswith('#')]
-    cmd_without_comments = '\n'.join(cmd_lines)
+    cmd_lines = [line for line in cmd.split("\n") if not line.strip().startswith("#")]
+    cmd_without_comments = "\n".join(cmd_lines)
 
     if "run_benchmarks_priv_cmd" in cmd_without_comments and "{{" in cmd_without_comments:
         # If it uses the variable in actual code (not comment), it must not be the primary method
@@ -314,9 +304,7 @@ def test_sanity_check_yml_privilege_probe_detects_inline(worktree_root):
 
 def test_setup_yml_gcc_probes_use_resolved_command(worktree_root):
     """Test that all GCC-related probes in setup.yml use resolved command variable."""
-    setup_path = os.path.join(
-        worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml"
-    )
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
     with open(setup_path, encoding="utf-8") as file_handle:
         content = file_handle.read()
 
@@ -345,6 +333,7 @@ def test_setup_yml_gcc_probes_use_resolved_command(worktree_root):
 
         # Check for problematic patterns
         import re
+
         for pattern in problematic_patterns:
             if re.search(pattern, line):
                 issues.append(f"Line {i}: {line.strip()}")
@@ -357,15 +346,145 @@ def test_setup_yml_gcc_probes_use_resolved_command(worktree_root):
     critical_hardcoded = []
     for issue in issues:
         if any(
-            keyword in issue.lower()
-            for keyword in ["dumpspecs", "march=native", "configured with"]
+            keyword in issue.lower() for keyword in ["dumpspecs", "march=native", "configured with"]
         ):
             critical_hardcoded.append(issue)
 
     if critical_hardcoded:
         pytest.fail(
             f"setup.yml should use {{{{ run_benchmarks_gcc_cmd }}}} for GCC probes, "
-            f"not hardcoded 'gcc'. Found {len(critical_hardcoded)} issue(s):\n" +
-            "\n".join(critical_hardcoded[:5])
+            f"not hardcoded 'gcc'. Found {len(critical_hardcoded)} issue(s):\n"
+            + "\n".join(critical_hardcoded[:5])
         )
 
+
+def test_setup_yml_privilege_probes_use_inline_detection(worktree_root):
+    """
+    Test that privilege-sensitive probes in setup.yml use inline detection, not hardcoded sudo.
+
+    Background: setup.yml defines run_benchmarks_priv_cmd (sudo||doas), but this runs
+    AFTER sanity_check.yml in the playbook workflow. Any privilege-sensitive probe in
+    setup.yml that runs before the fact is defined must use inline detection.
+
+    The dmidecode task (~line 590) was still using hardcoded 'sudo -n', which breaks
+    on OpenBSD systems that only have doas.
+    """
+    setup_yml = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_yml, encoding="utf-8") as file:
+        content = file.read()
+
+    # Check the dmidecode task specifically
+    # It should either:
+    # 1. Use inline sudo||doas detection
+    # 2. Or be conditional on ansible_system == 'Linux' (where sudo is standard)
+    #    AND be documented as Linux-only
+
+    # Look for hardcoded sudo in privilege-requiring commands (dmidecode)
+    # Pattern: detect 'sudo' that's not part of variable names or comments
+    import re
+
+    # Find the dmidecode task
+    dmidecode_match = re.search(
+        r"- name:.*dmidecode.*?\n(.*?)(?=\n- name:|\Z)", content, re.DOTALL | re.IGNORECASE
+    )
+
+    if not dmidecode_match:
+        pytest.skip("dmidecode task not found in setup.yml")
+
+    dmidecode_block = dmidecode_match.group(0)
+
+    # Check if it has when condition restricting to Linux
+    has_linux_guard = bool(
+        re.search(r"when:.*ansible_system.*==.*['\"]Linux['\"]", dmidecode_block)
+    )
+
+    # Check for hardcoded sudo (not in a variable reference or inline detection)
+    has_hardcoded_sudo = bool(re.search(r"\bsudo\s+-n\s+dmidecode", dmidecode_block))
+
+    # Also check for proper inline detection pattern
+    has_inline_detection = bool(
+        re.search(r"if command -v sudo.*elif command -v doas", dmidecode_block, re.DOTALL)
+    )
+
+    if has_hardcoded_sudo:
+        if has_linux_guard:
+            # Acceptable: hardcoded sudo with Linux guard
+            pass
+        elif has_inline_detection:
+            # Good: uses inline detection for cross-platform
+            pass
+        else:
+            pytest.fail(
+                "dmidecode task in setup.yml uses hardcoded 'sudo -n' without:\n"
+                "  (a) inline sudo||doas detection, or\n"
+                "  (b) 'when: ansible_system == Linux' guard.\n"
+                "This breaks OpenBSD compatibility where only doas is available."
+            )
+
+
+def test_sanity_check_yml_doas_probe_explicit_noninteractive(worktree_root):
+    """
+    Test that doas pre-flight check in sanity_check.yml is explicitly non-interactive.
+
+    Background: The privilege probe checks both sudo and doas. The sudo branch uses
+    'sudo -n true' where -n means non-interactive/passwordless. The doas branch
+    should be similarly explicit that it's testing passwordless access.
+
+    On OpenBSD, 'doas true' will prompt for password if configured to require one,
+    which is not what we want in a probe. We should either:
+    - Use 'doas -n true' if doas supports -n
+    - Document that doas must be configured for passwordless access
+    - Use a different approach to test non-interactive doas
+    """
+    sanity_check_yml = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
+    )
+
+    with open(sanity_check_yml, encoding="utf-8") as file:
+        content = file.read()
+
+    import re
+
+    # Find the privilege probe task
+    priv_probe_match = re.search(
+        r"- name:.*[Pp]rivilege.*(?:escalation|sudo).*?\n(.*?)(?=\n- name:|\Z)", content, re.DOTALL
+    )
+
+    if not priv_probe_match:
+        pytest.fail("Privilege probe task not found in sanity_check.yml")
+
+    priv_probe_block = priv_probe_match.group(0)
+
+    # Look for the doas branch
+    doas_branch_match = re.search(
+        r"elif command -v doas.*?then\s+(.*?)(?:else|fi)", priv_probe_block, re.DOTALL
+    )
+
+    if not doas_branch_match:
+        pytest.skip("doas branch not found in privilege probe")
+
+    doas_command = doas_branch_match.group(1).strip()
+
+    # Check that it's not just 'doas true' without any flags or documentation
+    is_bare_doas_true = bool(re.match(r"^doas\s+true\s*$", doas_command))
+
+    if is_bare_doas_true:
+        # Check if there's a comment explaining passwordless requirement
+        has_passwordless_comment = bool(
+            re.search(
+                r"#.*password.*less|#.*non.*interactive|#.*configured.*nopass",
+                priv_probe_block,
+                re.IGNORECASE,
+            )
+        )
+
+        # Check if using doas -n (if that flag exists)
+        has_n_flag = "doas -n" in priv_probe_block
+
+        if not (has_passwordless_comment or has_n_flag):
+            pytest.fail(
+                "doas branch in sanity_check.yml uses bare 'doas true' without:\n"
+                "  (a) explicit non-interactive flag (e.g., -n), or\n"
+                "  (b) comment documenting passwordless requirement.\n"
+                "This probe should be explicitly non-interactive like 'sudo -n true'."
+            )
