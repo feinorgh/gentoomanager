@@ -114,6 +114,24 @@ provision_benchmarks_packages:
     - archivers/7-zip
     - graphics/ImageMagick7
     - databases/sqlite3
+  OpenBSD:
+    - gcc
+    - llvm
+    - openssl
+    - python3
+    - rust
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+    - p7zip
+    - ImageMagick
+    - sqlite3
 
 # Packages available only via EPEL on RHEL/CentOS
 provision_benchmarks_epel_packages:
@@ -187,6 +205,8 @@ provision_benchmarks_numpy_packages:
     - python3-numpy
   FreeBSD:
     - math/py-numpy
+  OpenBSD:
+    - py3-numpy
 
 # opencv package name per OS family (used when provision_benchmarks_install_opencv is true)
 provision_benchmarks_opencv_packages:
@@ -202,6 +222,8 @@ provision_benchmarks_opencv_packages:
     - python3-opencv
   FreeBSD:
     - graphics/py-opencv
+  OpenBSD:
+    - py3-opencv
 provision_benchmarks_install_botan: true
 
 # botan package name per OS family (provides the botan CLI used by the benchmark)
@@ -218,6 +240,8 @@ provision_benchmarks_botan_packages:
     - botan3
   FreeBSD:
     - security/botan3
+  OpenBSD:
+    - botan3
 
 provision_benchmarks_install_mold: true
 
@@ -235,6 +259,8 @@ provision_benchmarks_mold_packages:
     - mold
   FreeBSD:
     - devel/mold
+  OpenBSD:
+    - mold
 
 provision_benchmarks_install_octave: true
 
@@ -252,3 +278,5 @@ provision_benchmarks_octave_packages:
     - octave
   FreeBSD:
     - math/octave
+  OpenBSD:
+    - octave

@@ -1,0 +1,83 @@
+---
+# OpenBSD – install packages using community.general.openbsd_pkg.
+
+- name: Install benchmark dependencies (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ provision_benchmarks_packages['OpenBSD'] }}"
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install hyperfine (OpenBSD)
+  community.general.openbsd_pkg:
+    name: hyperfine
+    state: present
+  become: true
+  failed_when: false
+
+- name: Install ffmpeg (OpenBSD)
+  community.general.openbsd_pkg:
+    name: ffmpeg
+    state: present
+  become: true
+  when: provision_benchmarks_install_ffmpeg | bool
+  failed_when: false
+
+- name: Install numpy (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ provision_benchmarks_numpy_packages['OpenBSD'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Install GIMP (OpenBSD)
+  community.general.openbsd_pkg:
+    name: gimp
+    state: present
+  become: true
+  when: provision_benchmarks_install_gimp | bool
+  failed_when: false
+
+- name: Install Inkscape (OpenBSD)
+  community.general.openbsd_pkg:
+    name: inkscape
+    state: present
+  become: true
+  when: provision_benchmarks_install_inkscape | bool
+  failed_when: false
+
+- name: Install OpenCV Python bindings (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ provision_benchmarks_opencv_packages['OpenBSD'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_opencv | bool
+  failed_when: false
+
+- name: Install Botan CLI (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ provision_benchmarks_botan_packages['OpenBSD'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_botan | bool
+  failed_when: false
+
+- name: Install mold linker (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ provision_benchmarks_mold_packages['OpenBSD'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_mold | bool
+  failed_when: false
+
+- name: Install Octave (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ provision_benchmarks_octave_packages['OpenBSD'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_octave | bool
+  failed_when: false
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml
