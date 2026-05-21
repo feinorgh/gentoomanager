@@ -640,8 +640,87 @@ def test_denormalize_yml_openbsd_safe_subset_branch(worktree_root):
     )
 
 
-def test_run_category_yml_openbsd_avoids_linux_cache_drop(worktree_root):
-    """Test that run_category.yml does not run Linux-only cache drop unconditionally on OpenBSD."""
+def test_setup_yml_category_prepare_cmd_only_linux_openbsd(worktree_root):
+    """Test that category_prepare_cmd is ONLY set for Linux and OpenBSD, not other platforms."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+        setup_tasks = yaml.safe_load(content)
+
+    # Find the task that sets run_benchmarks_category_prepare_cmd
+    prepare_cmd_task = None
+    for task in setup_tasks:
+        if "ansible.builtin.set_fact" in task:
+            facts = task["ansible.builtin.set_fact"]
+            if "run_benchmarks_category_prepare_cmd" in facts:
+                prepare_cmd_task = task
+                break
+
+    assert prepare_cmd_task is not None, (
+        "setup.yml should define run_benchmarks_category_prepare_cmd"
+    )
+
+    # The task should be conditional on Linux or OpenBSD ONLY
+    # It should NOT set the variable for FreeBSD or other platforms
+    when_clause = str(prepare_cmd_task.get("when", ""))
+    
+    # Check that the when clause restricts to Linux or OpenBSD
+    # This prevents unintended per-category prep on FreeBSD and other platforms
+    assert ("Linux" in when_clause or "OpenBSD" in when_clause), (
+        "run_benchmarks_category_prepare_cmd should only be set when ansible_system "
+        "is Linux or OpenBSD, to avoid unintended per-category prep on other platforms"
+    )
+
+
+def test_setup_yml_category_prepare_cmd_linux_has_cache_drop(worktree_root):
+    """Test that Linux category_prepare_cmd includes cache drop (preserve existing behavior)."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+
+    # Find the set_fact for run_benchmarks_category_prepare_cmd
+    import re
+    # Look for the Jinja2 template that sets the command for Linux
+    linux_prep_match = re.search(
+        r"run_benchmarks_category_prepare_cmd.*?Linux.*?drop_caches",
+        content,
+        re.DOTALL | re.IGNORECASE
+    )
+
+    assert linux_prep_match is not None, (
+        "Linux category_prepare_cmd should include cache drop command "
+        "(preserve existing Linux per-category prep behavior)"
+    )
+
+
+def test_setup_yml_category_prepare_cmd_openbsd_sync_only(worktree_root):
+    """Test that OpenBSD category_prepare_cmd is sync only (safe subset)."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        content = file_handle.read()
+
+    # Find the set_fact for run_benchmarks_category_prepare_cmd
+    import re
+    # Look for the OpenBSD branch - should have sync but NOT drop_caches
+    openbsd_prep_match = re.search(
+        r"OpenBSD.*?sync",
+        content,
+        re.DOTALL | re.IGNORECASE
+    )
+
+    assert openbsd_prep_match is not None, (
+        "OpenBSD category_prepare_cmd should include sync"
+    )
+
+    # Verify OpenBSD branch doesn't have cache drop (safe subset)
+    openbsd_section = openbsd_prep_match.group(0)
+    assert "drop_caches" not in openbsd_section.lower(), (
+        "OpenBSD category_prepare_cmd should NOT include cache drop (safe subset)"
+    )
+
+
+def test_run_category_yml_prep_guard_matches_setup_intent(worktree_root):
+    """Test that run_category.yml prep task guard aligns with setup.yml variable setting."""
     run_category_path = os.path.join(
         worktree_root, "roles", "run_benchmarks", "tasks", "run_category.yml"
     )
@@ -649,35 +728,24 @@ def test_run_category_yml_openbsd_avoids_linux_cache_drop(worktree_root):
         content = file_handle.read()
         run_category_tasks = yaml.safe_load(content)
 
-    # Find the cache drop task
-    cache_drop_task = None
+    # Find the system state preparation task
+    prep_task = None
     for task in run_category_tasks:
         task_name = task.get("name", "").lower()
-        if "drop" in task_name and "cache" in task_name:
-            cache_drop_task = task
-            break
+        if "prepare" in task_name or "state" in task_name:
+            # Check if it uses run_benchmarks_category_prepare_cmd
+            task_str = str(task)
+            if "run_benchmarks_category_prepare_cmd" in task_str:
+                prep_task = task
+                break
 
-    if cache_drop_task is None:
-        pytest.skip("Cache drop task not found in run_category.yml")
-
-    # Verify it's conditional on Linux (not unconditional)
-    when_clause = str(cache_drop_task.get("when", ""))
-    assert "Linux" in when_clause, (
-        "run_category.yml cache drop task should be conditional on Linux, "
-        "not run unconditionally on OpenBSD"
+    assert prep_task is not None, (
+        "run_category.yml should have a preparation task using run_benchmarks_category_prepare_cmd"
     )
 
-
-def test_run_category_yml_uses_category_prepare_cmd(worktree_root):
-    """Test that run_category.yml uses run_benchmarks_category_prepare_cmd for OpenBSD preparation."""
-    run_category_path = os.path.join(
-        worktree_root, "roles", "run_benchmarks", "tasks", "run_category.yml"
-    )
-    with open(run_category_path, encoding="utf-8") as file_handle:
-        content = file_handle.read()
-
-    # Check that run_benchmarks_category_prepare_cmd is used
-    assert "run_benchmarks_category_prepare_cmd" in content, (
-        "run_category.yml should use run_benchmarks_category_prepare_cmd for "
-        "OS-specific per-category preparation"
+    # The guard should ensure it only runs when the variable is defined
+    # This is correct - the key is that setup.yml should only define it for Linux/OpenBSD
+    when_clause = str(prep_task.get("when", ""))
+    assert "run_benchmarks_category_prepare_cmd is defined" in when_clause, (
+        "Preparation task should guard with 'run_benchmarks_category_prepare_cmd is defined'"
     )

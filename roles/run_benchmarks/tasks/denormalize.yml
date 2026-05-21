@@ -1,6 +1,6 @@
 ---
 # Restore the VM to its original state after benchmarking.
-# OS-agnostic — works on Linux (all distros) and FreeBSD.
+# OS-agnostic — works on Linux (all distros), FreeBSD, and OpenBSD.
 
 # ── OpenBSD safe subset restore (no-op marker) ───────────────────────────
 - name: OpenBSD restore marker (no changes were made during normalization)
