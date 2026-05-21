@@ -166,6 +166,7 @@ cython_debug/
 # Ansible
 .ansible/
 *.retry
+.worktrees/
 
 # Ruff
 .ruff_cache/
