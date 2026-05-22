@@ -5,7 +5,13 @@
 # scaled to the VM's max configured memory for the benchmark run, then
 # restored to its minimal allocation — even if the benchmark fails.
 #
-# Supported: Linux (all distros), FreeBSD.  Windows VMs are optional.
+# Supported: Linux (all distros), FreeBSD, OpenBSD.  Windows VMs are optional.
+#
+# OpenBSD notes:
+#   - Most categories run successfully.
+#   - Uses sync-only normalization (no /proc/sys/vm/drop_caches).
+#   - Some categories are unsupported (disk I/O is Tier 3, boot-time is Tier 3).
+#   - Disk skip reason is recorded in benchmark_notes.json; boot-time writes to boot_times.json.
 #
 # Usage:
 #   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py
@@ -194,8 +200,34 @@
          _reachable_check.rc | default(1) != 0)
 
     # ── Skip host if results are already complete (optional) ────────────
-    # These tasks only read local files on the controller — no remote facts
-    # are needed, so they can safely run before RAM scaling and fact gathering.
+    # Completion semantics need the remote OS name because OpenBSD expects a
+    # slightly different artifact set (for example memory latency vs the Linux
+    # shared-memory bandwidth artifact). Gather only the minimum OS fact needed
+    # before the controller-side completeness check.
+    - name: Set Windows OS name for completion gating
+      ansible.builtin.set_fact:
+        run_benchmarks_preflight_system: Windows
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname in (groups['mswindows'] | default([]))
+
+    - name: Detect OS name for completion gating
+      ansible.builtin.raw: uname -s 2>/dev/null || echo unknown
+      register: run_benchmarks_preflight_system_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['mswindows'] | default([]))
+
+    - name: Set OS name for completion gating
+      ansible.builtin.set_fact:
+        run_benchmarks_preflight_system: >-
+          {{ run_benchmarks_preflight_system_raw.stdout | default('unknown') | trim }}
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['mswindows'] | default([]))
+
     - name: Check existing result files for this host on controller
       ansible.builtin.find:
         paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
@@ -209,16 +241,21 @@
     - name: Resolve active categories for completeness check
       ansible.builtin.set_fact:
         _skip_check_categories: >-
+          {%- set selected = (
+                (run_benchmarks_categories | default([]))
+                if (run_benchmarks_categories | default([]) | length > 0)
+                else ['compression', 'crypto', 'compiler', 'python', 'numeric',
+                      'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
+                      'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
+                      'startup', 'boot_time', 'bash', 'octave']
+                     + (['gentoo_build_times']
+                        if inventory_hostname in (groups['gentoo'] | default([]))
+                        else [])
+             ) -%}
           {{
-            (run_benchmarks_categories | default([]) | length > 0)
-            | ternary(run_benchmarks_categories | default([]),
-                      ['compression', 'crypto', 'compiler', 'python', 'numeric',
-                       'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
-                       'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
-                       'startup', 'boot_time', 'bash', 'octave']
-                      + (['gentoo_build_times']
-                         if inventory_hostname in (groups['gentoo'] | default([]))
-                         else []))
+            selected
+            if run_benchmarks_preflight_system != 'Windows'
+            else selected | intersect(run_benchmarks_windows_categories | default([]))
           }}
       when: run_benchmarks_skip_complete | default(false) | bool
 
@@ -240,23 +277,32 @@
             'ffmpeg':             'ffmpeg_video_encode.json',
             'imagemagick':        'imagemagick_resize.json',
             'coreutils':          'coreutils.json',
-            'memory':             'memory_bandwidth.json',
-            'process':            'process.json',
-            'disk':               'disk.json',
+             'memory':             ('memory_latency.json'
+                                    if run_benchmarks_preflight_system == 'OpenBSD'
+                                    else 'memory_bandwidth.json'),
+             'process':            'process.json',
+             'disk':               ('disk_skip.json'
+                                    if run_benchmarks_preflight_system == 'OpenBSD'
+                                    else 'disk.json'),
             'linker':             'linker.json',
             'opencv':             'opencv.json',
             'gimp':               'gimp.json',
-            'inkscape':           'inkscape.json',
-            'startup':            'startup.json',
-            'boot_time':          'boot_times.json',
-            'bash':               'bash.json',
-            'gentoo_build_times': 'gentoo_build_times.json'
-          } -%}
+             'inkscape':           'inkscape.json',
+             'startup':            'startup.json',
+             'boot_time':          'boot_times.json',
+             'bash':               'bash.json',
+             'octave':             'octave.json',
+             'gentoo_build_times': 'gentoo_build_times.json'
+           } -%}
+          {%- set unsupported_on_openbsd = [] -%}
           {%- set missing = [] -%}
           {%- for cat in _skip_check_categories -%}
-            {%- set f = primary.get(cat, '') -%}
-            {%- if f and f not in existing -%}
-              {%- set _ = missing.append(cat) -%}
+            {%- if cat in unsupported_on_openbsd -%}
+            {%- else -%}
+              {%- set f = primary.get(cat, '') -%}
+              {%- if f and f not in existing -%}
+                {%- set _ = missing.append(cat) -%}
+              {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
           {{ missing | length == 0 }}

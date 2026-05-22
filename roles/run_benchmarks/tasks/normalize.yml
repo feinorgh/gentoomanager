@@ -108,6 +108,12 @@
   failed_when: false
   when: ansible_system | default('Linux') == 'FreeBSD'
 
+- name: Sync filesystems (OpenBSD safe subset)
+  ansible.builtin.command:
+    cmd: sync
+  changed_when: false
+  when: ansible_system | default('Linux') == 'OpenBSD'
+
 # ── 4. Stop heavyweight services that consume CPU/RAM ─────────────────────
 - name: Identify stoppable services (systemd)
   ansible.builtin.shell:
@@ -360,11 +366,13 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      for _ in $(seq 1 30); do
+      _tries=0
+      while [ "$_tries" -lt 30 ]; do
         LOAD=$(awk '{printf "%.0f", $1 * 100}' /proc/loadavg 2>/dev/null \
                || sysctl -n vm.loadavg 2>/dev/null | awk '{printf "%.0f", $2 * 100}')
         [ "$LOAD" -lt 50 ] && exit 0
         sleep 2
+        _tries=$((_tries + 1))
       done
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   changed_when: false

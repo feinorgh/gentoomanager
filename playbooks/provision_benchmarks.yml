@@ -121,7 +121,7 @@
       when: >-
         ansible_os_family is defined and
         ansible_os_family in ['Gentoo', 'RedHat', 'Debian', 'Archlinux',
-                              'Suse', 'FreeBSD', 'Void', 'NixOS', 'Solus']
+                              'Suse', 'FreeBSD', 'OpenBSD', 'Void', 'NixOS', 'Solus']
 
     - name: Group by distribution (non-standard OS families)
       ansible.builtin.group_by:
@@ -129,7 +129,7 @@
       when: >-
         ansible_os_family is defined and
         ansible_os_family not in ['Gentoo', 'RedHat', 'Debian', 'Archlinux',
-                                  'Suse', 'FreeBSD', 'Void', 'NixOS', 'Solus']
+                                  'Suse', 'FreeBSD', 'OpenBSD', 'Void', 'NixOS', 'Solus']
 
 # ── Play 2: Gentoo – serial to avoid compile-time noise on shared CPUs ──
 - name: Provision Gentoo hosts
@@ -335,7 +335,20 @@
             _provision_minimal_ram.stdout is defined and
             _provision_minimal_ram.stdout | trim | length > 0
 
-# ── Play 8: Void Linux ───────────────────────────────────────────────────
+# ── Play 8: OpenBSD ──────────────────────────────────────────────────────
+- name: Provision OpenBSD hosts
+  hosts: provision_os_openbsd
+  serial: "{{ provision_serial | default(1) }}"
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/openbsd.yml
+
+# ── Play 9: Void Linux ───────────────────────────────────────────────────
 - name: Provision Void Linux hosts
   hosts: provision_os_void
   serial: "{{ provision_serial | default(1) }}"
@@ -348,7 +361,7 @@
         name: provision_benchmarks
         tasks_from: os/void.yml
 
-# ── Play 9: NixOS ────────────────────────────────────────────────────────
+# ── Play 10: NixOS ────────────────────────────────────────────────────────
 - name: Provision NixOS hosts
   hosts: provision_os_nixos
   serial: "{{ provision_serial | default(1) }}"
@@ -361,7 +374,7 @@
         name: provision_benchmarks
         tasks_from: os/nixos.yml
 
-# ── Play 10: Solus ───────────────────────────────────────────────────────
+# ── Play 11: Solus ───────────────────────────────────────────────────────
 - name: Provision Solus hosts
   hosts: provision_os_solus
   serial: "{{ provision_serial | default(1) }}"
@@ -374,7 +387,7 @@
         name: provision_benchmarks
         tasks_from: os/solus.yml
 
-# ── Play 11: Provision Windows hosts ────────────────────────────────────
+# ── Play 12: Provision Windows hosts ────────────────────────────────────
 - name: Provision Windows hosts
   hosts: mswindows
   serial: "{{ provision_serial | default(1) }}"
@@ -387,7 +400,7 @@
         name: provision_benchmarks
         tasks_from: os/windows.yml
 
-# ── Play 12: Shut down VMs that were booted by this run (--manage-power) ─
+# ── Play 13: Shut down VMs that were booted by this run (--manage-power) ─
 - name: Shut down VMs booted by this provisioning run
   hosts: "{{ 'all' if (provision_include_windows | default(false) | bool) else 'all:!mswindows:!win:!win11:!win10' }}"
   serial: "100%"

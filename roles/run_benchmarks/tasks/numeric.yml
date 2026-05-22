@@ -7,14 +7,14 @@
 
 - name: Check gcc availability for numeric benchmarks
   ansible.builtin.command:
-    cmd: gcc --version
+    cmd: "{{ run_benchmarks_gcc_cmd }} --version"
   register: run_benchmarks_numeric_gcc_check
   changed_when: false
   failed_when: false
 
 - name: Check numpy availability
   ansible.builtin.command:
-    cmd: python3 -c "import numpy"
+    cmd: "{{ run_benchmarks_python_cmd }} -c \"import numpy\""
   register: run_benchmarks_numeric_numpy_check
   changed_when: false
   failed_when: false
@@ -35,7 +35,7 @@
 - name: Compile bench_nbody
   ansible.builtin.command:
     cmd: >-
-      gcc -O3 -march=native -ffast-math -lm
+      {{ run_benchmarks_gcc_cmd }} -O3 -march=native -ffast-math -lm
       -o {{ run_benchmarks_work_dir }}/bench_nbody
       {{ run_benchmarks_work_dir }}/bench_nbody.c
   changed_when: false
@@ -45,7 +45,7 @@
 - name: Compile bench_mandelbrot
   ansible.builtin.command:
     cmd: >-
-      gcc -O3 -march=native -ffast-math
+      {{ run_benchmarks_gcc_cmd }} -O3 -march=native -ffast-math
       -o {{ run_benchmarks_work_dir }}/bench_mandelbrot
       {{ run_benchmarks_work_dir }}/bench_mandelbrot.c
   changed_when: false
@@ -55,7 +55,7 @@
 - name: Compile bench_spectral_norm
   ansible.builtin.command:
     cmd: >-
-      gcc -O3 -march=native -ffast-math -lm
+      {{ run_benchmarks_gcc_cmd }} -O3 -march=native -ffast-math -lm
       -o {{ run_benchmarks_work_dir }}/bench_spectral_norm
       {{ run_benchmarks_work_dir }}/bench_spectral_norm.c
   changed_when: false
@@ -101,11 +101,11 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/numeric_numpy.json \
         --command-name "numpy-matmul-2000" \
-          "python3 -c \"import numpy as np; a=np.random.rand(2000,2000); np.matmul(a,a)\"" \
+          "{{ run_benchmarks_python_cmd }} -c \"import numpy as np; a=np.random.rand(2000,2000); np.matmul(a,a)\"" \
         --command-name "numpy-fft2-2048" \
-          "python3 -c \"import numpy as np; a=np.random.rand(2048,2048); np.fft.fft2(a)\"" \
+          "{{ run_benchmarks_python_cmd }} -c \"import numpy as np; a=np.random.rand(2048,2048); np.fft.fft2(a)\"" \
         --command-name "numpy-sort-10m" \
-          "python3 -c \"import numpy as np; a=np.random.rand(10_000_000); np.sort(a)\""
+          "{{ run_benchmarks_python_cmd }} -c \"import numpy as np; a=np.random.rand(10_000_000); np.sort(a)\""
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_numeric_numpy_result
   changed_when: false

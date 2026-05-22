@@ -50,6 +50,7 @@ reports with charts.
   - [Fixture Corpus Details](#fixture-corpus-details)
   - [Fallback Behaviour](#fallback-behaviour)
 - [RAM Management](#ram-management)
+- [OpenBSD Support](#openbsd-support)
 - [Windows Support](#windows-support)
 - [Configuration Reference](#configuration-reference)
   - [run\_benchmarks Role](#run_benchmarks-role)
@@ -1391,6 +1392,72 @@ To disable RAM scaling:
 
 `hypervisor_host` must be set in each VM's inventory variables so the
 playbook knows which hypervisor to delegate `virsh` commands to.
+
+## OpenBSD Support
+
+OpenBSD is supported as a runtime target for most benchmark categories.
+The suite automatically detects OpenBSD and adapts its behavior to match
+platform capabilities.
+
+### Supported Categories
+
+Most categories run successfully on OpenBSD:
+
+- **Fully supported (with sync-only normalization):** compression, crypto,
+  compiler, python, numeric, sqlite, coreutils, process, linker, startup, bash
+- **Memory category on OpenBSD:** OpenBSD memory latency is supported and
+  counted as the primary OpenBSD memory result. The Linux-style `memory_bandwidth.json`
+  artifact is not required on OpenBSD because the suite does not assume a
+  portable `/dev/shm`-style RAM-disk path there.
+- **Sync-only normalization:** OpenBSD does not support system-wide cache drops
+  (no `/proc/sys/vm/drop_caches`). The suite uses `sync`-only preparation
+  between benchmark runs.
+- **Unsupported categories (Tier 3):** disk I/O benchmarks (Linux-specific
+  df/dd commands and cache-drop mechanism not yet verified as safe for OpenBSD
+  use), boot-time (systemd-analyze unavailable; dmesg timestamp parsing not
+  yet verified for OpenBSD boot process), Gentoo build times (Gentoo-specific).
+
+### Category Skip Reasons
+
+When the disk category is skipped on OpenBSD, the skip reason is recorded in
+`benchmark_notes.json` under `category_skip_reasons`. Example:
+
+```json
+{
+  "category_skip_reasons": {
+    "disk": "Disk benchmark category is Tier 3 on OpenBSD (requires explicit review before safe OpenBSD-native implementation is confirmed). The Linux-specific df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no direct OpenBSD equivalent verified as safe for benchmark use."
+  }
+}
+```
+
+The boot-time category writes its unsupported result directly to
+`boot_times.json` with an error field explaining the Tier 3 status.
+
+This ensures transparency and facilitates cross-platform comparisons where
+some categories are unavailable.
+
+### Privilege Escalation
+
+OpenBSD's default privilege escalation tool is **doas**, not `sudo`.
+The suite auto-detects this during sanity checks and uses the appropriate command.
+
+### Provisioning
+
+Provisioning on OpenBSD uses `pkg_add` to install required packages. The
+following packages are included in the default OpenBSD provisioning list:
+
+- **Core tools:** gcc, llvm, python3, rust, go, openssl, git, compression tools
+- **Optional tools (controlled by role variables):**
+  - FFmpeg: Installed by default (`provision_benchmarks_install_ffmpeg: true`)
+  - NumPy: Installed by default (`provision_benchmarks_install_numpy: true`)
+  - OpenCV: Installed by default (`provision_benchmarks_install_opencv: true`)
+  - Botan: Installed by default (`provision_benchmarks_install_botan: true`)
+  - mold linker: Installed by default (`provision_benchmarks_install_mold: true`)
+  - Octave: Installed by default (`provision_benchmarks_install_octave: true`)
+  - GIMP: Not installed by default (`provision_benchmarks_install_gimp: false`)
+  - Inkscape: Not installed by default (`provision_benchmarks_install_inkscape: false`)
+
+All of these packages are available in OpenBSD's standard package repositories.
 
 ## Windows Support
 

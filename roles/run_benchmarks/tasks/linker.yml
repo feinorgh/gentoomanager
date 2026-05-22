@@ -8,7 +8,7 @@
 
 - name: Check gcc and ld availability for linker benchmark
   ansible.builtin.command:
-    cmd: gcc --version
+    cmd: "{{ run_benchmarks_gcc_cmd }} --version"
   register: run_benchmarks_linker_gcc_check
   changed_when: false
   failed_when: false
@@ -43,7 +43,7 @@
       DIR="{{ run_benchmarks_work_dir }}/linker_src"
       mkdir -p "$DIR"
       # Generate 400 small C files each defining 10 functions
-      python3 - <<'PYEOF'
+      {{ run_benchmarks_python_cmd }} - <<'PYEOF'
       import os
       outdir = "{{ run_benchmarks_work_dir }}/linker_src"
       # header
@@ -80,7 +80,7 @@
       cd "$DIR"
       for src in unit_*.c main.c; do
         obj="${src%.c}.o"
-        [ -f "$obj" ] || gcc -O2 -c -o "$obj" "$src"
+        [ -f "$obj" ] || {{ run_benchmarks_gcc_cmd }} -O2 -c -o "$obj" "$src"
       done
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   changed_when: false
@@ -97,15 +97,15 @@
       OBJS=$(find "$DIR" -name '*.o' | sort | tr '\n' ' ')
       CMDS=(
         --command-name "ld-bfd"
-          "gcc -fuse-ld=bfd -o /dev/null $OBJS -lm 2>/dev/null"
+          "{{ run_benchmarks_gcc_cmd }} -fuse-ld=bfd -o /dev/null $OBJS -lm 2>/dev/null"
       )
       command -v ld.lld >/dev/null 2>&1 && CMDS+=(
         --command-name "ld-lld"
-          "gcc -fuse-ld=lld -o /dev/null $OBJS -lm 2>/dev/null"
+          "{{ run_benchmarks_gcc_cmd }} -fuse-ld=lld -o /dev/null $OBJS -lm 2>/dev/null"
       )
       command -v ld.gold >/dev/null 2>&1 && CMDS+=(
         --command-name "ld-gold"
-          "gcc -fuse-ld=gold -o /dev/null $OBJS -lm 2>/dev/null"
+          "{{ run_benchmarks_gcc_cmd }} -fuse-ld=gold -o /dev/null $OBJS -lm 2>/dev/null"
       )
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \

@@ -5,6 +5,15 @@
 # Results are intentionally NOT comparable across runs if the work directory
 # changes filesystems.
 
+# ── OpenBSD gate (Tier 3: requires explicit review) ──────────────────────
+# Skip reason is set earlier in sanity_check.yml (before benchmark_notes.json
+# write). This gate still sets the skip flag so disk benchmark tasks don't run.
+
+- name: Skip disk benchmark on OpenBSD (unsupported tier 3)
+  ansible.builtin.set_fact:
+    run_benchmarks_disk_skip: true
+  when: ansible_system | default('Linux') == 'OpenBSD'
+
 # ── Detect work directory filesystem ─────────────────────────────────────
 
 - name: Detect work directory device
@@ -40,7 +49,7 @@
       set -eo pipefail
       TESTFILE="{{ run_benchmarks_work_dir }}/disk_bench.bin"
       # Drop caches if sudo is available; fall back to sync-only otherwise
-      DROP_CMD="sync; sudo -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || sync"
+      DROP_CMD="sync; {{ run_benchmarks_priv_cmd }} -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || sync"
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup 1 \

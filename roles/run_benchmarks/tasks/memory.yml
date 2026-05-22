@@ -8,7 +8,7 @@
 
 - name: Check gcc availability for memory latency benchmark
   ansible.builtin.command:
-    cmd: gcc --version
+    cmd: "{{ run_benchmarks_gcc_cmd }} --version"
   register: run_benchmarks_memory_gcc_check
   changed_when: false
   failed_when: false
@@ -30,7 +30,7 @@
 - name: Compile bench_latency
   ansible.builtin.command:
     cmd: >-
-      gcc -O2
+      {{ run_benchmarks_gcc_cmd }} -O2
       -o {{ run_benchmarks_work_dir }}/bench_latency
       {{ run_benchmarks_work_dir }}/bench_latency.c
   changed_when: false

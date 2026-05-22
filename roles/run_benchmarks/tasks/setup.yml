@@ -100,14 +100,64 @@
 # Detect bash executable (NixOS and other non-FHS distros lack /bin/bash)
 # ---------------------------------------------------------------------------
 - name: Detect bash executable path
-  ansible.builtin.raw: command -v bash 2>/dev/null || echo /bin/bash
+  ansible.builtin.raw: command -v bash 2>/dev/null || echo /usr/local/bin/bash
   register: run_benchmarks_bash_probe
   changed_when: false
   failed_when: false
 
 - name: Set bash executable variable
   ansible.builtin.set_fact:
-    _run_benchmarks_bash: "{{ run_benchmarks_bash_probe.stdout | default('/bin/bash') | trim }}"
+    _run_benchmarks_bash: >-
+      {{ run_benchmarks_bash_probe.stdout | default('/usr/local/bin/bash') | trim }}
+
+# ---------------------------------------------------------------------------
+# Detect resolved commands (python/python3, gcc/cc, sudo/doas)
+# ---------------------------------------------------------------------------
+- name: Detect resolved Python command
+  ansible.builtin.raw: command -v python3 2>/dev/null || command -v python 2>/dev/null || echo python3
+  register: run_benchmarks_python_cmd_probe
+  changed_when: false
+  failed_when: false
+
+- name: Set resolved Python command variable
+  ansible.builtin.set_fact:
+    run_benchmarks_python_cmd: "{{ run_benchmarks_python_cmd_probe.stdout | default('python3') | trim }}"
+
+- name: Detect resolved GCC command
+  ansible.builtin.raw: command -v gcc 2>/dev/null || command -v cc 2>/dev/null || echo gcc
+  register: run_benchmarks_gcc_cmd_probe
+  changed_when: false
+  failed_when: false
+
+- name: Set resolved GCC command variable
+  ansible.builtin.set_fact:
+    run_benchmarks_gcc_cmd: "{{ run_benchmarks_gcc_cmd_probe.stdout | default('gcc') | trim }}"
+
+- name: Detect resolved privilege escalation command
+  ansible.builtin.raw: command -v sudo 2>/dev/null || command -v doas 2>/dev/null || echo sudo
+  register: run_benchmarks_priv_cmd_probe
+  changed_when: false
+  failed_when: false
+
+- name: Set resolved privilege escalation command variable
+  ansible.builtin.set_fact:
+    run_benchmarks_priv_cmd: "{{ run_benchmarks_priv_cmd_probe.stdout | default('sudo') | trim }}"
+
+# ---------------------------------------------------------------------------
+# Set OpenBSD capability and per-category preparation command
+# ---------------------------------------------------------------------------
+- name: Set OpenBSD normalization capability
+  ansible.builtin.set_fact:
+    run_benchmarks_openbsd_safe_normalization: >-
+      {{ ansible_system | default('Linux') == 'OpenBSD' }}
+
+- name: Set per-category preparation command (Linux and OpenBSD only)
+  ansible.builtin.set_fact:
+    run_benchmarks_category_prepare_cmd: >-
+      {%- if ansible_system | default('Linux') == 'Linux' -%}
+      sync && echo 3 > /proc/sys/vm/drop_caches{%- elif ansible_system | default('Linux') == 'OpenBSD' -%}
+      sync{%- endif -%}
+  when: ansible_system | default('Linux') in ['Linux', 'OpenBSD']
 
 # ---------------------------------------------------------------------------
 # Collect host metadata (OS-agnostic, uses Ansible gathered facts)
@@ -116,11 +166,11 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      echo "::gcc::$(gcc --version 2>/dev/null | head -1 || echo 'not installed')"
+      echo "::gcc::$({{ run_benchmarks_gcc_cmd }} --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::clang::$(clang --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::rustc::$(rustc --version 2>/dev/null || echo 'not installed')"
       echo "::go::$(go version 2>/dev/null || echo 'not installed')"
-      echo "::python::$(python3 --version 2>/dev/null || echo 'not installed')"
+      echo "::python::$({{ run_benchmarks_python_cmd }} --version 2>/dev/null || echo 'not installed')"
       echo "::ffmpeg::$(ffmpeg -version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::openssl::$(openssl version 2>/dev/null || echo 'not installed')"
       echo "::kernel::$(uname -r)"
@@ -129,7 +179,7 @@
       echo "::imagemagick::$(magick --version 2>/dev/null | head -1 || convert --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::lld::$(lld --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::sqlite3::$(sqlite3 --version 2>/dev/null | head -1 || echo 'not installed')"
-      echo "::numpy::$(python3 -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo 'not installed')"
+      echo "::numpy::$({{ run_benchmarks_python_cmd }} -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo 'not installed')"
       echo "::gimp::$(gimp --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::inkscape::$(inkscape --version 2>/dev/null | head -1 || echo 'not installed')"
       echo "::perl::$(perl --version 2>/dev/null | grep -m1 'This is perl' || echo 'not installed')"
@@ -167,6 +217,14 @@
   failed_when: false
   when: ansible_system | default('') == 'FreeBSD'
 
+- name: Get CPU max clock speed (OpenBSD)
+  ansible.builtin.command:
+    cmd: sysctl -n hw.cpuspeed
+  register: run_benchmarks_cpu_freq_openbsd
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'OpenBSD'
+
 # ---------------------------------------------------------------------------
 # Detect distro default build flags (non-Gentoo)
 # ---------------------------------------------------------------------------
@@ -203,9 +261,9 @@
         [ -n "$fl" ] && LDFLAGS="$fl"
       fi
       # Fallback: extract GCC default flags from its spec/config
-      if [ -z "$CFLAGS" ] && command -v gcc >/dev/null 2>&1; then
-        specs=$(gcc -dumpspecs 2>/dev/null || true)
-        config=$(gcc -v 2>&1 | grep '^Configured with:' | sed 's/Configured with: //' || true)
+      if [ -z "$CFLAGS" ] && command -v {{ run_benchmarks_gcc_cmd }} >/dev/null 2>&1; then
+        specs=$({{ run_benchmarks_gcc_cmd }} -dumpspecs 2>/dev/null || true)
+        config=$({{ run_benchmarks_gcc_cmd }} -v 2>&1 | grep '^Configured with:' | sed 's/Configured with: //' || true)
         # Extract --with-arch and optimization defaults
         march=$(echo "$config" | grep -oP '(?<=--with-arch=)\S+' || true)
         mtune=$(echo "$config" | grep -oP '(?<=--with-tune=)\S+' || true)
@@ -244,7 +302,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      gcc -march=native -Q --help=target 2>/dev/null |
+      {{ run_benchmarks_gcc_cmd }} -march=native -Q --help=target 2>/dev/null |
         grep -m1 '^\s*-march=' | awk '{print $2}' || echo ''
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_march_native_raw
@@ -292,8 +350,8 @@
     cmd: |
       set +e
       set -o pipefail
-      cfg=$(gcc -v 2>&1 | grep '^Configured with:' | sed 's/^Configured with: //' || true)
-      [ -z "$cfg" ] && cfg=$(gcc -v 2>&1 | grep '^COLLECT_GCC' | head -1 || true)
+      cfg=$({{ run_benchmarks_gcc_cmd }} -v 2>&1 | grep '^Configured with:' | sed 's/^Configured with: //' || true)
+      [ -z "$cfg" ] && cfg=$({{ run_benchmarks_gcc_cmd }} -v 2>&1 | grep '^COLLECT_GCC' | head -1 || true)
       # Emit key=value lines for fields we care about
       for field in --with-arch= --with-tune= --with-cpu=; do
         val=$(printf '%s' "$cfg" | grep -oE "${field}[^ ]+" | head -1 | sed "s/${field}//")
@@ -554,7 +612,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      (sudo -n dmidecode -t 17 2>/dev/null || true) \
+      ({{ run_benchmarks_priv_cmd }} -n dmidecode -t 17 2>/dev/null || true) \
         | awk -F': ' '/^\s+Speed:/ && !/Unknown/{gsub(/^ +/,"",$2); print $2; exit}'
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_mem_speed_raw
@@ -620,6 +678,9 @@
           else
           (run_benchmarks_cpu_freq_bsd.stdout | default('0') | trim | int)
           if (ansible_system | default('') == 'FreeBSD')
+          else
+          (run_benchmarks_cpu_freq_openbsd.stdout | default('0') | trim | int)
+          if (ansible_system | default('') == 'OpenBSD')
           else 0
         }}
       march_native: "{{ run_benchmarks_march_native_raw.stdout | default('') | trim }}"
@@ -679,6 +740,13 @@
           if (ansible_system | default('') == 'Linux')
           else 'unknown'
         }}
+      normalization_mode: >-
+        {{
+          'sync-only-safe-subset'
+          if (ansible_system | default('') == 'OpenBSD')
+          else 'platform-default'
+        }}
+      normalization_reduced: "{{ ansible_system | default('') == 'OpenBSD' }}"
       smt_active: >-
         {{
           (run_benchmarks_smt_raw.stdout | default('') | trim == '1')

@@ -9,9 +9,16 @@
       set -e
       missing_req=""
       missing_opt=""
-      for tool in hyperfine gcc python3 openssl; do
+      for tool in hyperfine openssl; do
         command -v "$tool" >/dev/null 2>&1 || missing_req="$missing_req $tool"
       done
+      if ! command -v gcc >/dev/null 2>&1 && ! command -v cc >/dev/null 2>&1; then
+        missing_req="$missing_req compiler"
+      fi
+      # Python: check for python3 or python (OpenBSD may have either)
+      if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+        missing_req="$missing_req python"
+      fi
       for tool in clang rustc go ffmpeg; do
         command -v "$tool" >/dev/null 2>&1 || missing_opt="$missing_opt $tool"
       done
@@ -49,10 +56,19 @@
           | regex_replace('^missing_opt=', '')
          ).split() | select | list }}
 
-# ── 2. Probe sudo / become access ────────────────────────────────────────
-- name: Probe passwordless sudo access
-  ansible.builtin.command:
-    cmd: sudo -n true
+# ── 2. Probe privilege escalation / become access ───────────────────────
+- name: Probe passwordless privilege escalation
+  ansible.builtin.shell:
+    cmd: |
+      # Detect sudo or doas inline (runs before setup.yml defines run_benchmarks_priv_cmd)
+      if command -v sudo >/dev/null 2>&1; then
+        sudo -n true
+      elif command -v doas >/dev/null 2>&1; then
+        doas -n true
+      else
+        exit 1
+      fi
+    executable: /bin/sh
   register: run_benchmarks_sanity_sudo
   changed_when: false
   failed_when: false
@@ -102,6 +118,7 @@
   register: run_benchmarks_sanity_fstype_raw
   changed_when: false
   failed_when: false
+  when: ansible_system | default('Linux') != 'OpenBSD'
 
 - name: Probe total RAM (MemTotal from /proc/meminfo)
   ansible.builtin.shell:
@@ -110,6 +127,7 @@
   register: run_benchmarks_sanity_memtotal_raw
   changed_when: false
   failed_when: false
+  when: ansible_system | default('Linux') != 'OpenBSD'
 
 - name: Evaluate RAM vs tmpfs requirement
   ansible.builtin.set_fact:
@@ -121,6 +139,14 @@
       {{ ((run_benchmarks_sanity_memtotal_raw.stdout | default('0') | int) / 1024) | int
          >= run_benchmarks_min_ram_mb
          or (run_benchmarks_scale_ram | default(true) | bool) }}
+  when: ansible_system | default('Linux') != 'OpenBSD'
+
+- name: Default tmpfs/RAM probe facts on OpenBSD
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_is_tmpfs: false
+    run_benchmarks_sanity_ram_total_mb: 0
+    run_benchmarks_sanity_ram_ok: true
+  when: ansible_system | default('Linux') == 'OpenBSD'
 
 # ── 5. Emit warning when issues are detected ─────────────────────────────
 - name: Warn — benchmark sanity check issues detected
@@ -138,9 +164,9 @@
           {{ run_benchmarks_sanity_missing_opt | join(', ') }}
       {% endif %}
       {% if run_benchmarks_sanity_sudo.rc | default(1) != 0 %}
-      ✗ Passwordless sudo NOT available — CPU governor pinning and swap
-          disable/restore steps will be skipped or may fail.
-          Ensure the Ansible user is in the sudoers file with NOPASSWD.
+      ✗ Passwordless privilege escalation NOT available — CPU governor pinning
+          and swap disable/restore steps will be skipped or may fail.
+          Ensure the Ansible user has passwordless sudo/doas access configured.
       {% endif %}
       {% if not run_benchmarks_sanity_disk_ok %}
       ✗ Low disk space on partition '{{ run_benchmarks_sanity_disk_mount }}'
@@ -194,8 +220,51 @@
           ~ 'full ffmpeg (with h264/h265) requires RPM Fusion which is a non-default '
           ~ 'third-party repository — intentionally not used so results reflect the '
           ~ 'default system package set') -%}
+       {%- endif -%}
+       {{ notes }}
+
+- name: Compute OpenBSD normalization and platform notes
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_normalization_notes: >-
+      {%- set notes = [] -%}
+      {%- if ansible_system | default('') == 'OpenBSD' -%}
+        {%- set _ = notes.append(
+          'OpenBSD uses sync-only safe-subset normalization; Linux-specific cache-drop '
+          ~ 'and related normalization steps are not applied.'
+        ) -%}
       {%- endif -%}
       {{ notes }}
+    run_benchmarks_sanity_platform_notes: >-
+      {%- set notes = [] -%}
+      {%- if ansible_system | default('') == 'OpenBSD' -%}
+        {%- set _ = notes.append(
+          'OpenBSD skips the Linux-specific tmpfs/RAM pre-flight probe because '
+          ~ 'GNU stat -f -c and /proc/meminfo are not portable there.'
+        ) -%}
+      {%- endif -%}
+      {{ notes }}
+
+# ── 7. Set OpenBSD tier 3 category skip reasons ───────────────────────────
+# These must be set HERE (before benchmark_notes.json write) because
+# sanity_check.yml runs BEFORE category task files in the playbook flow.
+# The category task files (disk.yml, boot_time.yml) still have their own
+# OpenBSD gates but do NOT set skip_reason variables (too late by then).
+- name: Set OpenBSD tier 3 category skip reasons (disk)
+  ansible.builtin.set_fact:
+    run_benchmarks_disk_skip_reason: >-
+      Disk benchmark category is Tier 3 on OpenBSD (requires explicit review
+      before safe OpenBSD-native implementation is confirmed). The Linux-specific
+       df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no
+       direct OpenBSD equivalent verified as safe for benchmark use.
+  when: ansible_system | default('Linux') == 'OpenBSD'
+
+- name: Ensure benchmark work directory exists for support-boundary artifacts
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}"
+    state: directory
+    mode: "0755"
+  changed_when: false
+  failed_when: false
 
 - name: Write benchmark notes (missing tools + distro limitations)
   ansible.builtin.copy:
@@ -208,5 +277,25 @@
         required: "{{ run_benchmarks_sanity_missing_req | default([]) }}"
         optional: "{{ run_benchmarks_sanity_missing_opt | default([]) }}"
       distro_notes: "{{ run_benchmarks_sanity_distro_notes | default([]) }}"
+      normalization_notes: "{{ run_benchmarks_sanity_normalization_notes | default([]) }}"
+      platform_notes: "{{ run_benchmarks_sanity_platform_notes | default([]) }}"
+      category_skip_reasons:
+        disk: "{{ run_benchmarks_disk_skip_reason | default('') }}"
   changed_when: false
   failed_when: false
+
+- name: Write OpenBSD disk skip artifact
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/disk_skip.json"
+    content: >-
+      {{
+        {
+          'category': 'disk',
+          'status': 'unsupported',
+          'reason': run_benchmarks_disk_skip_reason | default('')
+        } | to_nice_json
+      }}
+    mode: "0644"
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('Linux') == 'OpenBSD'

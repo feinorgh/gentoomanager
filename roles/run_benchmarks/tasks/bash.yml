@@ -18,7 +18,8 @@
 # reflect the interpreter, not rc-file loading overhead.
 
 - name: Check bash availability
-  ansible.builtin.command: bash --version
+  ansible.builtin.command:
+    cmd: "{{ _run_benchmarks_bash | default('bash') }} --version"
   register: run_benchmarks_bash_check
   failed_when: false
   changed_when: false
@@ -69,7 +70,7 @@
         > "$BENCH/cmd_subst.sh"
 
       printf '%s\n' \
-        'c=0; while IFS= read -r _; do (( c++ )); done < <(seq 1 3000)' \
+        'c=0; i=1; while [ "$i" -le 3000 ]; do printf "%s\n" "$i"; i=$((i + 1)); done | while IFS= read -r _; do (( c++ )); done' \
         > "$BENCH/while_read.sh"
 
       printf '%s\n' \
@@ -85,14 +86,14 @@
       CMDS=()
 
       # Startup: binary load + exit (no rc files, no profile)
-      CMDS+=(--command-name "startup-bare" "bash --norc --noprofile -c true")
+      CMDS+=(--command-name "startup-bare" "{{ _run_benchmarks_bash | default('bash') }} --norc --noprofile -c true")
 
       # Execution benchmarks
       for bench in \
           arith_loop str_concat str_subst array_build assoc_array \
           func_calls cmd_subst while_read regex_match glob_match; do
         name="${bench//_/-}"
-        CMDS+=(--command-name "$name" "bash --norc --noprofile $BENCH/${bench}.sh")
+        CMDS+=(--command-name "$name" "{{ _run_benchmarks_bash | default('bash') }} --norc --noprofile $BENCH/${bench}.sh")
       done
 
       {{ run_benchmarks_hyperfine_bin }} \

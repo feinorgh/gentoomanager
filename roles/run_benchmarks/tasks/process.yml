@@ -8,7 +8,7 @@
 
 - name: Check gcc availability for process benchmark
   ansible.builtin.command:
-    cmd: gcc --version
+    cmd: "{{ run_benchmarks_gcc_cmd }} --version"
   register: run_benchmarks_process_gcc_check
   changed_when: false
   failed_when: false
@@ -25,7 +25,7 @@
 - name: Compile bench_fork
   ansible.builtin.command:
     cmd: >-
-      gcc -O2
+      {{ run_benchmarks_gcc_cmd }} -O2
       -o {{ run_benchmarks_work_dir }}/bench_fork
       {{ run_benchmarks_work_dir }}/bench_fork.c
   changed_when: false
@@ -46,9 +46,9 @@
         --command-name "fork-exec-1k" \
           "{{ run_benchmarks_work_dir }}/bench_fork 1000" \
         --command-name "shell-spawn-500" \
-          "sh -c 'for i in \$(seq 500); do /bin/true; done'" \
+          "sh -c 'i=0; while [ \"\$i\" -lt 500 ]; do /bin/true; i=\$((i + 1)); done'" \
         --command-name "python3-import" \
-          "python3 -c 'import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools'"
+          "{{ run_benchmarks_python_cmd }} -c 'import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools'"
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   register: run_benchmarks_process_result
   changed_when: false

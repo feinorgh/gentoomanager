@@ -14,6 +14,7 @@
       Archlinux: archlinux
       Suse: suse
       FreeBSD: freebsd
+      OpenBSD: openbsd
       Void: void
       NixOS: nixos
       Solus: solus

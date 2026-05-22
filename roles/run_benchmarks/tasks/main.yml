@@ -77,9 +77,13 @@
             'ffmpeg':             'ffmpeg_video_encode.json',
             'imagemagick':        'imagemagick_resize.json',
             'coreutils':          'coreutils.json',
-            'memory':             'memory_bandwidth.json',
+            'memory':             ('memory_latency.json'
+                                   if ansible_system == 'OpenBSD'
+                                   else 'memory_bandwidth.json'),
             'process':            'process.json',
-            'disk':               'disk.json',
+            'disk':               ('disk_skip.json'
+                                   if ansible_system == 'OpenBSD'
+                                   else 'disk.json'),
             'linker':             'linker.json',
             'opencv':             'opencv.json',
             'gimp':               'gimp.json',
@@ -90,6 +94,7 @@
             'gentoo_build_times': 'gentoo_build_times.json',
             'octave':             'octave.json'
           } -%}
+      {%- set unsupported_on_openbsd = [] -%}
       {%- set existing = run_benchmarks_skip_existing_found.files
                          | default([])
                          | map(attribute='path')
@@ -97,9 +102,12 @@
                          | list -%}
       {%- set filtered = [] -%}
       {%- for cat in run_benchmarks_active_categories -%}
-        {%- set f = primary.get(cat, '') -%}
-        {%- if not f or f not in existing -%}
-          {%- set _ = filtered.append(cat) -%}
+        {%- if cat in unsupported_on_openbsd -%}
+        {%- else -%}
+          {%- set f = primary.get(cat, '') -%}
+          {%- if not f or f not in existing -%}
+            {%- set _ = filtered.append(cat) -%}
+          {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
       {{ filtered }}
