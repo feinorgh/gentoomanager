@@ -204,18 +204,29 @@
     # slightly different artifact set (for example memory latency vs the Linux
     # shared-memory bandwidth artifact). Gather only the minimum OS fact needed
     # before the controller-side completeness check.
+    - name: Set Windows OS name for completion gating
+      ansible.builtin.set_fact:
+        run_benchmarks_preflight_system: Windows
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname in (groups['windows'] | default([]))
+
     - name: Detect OS name for completion gating
       ansible.builtin.raw: uname -s 2>/dev/null || echo unknown
       register: run_benchmarks_preflight_system_raw
       changed_when: false
       failed_when: false
-      when: run_benchmarks_skip_complete | default(false) | bool
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['windows'] | default([]))
 
     - name: Set OS name for completion gating
       ansible.builtin.set_fact:
         run_benchmarks_preflight_system: >-
           {{ run_benchmarks_preflight_system_raw.stdout | default('unknown') | trim }}
-      when: run_benchmarks_skip_complete | default(false) | bool
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['windows'] | default([]))
 
     - name: Check existing result files for this host on controller
       ansible.builtin.find:

@@ -1224,6 +1224,12 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
     assert "run_benchmarks_preflight_system" in playbook, (
         "run_benchmarks.yml should detect a dedicated OS name for skip_complete gating"
     )
+    assert (
+        "groups['windows']" in playbook and "run_benchmarks_preflight_system: Windows" in playbook
+    ), (
+        "run_benchmarks.yml should avoid POSIX raw OS detection on Windows hosts "
+        "during skip_complete"
+    )
 
     for file_name, content in {"main.yml": role_main, "run_benchmarks.yml": playbook}.items():
         assert "OpenBSD" in content and "'disk'" in content, (
