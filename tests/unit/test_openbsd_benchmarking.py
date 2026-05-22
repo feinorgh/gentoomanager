@@ -1225,7 +1225,7 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
         "run_benchmarks.yml should detect a dedicated OS name for skip_complete gating"
     )
     assert (
-        "groups['windows']" in playbook and "run_benchmarks_preflight_system: Windows" in playbook
+        "groups['mswindows']" in playbook and "run_benchmarks_preflight_system: Windows" in playbook
     ), (
         "run_benchmarks.yml should avoid POSIX raw OS detection on Windows hosts "
         "during skip_complete"

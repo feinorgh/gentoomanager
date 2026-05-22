@@ -209,7 +209,7 @@
         run_benchmarks_preflight_system: Windows
       when:
         - run_benchmarks_skip_complete | default(false) | bool
-        - inventory_hostname in (groups['windows'] | default([]))
+        - inventory_hostname in (groups['mswindows'] | default([]))
 
     - name: Detect OS name for completion gating
       ansible.builtin.raw: uname -s 2>/dev/null || echo unknown
@@ -218,7 +218,7 @@
       failed_when: false
       when:
         - run_benchmarks_skip_complete | default(false) | bool
-        - inventory_hostname not in (groups['windows'] | default([]))
+        - inventory_hostname not in (groups['mswindows'] | default([]))
 
     - name: Set OS name for completion gating
       ansible.builtin.set_fact:
@@ -226,7 +226,7 @@
           {{ run_benchmarks_preflight_system_raw.stdout | default('unknown') | trim }}
       when:
         - run_benchmarks_skip_complete | default(false) | bool
-        - inventory_hostname not in (groups['windows'] | default([]))
+        - inventory_hostname not in (groups['mswindows'] | default([]))
 
     - name: Check existing result files for this host on controller
       ansible.builtin.find:
