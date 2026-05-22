@@ -29,7 +29,7 @@
 - name: Generate Inkscape benchmark SVG fixture
   ansible.builtin.shell:
     cmd: |
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import math, random, sys, os
       random.seed(42)
       W, H = 1200, 900

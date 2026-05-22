@@ -46,6 +46,10 @@
 - name: Check available compilers
   ansible.builtin.shell:
     cmd: |
+      resolved_cc=$(basename {{ run_benchmarks_gcc_cmd | quote }})
+      if command -v {{ run_benchmarks_gcc_cmd | quote }} >/dev/null 2>&1; then
+        printf '%s\n' "$resolved_cc"
+      fi
       for cmd in gcc clang rustc go; do
         command -v "$cmd" >/dev/null 2>&1 && echo "$cmd"
       done
@@ -75,6 +79,9 @@
           done
         done
         unset IFS
+        # Resolved compiler from setup (e.g. OpenBSD may prefer cc)
+        full=$(command -v {{ run_benchmarks_gcc_cmd | quote }} 2>/dev/null) || true
+        [ -n "$full" ] && printf '{{ run_benchmarks_gcc_cmd | basename }} %s\n' "$full"
         # Generic gcc / clang (added after versioned so they sort last and
         # are dropped by dedup if a versioned binary resolves to the same path)
         for cc in gcc clang; do
@@ -109,7 +116,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import json, re, subprocess, sys
       lines = """{{ run_benchmarks_cc_versions.stdout | default('') }}""".strip().splitlines()
       seen: dict = {}   # (family, full_ver) → (new_label, exe, ver_string)
@@ -118,19 +125,24 @@
           if len(parts) < 2:
               continue
           label, exe = parts[0], parts[1]
-          if label.startswith('gcc') or label == 'cc':
-              family = 'gcc'
-          elif label.startswith('clang'):
-              family = 'clang'
-          else:
-              m_fam = re.match(r'^([a-z]+)', label)
-              family = m_fam.group(1) if m_fam else label
           try:
               out = subprocess.run([exe, '--version'], capture_output=True, text=True,
                                    timeout=5, check=False)
               ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
           except Exception as exc:
               ver_str = str(exc)
+          ver_str_lower = ver_str.lower()
+          if 'clang' in ver_str_lower:
+              family = 'clang'
+          elif 'gcc' in ver_str_lower or 'free software foundation' in ver_str_lower:
+              family = 'gcc'
+          elif label.startswith('gcc'):
+              family = 'gcc'
+          elif label.startswith('clang'):
+              family = 'clang'
+          else:
+              m_fam = re.match(r'^([a-z]+)', label)
+              family = m_fam.group(1) if m_fam else label
           m = re.search(r'\b(\d+\.\d+\.\d+)\b', ver_str)
           if not m:
               continue
@@ -385,7 +397,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import json, os, re, subprocess, sys
       lines = """{{ run_benchmarks_rust_toolchains.stdout | default('') }}""".strip().splitlines()
       seen: dict = {}   # full_ver → (new_label, cargo_bin, ver_string)
@@ -566,7 +578,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import json, re, subprocess, sys
       lines = """{{ run_benchmarks_go_toolchains.stdout | default('') }}""".strip().splitlines()
       seen: dict = {}   # full_ver → (new_label, exe, ver_string)

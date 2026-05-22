@@ -115,6 +115,7 @@ provision_benchmarks_packages:
     - graphics/ImageMagick7
     - databases/sqlite3
   OpenBSD:
+    - bash
     - gcc
     - llvm
     - openssl

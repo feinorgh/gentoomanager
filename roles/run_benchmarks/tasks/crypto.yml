@@ -204,7 +204,7 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
 
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import json
       import math
       import re
@@ -795,7 +795,7 @@
       print(json.dumps({'results': results}, indent=2))
       PYEOF
 
-      python3 botan_parse.py > {{ run_benchmarks_work_dir }}/crypto_botan.json
+      {{ run_benchmarks_python_cmd }} botan_parse.py > {{ run_benchmarks_work_dir }}/crypto_botan.json
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   when: run_benchmarks_botan_check.rc == 0
   register: run_benchmarks_crypto_botan_result

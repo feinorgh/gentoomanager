@@ -15,6 +15,12 @@
   become: true
   failed_when: false
 
+- name: Verify bash is available for documented OpenBSD support
+  ansible.builtin.command: bash --version
+  register: provision_benchmarks_openbsd_bash_check
+  changed_when: false
+  failed_when: provision_benchmarks_openbsd_bash_check.rc != 0
+
 - name: Install ffmpeg (OpenBSD)
   community.general.openbsd_pkg:
     name: ffmpeg

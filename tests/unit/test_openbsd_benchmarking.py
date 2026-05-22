@@ -1016,6 +1016,32 @@ def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
                 "\"python3 -c 'import os, sys, json, re, hashlib",
             ],
         },
+        "memory.yml": {
+            "must_contain": ["run_benchmarks_gcc_cmd"],
+            "must_not_contain": [
+                "cmd: gcc --version",
+                "gcc -O2",
+            ],
+        },
+        "compiler.yml": {
+            "must_contain": ["run_benchmarks_python_cmd", "run_benchmarks_gcc_cmd"],
+            "must_not_contain": [
+                "python3 - << 'PYEOF'",
+                "label == 'cc'",
+            ],
+        },
+        "coreutils.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "python3 - << 'PYEOF'",
+            ],
+        },
+        "crypto.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "python3 - << 'PYEOF'",
+            ],
+        },
         "linker.yml": {
             "must_contain": ["run_benchmarks_gcc_cmd", "run_benchmarks_python_cmd"],
             "must_not_contain": [
@@ -1037,6 +1063,26 @@ def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
             "must_not_contain": [
                 "command -v python3",
                 '"python3 -c pass"',
+            ],
+        },
+        "boot_time.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "python3 - << 'PYEOF'",
+            ],
+        },
+        "inkscape.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "python3 - << 'PYEOF'",
+            ],
+        },
+        "opencv.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                'cmd: python3 -c "import cv2"',
+                "'python3 opencv_bench.py resize'",
+                "'python3 opencv_bench.py kodak_load ./kodak'",
             ],
         },
     }

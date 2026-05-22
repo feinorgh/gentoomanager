@@ -30,6 +30,9 @@ def test_openbsd_defaults_exist(worktree_root):
     assert len(defaults["provision_benchmarks_packages"]["OpenBSD"]) > 0, (
         "OpenBSD packages list should not be empty"
     )
+    assert "bash" in defaults["provision_benchmarks_packages"]["OpenBSD"], (
+        "OpenBSD packages should include bash for the documented bash benchmark"
+    )
 
     # Check numpy packages
     assert "OpenBSD" in defaults["provision_benchmarks_numpy_packages"], (
@@ -63,6 +66,18 @@ def test_openbsd_task_file_exists(worktree_root):
         worktree_root, "roles", "provision_benchmarks", "tasks", "os", "openbsd.yml"
     )
     assert os.path.exists(task_path), f"OpenBSD task file should exist at {task_path}"
+
+    verify_path = os.path.join(
+        worktree_root, "roles", "provision_benchmarks", "tasks", "verify.yml"
+    )
+    with open(task_path, encoding="utf-8") as file_handle:
+        openbsd_task = file_handle.read()
+    with open(verify_path, encoding="utf-8") as file_handle:
+        verify_task = file_handle.read()
+
+    assert "bash" in openbsd_task or "bash" in verify_task, (
+        "OpenBSD provisioning should explicitly verify documented bash support"
+    )
 
 
 def test_openbsd_main_yml_mapping(worktree_root):

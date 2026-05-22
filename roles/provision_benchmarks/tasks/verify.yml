@@ -7,7 +7,7 @@
     cmd: |
       set -e
       echo "=== Tool availability ==="
-      for tool in hyperfine gcc openssl git; do
+      for tool in hyperfine bash gcc openssl git; do
         if command -v "$tool" >/dev/null 2>&1; then
           printf "  %-15s OK\n" "$tool"
         else

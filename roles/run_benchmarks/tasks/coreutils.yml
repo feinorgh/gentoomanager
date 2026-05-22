@@ -30,7 +30,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import os
       base = "{{ run_benchmarks_work_dir }}/findtree"
       for i in range(100):

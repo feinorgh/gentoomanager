@@ -3,7 +3,7 @@
 
 - name: Check OpenCV Python availability
   ansible.builtin.command:
-    cmd: python3 -c "import cv2"
+    cmd: "{{ run_benchmarks_python_cmd }} -c \"import cv2\""
   register: run_benchmarks_opencv_check
   changed_when: false
   failed_when: false
@@ -196,13 +196,13 @@
         --warmup {{ run_benchmarks_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/opencv.json \
-        --command-name 'resize' 'python3 opencv_bench.py resize' \
-        --command-name 'blur' 'python3 opencv_bench.py blur' \
-        --command-name 'edge-detection' 'python3 opencv_bench.py edge_detection' \
-        --command-name 'color-conversion' 'python3 opencv_bench.py color_conversion' \
-        --command-name 'threshold' 'python3 opencv_bench.py threshold' \
-        --command-name 'adaptive-threshold' 'python3 opencv_bench.py adaptive_threshold' \
-        --command-name 'opencv-all' 'python3 opencv_bench.py all'
+        --command-name 'resize' '{{ run_benchmarks_python_cmd }} opencv_bench.py resize' \
+        --command-name 'blur' '{{ run_benchmarks_python_cmd }} opencv_bench.py blur' \
+        --command-name 'edge-detection' '{{ run_benchmarks_python_cmd }} opencv_bench.py edge_detection' \
+        --command-name 'color-conversion' '{{ run_benchmarks_python_cmd }} opencv_bench.py color_conversion' \
+        --command-name 'threshold' '{{ run_benchmarks_python_cmd }} opencv_bench.py threshold' \
+        --command-name 'adaptive-threshold' '{{ run_benchmarks_python_cmd }} opencv_bench.py adaptive_threshold' \
+        --command-name 'opencv-all' '{{ run_benchmarks_python_cmd }} opencv_bench.py all'
   when: run_benchmarks_opencv_check.rc == 0
   register: run_benchmarks_opencv_result
   changed_when: false
@@ -251,19 +251,19 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/opencv_kodak.json \
         --command-name 'kodak-load' \
-          'python3 opencv_bench.py kodak_load ./kodak' \
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_load ./kodak' \
         --command-name 'kodak-blur' \
-          'python3 opencv_bench.py kodak_blur ./kodak' \
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_blur ./kodak' \
         --command-name 'kodak-edges' \
-          'python3 opencv_bench.py kodak_edges ./kodak' \
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_edges ./kodak' \
         --command-name 'kodak-color' \
-          'python3 opencv_bench.py kodak_color ./kodak' \
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_color ./kodak' \
         --command-name 'kodak-orb' \
-          'python3 opencv_bench.py kodak_orb ./kodak' \
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_orb ./kodak' \
         --command-name 'kodak-clahe' \
-          'python3 opencv_bench.py kodak_clahe ./kodak' \
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_clahe ./kodak' \
         --command-name 'kodak-encode-jpeg' \
-          'python3 opencv_bench.py kodak_encode_jpeg ./kodak'
+          '{{ run_benchmarks_python_cmd }} opencv_bench.py kodak_encode_jpeg ./kodak'
   when:
     - run_benchmarks_opencv_check.rc == 0
     - run_benchmarks_opencv_kodak_stat.stat.exists | default(false)

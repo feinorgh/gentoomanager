@@ -30,7 +30,7 @@
 - name: Collect boot times via systemd-analyze # noqa: command-instead-of-shell
   ansible.builtin.shell:
     cmd: |
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import subprocess, json, re, sys
 
       def parse_time(s):
@@ -124,7 +124,7 @@
 - name: Collect boot times via dmesg (non-systemd fallback) # noqa: command-instead-of-shell
   ansible.builtin.shell:
     cmd: |
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import subprocess, json, re, sys
 
       BOOT_WINDOW_SEC = 300   # ignore dmesg entries > 5 min after boot
