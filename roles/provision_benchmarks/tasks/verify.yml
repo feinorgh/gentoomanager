@@ -7,13 +7,18 @@
     cmd: |
       set -e
       echo "=== Tool availability ==="
-      for tool in hyperfine bash gcc openssl git; do
+      for tool in hyperfine bash openssl git; do
         if command -v "$tool" >/dev/null 2>&1; then
           printf "  %-15s OK\n" "$tool"
         else
           printf "  %-15s MISSING\n" "$tool"
         fi
       done
+      if command -v gcc >/dev/null 2>&1 || command -v cc >/dev/null 2>&1; then
+        printf "  %-15s OK\n" "compiler"
+      else
+        printf "  %-15s MISSING\n" "compiler"
+      fi
       # Python: check for python3 or python (OpenBSD may have either)
       if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
         printf "  %-15s OK\n" "python"

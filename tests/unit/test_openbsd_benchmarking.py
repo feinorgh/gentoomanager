@@ -36,6 +36,7 @@ def test_verify_yml_openbsd_friendly_commands(worktree_root):
     assert "python3" in cmd and "python" in cmd, (
         "verify.yml should check for both python3 and python availability"
     )
+    assert "cc" in cmd, "verify.yml should treat cc as an acceptable compiler on OpenBSD"
 
     # It should NOT hardcode python3 in the essential tools loop
     assert "for tool in hyperfine gcc python3 openssl git" not in cmd, (
@@ -989,6 +990,12 @@ def test_sanity_check_yml_preserves_openbsd_skip_reasons(worktree_root):
     # The disk skip reason should be captured
     category_skip_reasons = notes_structure.get("category_skip_reasons", {})
     assert "disk" in category_skip_reasons, "category_skip_reasons should include disk skip reason"
+    assert "normalization_notes" in notes_structure, (
+        "benchmark_notes.json should record reduced normalization details"
+    )
+    assert "platform_notes" in notes_structure, (
+        "benchmark_notes.json should record platform-specific preflight limitations"
+    )
 
 
 def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
@@ -1123,6 +1130,9 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
         )
         assert "memory_latency.json" in content, (
             f"{file_name} should use the OpenBSD-safe memory artifact in completion logic"
+        )
+        assert "disk_skip.json" in content, (
+            f"{file_name} should require a dedicated OpenBSD disk skip artifact for completion"
         )
 
 

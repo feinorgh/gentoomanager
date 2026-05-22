@@ -263,7 +263,9 @@
                                    if ansible_system == 'OpenBSD'
                                    else 'memory_bandwidth.json'),
             'process':            'process.json',
-            'disk':               'disk.json',
+            'disk':               ('disk_skip.json'
+                                   if ansible_system == 'OpenBSD'
+                                   else 'disk.json'),
             'linker':             'linker.json',
             'opencv':             'opencv.json',
             'gimp':               'gimp.json',
@@ -273,8 +275,7 @@
             'bash':               'bash.json',
             'gentoo_build_times': 'gentoo_build_times.json'
           } -%}
-          {%- set unsupported_on_openbsd = ['disk']
-                if ansible_system == 'OpenBSD' else [] -%}
+          {%- set unsupported_on_openbsd = [] -%}
           {%- set missing = [] -%}
           {%- for cat in _skip_check_categories -%}
             {%- if cat in unsupported_on_openbsd -%}

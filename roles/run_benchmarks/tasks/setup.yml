@@ -739,6 +739,13 @@
           if (ansible_system | default('') == 'Linux')
           else 'unknown'
         }}
+      normalization_mode: >-
+        {{
+          'sync-only-safe-subset'
+          if (ansible_system | default('') == 'OpenBSD')
+          else 'platform-default'
+        }}
+      normalization_reduced: "{{ ansible_system | default('') == 'OpenBSD' }}"
       smt_active: >-
         {{
           (run_benchmarks_smt_raw.stdout | default('') | trim == '1')
