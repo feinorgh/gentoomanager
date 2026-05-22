@@ -39,7 +39,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import sqlite3, random
       random.seed(42)
       db = "{{ run_benchmarks_work_dir }}/sqlite_template.db"
@@ -74,7 +74,7 @@
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/sqlite_write.json \
         --command-name "insert-100k" \
-          "python3 -c \"import sqlite3,random; r=random.Random(42); c=sqlite3.connect(':memory:'); c.execute('CREATE TABLE bench(id INTEGER PRIMARY KEY, val REAL, str TEXT)'); c.execute('CREATE INDEX idx_val ON bench(val)'); c.executemany('INSERT INTO bench VALUES(?,?,?)', ((i,r.random(),'%08x'%i) for i in range(100000))); c.commit()\"" \
+          "{{ run_benchmarks_python_cmd }} -c \"import sqlite3,random; r=random.Random(42); c=sqlite3.connect(':memory:'); c.execute('CREATE TABLE bench(id INTEGER PRIMARY KEY, val REAL, str TEXT)'); c.execute('CREATE INDEX idx_val ON bench(val)'); c.executemany('INSERT INTO bench VALUES(?,?,?)', ((i,r.random(),'%08x'%i) for i in range(100000))); c.commit()\"" \
         --prepare "cp {{ run_benchmarks_work_dir }}/sqlite_template.db /tmp/sqlite_bench_upd.db" \
         --command-name "update-500k" \
           "sqlite3 /tmp/sqlite_bench_upd.db 'UPDATE bench SET val=1.0-val WHERE id%2=0'"

@@ -258,11 +258,16 @@
             'bash':               'bash.json',
             'gentoo_build_times': 'gentoo_build_times.json'
           } -%}
+          {%- set unsupported_on_openbsd = ['disk']
+                if ansible_system == 'OpenBSD' else [] -%}
           {%- set missing = [] -%}
           {%- for cat in _skip_check_categories -%}
-            {%- set f = primary.get(cat, '') -%}
-            {%- if f and f not in existing -%}
-              {%- set _ = missing.append(cat) -%}
+            {%- if cat in unsupported_on_openbsd -%}
+            {%- else -%}
+              {%- set f = primary.get(cat, '') -%}
+              {%- if f and f not in existing -%}
+                {%- set _ = missing.append(cat) -%}
+              {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
           {{ missing | length == 0 }}

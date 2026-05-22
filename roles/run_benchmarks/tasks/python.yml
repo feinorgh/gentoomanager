@@ -3,7 +3,7 @@
 
 - name: Check Python3 availability
   ansible.builtin.command:
-    cmd: python3 --version
+    cmd: "{{ run_benchmarks_python_cmd }} --version"
   register: run_benchmarks_python_check
   changed_when: false
   failed_when: false
@@ -99,9 +99,10 @@
           done
         done
         unset IFS
-        # Generic python3 last (dedup drops it if it resolves to an already-seen binary)
-        full=$(command -v python3 2>/dev/null) || true
-        [ -n "$full" ] && printf 'python3 %s\n' "$full"
+        # Generic resolved Python command last (dedup drops it if it resolves to
+        # an already-seen binary).
+        full=$(command -v {{ run_benchmarks_python_cmd | quote }} 2>/dev/null) || true
+        [ -n "$full" ] && printf '{{ run_benchmarks_python_cmd }} %s\n' "$full"
       } | while IFS=' ' read -r label path; do
           real=$(readlink -f "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
@@ -121,7 +122,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      python3 - << 'PYEOF'
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
       import json, subprocess, re, sys
 
       raw = """{{ run_benchmarks_py_versions.stdout | default('') }}"""

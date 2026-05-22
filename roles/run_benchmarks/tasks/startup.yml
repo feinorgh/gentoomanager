@@ -48,8 +48,8 @@
       {% endfor %}
 
       # Interpreter startup: measure Python, Node.js, and Perl init time
-      if command -v python3 >/dev/null 2>&1; then
-        CMDS+=(--command-name "python3-startup" "python3 -c pass")
+      if {{ run_benchmarks_python_cmd }} -c pass >/dev/null 2>&1; then
+        CMDS+=(--command-name "python3-startup" "{{ run_benchmarks_python_cmd }} -c pass")
       fi
       if command -v node >/dev/null 2>&1; then
         CMDS+=(--command-name "node-startup" 'node -e ""')

@@ -991,6 +991,88 @@ def test_sanity_check_yml_preserves_openbsd_skip_reasons(worktree_root):
     assert "disk" in category_skip_reasons, "category_skip_reasons should include disk skip reason"
 
 
+def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
+    """Task 2 resolution facts must be used by the actual benchmark category tasks."""
+    file_expectations = {
+        "python.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "cmd: python3 --version",
+                "python3 - << 'PYEOF'",
+            ],
+        },
+        "numeric.yml": {
+            "must_contain": ["run_benchmarks_gcc_cmd", "run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "cmd: gcc --version",
+                'cmd: python3 -c "import numpy"',
+                '"python3 -c \\"import numpy',
+            ],
+        },
+        "process.yml": {
+            "must_contain": ["run_benchmarks_gcc_cmd", "run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "cmd: gcc --version",
+                "\"python3 -c 'import os, sys, json, re, hashlib",
+            ],
+        },
+        "linker.yml": {
+            "must_contain": ["run_benchmarks_gcc_cmd", "run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "cmd: gcc --version",
+                "python3 - <<'PYEOF'",
+                '[ -f "$obj" ] || gcc -O2 -c -o "$obj" "$src"',
+                '"gcc -fuse-ld=bfd -o /dev/null $OBJS -lm 2>/dev/null"',
+            ],
+        },
+        "sqlite.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "python3 - << 'PYEOF'",
+                '"python3 -c \\"import sqlite3,random;',
+            ],
+        },
+        "startup.yml": {
+            "must_contain": ["run_benchmarks_python_cmd"],
+            "must_not_contain": [
+                "command -v python3",
+                '"python3 -c pass"',
+            ],
+        },
+    }
+
+    tasks_dir = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks")
+    for file_name, rules in file_expectations.items():
+        path = os.path.join(tasks_dir, file_name)
+        with open(path, encoding="utf-8") as file_handle:
+            content = file_handle.read()
+
+        for needle in rules["must_contain"]:
+            assert needle in content, f"{file_name} should use {needle}"
+
+        for needle in rules["must_not_contain"]:
+            assert needle not in content, f"{file_name} should not hardcode {needle!r}"
+
+
+def test_openbsd_disk_skip_counts_as_intentional_completion(worktree_root):
+    """OpenBSD disk gating should not keep skip_existing/skip_complete from ever completing."""
+    role_main_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "main.yml")
+    with open(role_main_path, encoding="utf-8") as file_handle:
+        role_main = file_handle.read()
+
+    playbook_path = os.path.join(worktree_root, "playbooks", "run_benchmarks.yml")
+    with open(playbook_path, encoding="utf-8") as file_handle:
+        playbook = file_handle.read()
+
+    for file_name, content in {"main.yml": role_main, "run_benchmarks.yml": playbook}.items():
+        assert "OpenBSD" in content and "'disk'" in content, (
+            f"{file_name} should special-case OpenBSD disk gating in completion logic"
+        )
+        assert "unsupported_on_openbsd" in content or "cat == 'disk'" in content, (
+            f"{file_name} should explicitly treat OpenBSD disk as an intentional skip"
+        )
+
+
 def test_openbsd_support_is_documented(worktree_root):
     """Test that OpenBSD support is documented in user-facing docs and playbook."""
     # Test 1: README.md should mention OpenBSD as a supported platform
