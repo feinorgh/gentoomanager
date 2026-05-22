@@ -1023,6 +1023,12 @@ def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
                 "\"python3 -c 'import os, sys, json, re, hashlib",
             ],
         },
+        "disk.yml": {
+            "must_contain": ["run_benchmarks_priv_cmd"],
+            "must_not_contain": [
+                "sudo -n sh -c 'echo 3 > /proc/sys/vm/drop_caches'",
+            ],
+        },
         "memory.yml": {
             "must_contain": ["run_benchmarks_gcc_cmd"],
             "must_not_contain": [
@@ -1117,8 +1123,8 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
     with open(playbook_path, encoding="utf-8") as file_handle:
         playbook = file_handle.read()
 
-    assert "Gather minimal OS facts for completion gating" in playbook, (
-        "run_benchmarks.yml should gather the OS fact needed by skip_complete"
+    assert "run_benchmarks_preflight_system" in playbook, (
+        "run_benchmarks.yml should detect a dedicated OS name for skip_complete gating"
     )
 
     for file_name, content in {"main.yml": role_main, "run_benchmarks.yml": playbook}.items():
