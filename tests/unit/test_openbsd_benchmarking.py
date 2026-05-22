@@ -1006,14 +1006,34 @@ def test_openbsd_support_is_documented(worktree_root):
         "roles/run_benchmarks/README.md should mention normalization behavior"
     )
 
+    # README should NOT claim disk benchmarks require fio (they use dd, avoiding fio requirement)
+    readme_lower = readme_content.lower()
+    assert not ("disk" in readme_lower and "require fio" in readme_lower), (
+        "roles/run_benchmarks/README.md should not claim disk benchmarks require fio "
+        "(implementation uses dd without requiring fio per disk.yml comment)"
+    )
+    assert not ("disk" in readme_lower and "requires fio" in readme_lower), (
+        "roles/run_benchmarks/README.md should not claim disk benchmarks require fio "
+        "(implementation uses dd without requiring fio per disk.yml comment)"
+    )
+
+    # README should not overstate that all category skip reasons go to
+    # benchmark_notes.json. Only disk goes there; boot-time writes to
+    # boot_times.json.
+    if "category skip reasons are recorded" in readme_lower and "benchmark_notes" in readme_lower:
+        # This phrasing overstates where skip reasons go (plural without disk specificity)
+        raise AssertionError(
+            "roles/run_benchmarks/README.md should not claim all category skip reasons "
+            "are recorded in benchmark_notes.json "
+            "(only disk is; boot-time writes to boot_times.json)"
+        )
+
     # Test 2: docs/benchmarks.md should document OpenBSD support and caveats
     benchmarks_doc_path = os.path.join(worktree_root, "docs", "benchmarks.md")
     with open(benchmarks_doc_path, encoding="utf-8") as file_handle:
         benchmarks_doc_content = file_handle.read()
 
-    assert "OpenBSD" in benchmarks_doc_content, (
-        "docs/benchmarks.md should document OpenBSD support"
-    )
+    assert "OpenBSD" in benchmarks_doc_content, "docs/benchmarks.md should document OpenBSD support"
 
     # Check concrete facts about provisioning defaults (based on defaults/main.yml)
     # These packages ARE in the OpenBSD provisioning list
@@ -1030,10 +1050,23 @@ def test_openbsd_support_is_documented(worktree_root):
         "docs/benchmarks.md should mention Tier 3 category classification for unsupported items"
     )
 
-    # Check that benchmark_notes.json is mentioned (not aspirational metadata fields)
-    assert "benchmark_notes" in benchmarks_doc_content.lower(), (
-        "docs/benchmarks.md should reference benchmark_notes.json for skip reasons"
-    )
+    # Docs should NOT overstate where skip reasons are recorded
+    benchmarks_lower = benchmarks_doc_content.lower()
+    # Find the "Category Skip Reasons" section
+    skip_section_start = benchmarks_lower.find("category skip reasons")
+    if skip_section_start > 0:
+        # Get the next 300 chars after the section heading
+        skip_section = benchmarks_lower[skip_section_start : skip_section_start + 300]
+        # If it says skip reasons "are recorded in benchmark_notes.json" without
+        # specifying which ones, that's an overstatement
+        if "is recorded in" in skip_section or "are recorded in" in skip_section:
+            if "benchmark_notes" in skip_section:
+                # Check if it's specific about disk (OK) or general (overstates)
+                assert "disk" in skip_section, (
+                    "docs/benchmarks.md Category Skip Reasons section should be specific "
+                    "that disk skip reason goes to benchmark_notes.json (boot-time writes to "
+                    "boot_times.json, not benchmark_notes.json)"
+                )
 
     # Test 3: playbooks/run_benchmarks.yml should mention OpenBSD in supported platforms
     playbook_path = os.path.join(worktree_root, "playbooks", "run_benchmarks.yml")
@@ -1048,6 +1081,19 @@ def test_openbsd_support_is_documented(worktree_root):
     assert "sync" in playbook_content.lower() or "normalization" in playbook_content.lower(), (
         "playbooks/run_benchmarks.yml should mention normalization behavior for OpenBSD"
     )
+
+    # Playbook should NOT overstate where skip reasons are recorded
+    playbook_lower = playbook_content.lower()
+    if (
+        "category skip reasons are recorded" in playbook_lower
+        and "benchmark_notes" in playbook_lower
+    ):
+        # This phrasing overstates (plural without disk specificity)
+        raise AssertionError(
+            "playbooks/run_benchmarks.yml should not claim all category skip reasons "
+            "are recorded in benchmark_notes.json "
+            "(only disk is; boot-time writes to boot_times.json)"
+        )
 
     # Test 4: Changelog should correctly attribute doas to run_benchmarks
     changelog_path = os.path.join(

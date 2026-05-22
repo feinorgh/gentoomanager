@@ -1415,7 +1415,7 @@ Most categories run successfully on OpenBSD:
 
 ### Category Skip Reasons
 
-When a category is skipped on OpenBSD, the reason is recorded in
+When the disk category is skipped on OpenBSD, the skip reason is recorded in
 `benchmark_notes.json` under `category_skip_reasons`. Example:
 
 ```json
@@ -1425,6 +1425,9 @@ When a category is skipped on OpenBSD, the reason is recorded in
   }
 }
 ```
+
+The boot-time category writes its unsupported result directly to
+`boot_times.json` with an error field explaining the Tier 3 status.
 
 This ensures transparency and facilitates cross-platform comparisons where
 some categories are unavailable.

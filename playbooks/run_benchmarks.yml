@@ -11,7 +11,7 @@
 #   - Most categories run successfully.
 #   - Uses sync-only normalization (no /proc/sys/vm/drop_caches).
 #   - Some categories are unsupported (disk I/O is Tier 3, boot-time is Tier 3).
-#   - Category skip reasons are recorded in benchmark_notes.json.
+#   - Disk skip reason is recorded in benchmark_notes.json; boot-time writes to boot_times.json.
 #
 # Usage:
 #   ansible-playbook playbooks/run_benchmarks.yml -i inventory_generator.py
