@@ -7,7 +7,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = [
-  "pytest>=9.0.3",
+  "pytest>=7.0",
   "pytest-ansible",
   "pytest-xdist",
   "molecule",
@@ -21,7 +21,7 @@ dev = [
 
 [dependency-groups]
 dev = [
-  "pytest>=9.0.3",
+  "pytest>=7.0",
   "pytest-ansible",
   "pytest-xdist",
   "molecule",
