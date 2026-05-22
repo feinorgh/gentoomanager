@@ -254,9 +254,17 @@
     run_benchmarks_disk_skip_reason: >-
       Disk benchmark category is Tier 3 on OpenBSD (requires explicit review
       before safe OpenBSD-native implementation is confirmed). The Linux-specific
-      df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no
-      direct OpenBSD equivalent verified as safe for benchmark use.
+       df/dd commands and /proc/sys/vm/drop_caches cache-drop mechanism have no
+       direct OpenBSD equivalent verified as safe for benchmark use.
   when: ansible_system | default('Linux') == 'OpenBSD'
+
+- name: Ensure benchmark work directory exists for support-boundary artifacts
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}"
+    state: directory
+    mode: "0755"
+  changed_when: false
+  failed_when: false
 
 - name: Write benchmark notes (missing tools + distro limitations)
   ansible.builtin.copy:

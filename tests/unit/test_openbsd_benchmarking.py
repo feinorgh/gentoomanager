@@ -971,6 +971,41 @@ def test_boot_time_yml_openbsd_unsupported_policy(worktree_root):
                 )
 
 
+def test_sanity_check_yml_creates_work_dir_before_artifact_writes(worktree_root):
+    """sanity_check.yml must create the work dir before writing support artifacts."""
+    sanity_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
+    )
+    with open(sanity_path, encoding="utf-8") as file_handle:
+        sanity_tasks = yaml.safe_load(file_handle.read())
+
+    ensure_dir_index = None
+    notes_write_index = None
+    disk_skip_write_index = None
+
+    for idx, task in enumerate(sanity_tasks):
+        file_module = task.get("ansible.builtin.file", {})
+        if file_module.get("path") == "{{ run_benchmarks_work_dir }}":
+            ensure_dir_index = idx
+
+        copy_module = task.get("ansible.builtin.copy", {})
+        dest = str(copy_module.get("dest", ""))
+        if "benchmark_notes.json" in dest:
+            notes_write_index = idx
+        if "disk_skip.json" in dest:
+            disk_skip_write_index = idx
+
+    assert ensure_dir_index is not None, "sanity_check.yml should create run_benchmarks_work_dir"
+    assert notes_write_index is not None, "sanity_check.yml should write benchmark_notes.json"
+    assert disk_skip_write_index is not None, "sanity_check.yml should write disk_skip.json"
+    assert ensure_dir_index < notes_write_index, (
+        "sanity_check.yml must create run_benchmarks_work_dir before writing benchmark_notes.json"
+    )
+    assert ensure_dir_index < disk_skip_write_index, (
+        "sanity_check.yml must create run_benchmarks_work_dir before writing disk_skip.json"
+    )
+
+
 def test_sanity_check_yml_preserves_openbsd_skip_reasons(worktree_root):
     """Test that sanity_check.yml preserves OpenBSD category skip reasons in notes."""
     sanity_path = os.path.join(
