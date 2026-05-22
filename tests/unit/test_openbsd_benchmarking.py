@@ -1191,6 +1191,25 @@ def test_openbsd_support_avoids_undeclared_helper_commands(worktree_root):
         "startup.yml should gate the Firefox timeout sub-benchmark on timeout availability"
     )
 
+    python_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "python.yml")
+    with open(python_path, encoding="utf-8") as file_handle:
+        python_content = file_handle.read()
+
+    compiler_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "compiler.yml")
+    with open(compiler_path, encoding="utf-8") as file_handle:
+        compiler_content = file_handle.read()
+
+    for file_name, content in {
+        "python.yml": python_content,
+        "compiler.yml": compiler_content,
+    }.items():
+        assert "readlink -f" not in content, (
+            f"{file_name} should avoid GNU-only readlink -f in OpenBSD-supported tool discovery"
+        )
+        assert "os.path.realpath" in content, (
+            f"{file_name} should use Python realpath resolution for portable deduplication"
+        )
+
 
 def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_root):
     """OpenBSD completion logic should expect the artifact set OpenBSD can honestly produce."""
@@ -1218,6 +1237,9 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
         )
         assert "disk_skip.json" in content, (
             f"{file_name} should require a dedicated OpenBSD disk skip artifact for completion"
+        )
+        assert "octave.json" in content, (
+            f"{file_name} should keep octave completion artifacts aligned across skip logic"
         )
 
 

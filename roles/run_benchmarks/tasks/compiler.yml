@@ -98,7 +98,7 @@
           done
         fi
       } | while IFS=' ' read -r label path; do
-          real=$(readlink -f "$path" 2>/dev/null || echo "$path")
+          real=$({{ run_benchmarks_python_cmd }} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
@@ -380,7 +380,7 @@
           [ -n "$cargo_bin" ] && printf 'rustc %s\n' "$cargo_bin"
         fi
       } | while IFS=' ' read -r label cargo_bin; do
-          real=$(readlink -f "$cargo_bin" 2>/dev/null || echo "$cargo_bin")
+          real=$({{ run_benchmarks_python_cmd }} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$cargo_bin" 2>/dev/null || echo "$cargo_bin")
           printf '%s\t%s\t%s\n' "$real" "$label" "$cargo_bin"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
@@ -561,7 +561,7 @@
         full=$(command -v go 2>/dev/null) || true
         [ -n "$full" ] && printf 'go %s\n' "$full"
       } | while IFS=' ' read -r label path; do
-          real=$(readlink -f "$path" 2>/dev/null || echo "$path")
+          real=$({{ run_benchmarks_python_cmd }} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"

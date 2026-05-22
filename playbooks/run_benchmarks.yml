@@ -271,12 +271,13 @@
             'linker':             'linker.json',
             'opencv':             'opencv.json',
             'gimp':               'gimp.json',
-            'inkscape':           'inkscape.json',
-            'startup':            'startup.json',
-            'boot_time':          'boot_times.json',
-            'bash':               'bash.json',
-            'gentoo_build_times': 'gentoo_build_times.json'
-          } -%}
+             'inkscape':           'inkscape.json',
+             'startup':            'startup.json',
+             'boot_time':          'boot_times.json',
+             'bash':               'bash.json',
+             'octave':             'octave.json',
+             'gentoo_build_times': 'gentoo_build_times.json'
+           } -%}
           {%- set unsupported_on_openbsd = [] -%}
           {%- set missing = [] -%}
           {%- for cat in _skip_check_categories -%}

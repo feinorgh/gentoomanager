@@ -104,7 +104,7 @@
         full=$(command -v {{ run_benchmarks_python_cmd | quote }} 2>/dev/null) || true
         [ -n "$full" ] && printf '{{ run_benchmarks_python_cmd }} %s\n' "$full"
       } | while IFS=' ' read -r label path; do
-          real=$(readlink -f "$path" 2>/dev/null || echo "$path")
+          real=$({{ run_benchmarks_python_cmd }} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$path" 2>/dev/null || echo "$path")
           printf '%s\t%s\t%s\n' "$real" "$label" "$path"
         done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
