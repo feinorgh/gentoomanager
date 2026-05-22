@@ -96,6 +96,20 @@ def test_setup_yml_defines_resolved_command_facts(worktree_root):
         "setup.yml should have a task to detect/resolve privilege escalation command (sudo/doas)"
     )
 
+    bash_resolve_task = None
+    for task in setup_tasks:
+        task_name = task.get("name", "").lower()
+        if "bash executable" in task_name:
+            bash_resolve_task = task
+            break
+
+    assert bash_resolve_task is not None, "setup.yml should detect a runtime bash executable"
+    bash_probe = bash_resolve_task.get("ansible.builtin.raw", "")
+    assert "command -v bash" in bash_probe, "setup.yml should probe PATH for bash first"
+    assert "/usr/local/bin/bash" in bash_probe, (
+        "setup.yml should fall back to /usr/local/bin/bash for OpenBSD runtime support"
+    )
+
 
 def test_sanity_check_yml_uses_resolved_privilege_command(worktree_root):
     """Test sanity_check.yml privilege probe handles sudo AND doas (not just hardcoded sudo)."""
@@ -1008,6 +1022,15 @@ def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
                 "python3 - << 'PYEOF'",
             ],
         },
+        "bash.yml": {
+            "must_contain": ["_run_benchmarks_bash"],
+            "must_not_contain": [
+                "bash --version",
+                '"startup-bare" "bash --norc --noprofile -c true"',
+                '"bash --norc --noprofile $BENCH/${bench}.sh"',
+                "$(seq 1 3000)",
+            ],
+        },
         "numeric.yml": {
             "must_contain": ["run_benchmarks_gcc_cmd", "run_benchmarks_python_cmd"],
             "must_not_contain": [
@@ -1111,6 +1134,27 @@ def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
 
         for needle in rules["must_not_contain"]:
             assert needle not in content, f"{file_name} should not hardcode {needle!r}"
+
+
+def test_openbsd_support_avoids_undeclared_helper_commands(worktree_root):
+    """OpenBSD paths should not depend on undeclared seq/timeout helper behavior."""
+    normalize_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "normalize.yml"
+    )
+    with open(normalize_path, encoding="utf-8") as file_handle:
+        normalize_content = file_handle.read()
+
+    assert "$(seq" not in normalize_content, (
+        "normalize.yml should avoid seq so OpenBSD does not depend on an undeclared helper"
+    )
+
+    startup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "startup.yml")
+    with open(startup_path, encoding="utf-8") as file_handle:
+        startup_content = file_handle.read()
+
+    assert "command -v timeout" in startup_content, (
+        "startup.yml should gate the Firefox timeout sub-benchmark on timeout availability"
+    )
 
 
 def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_root):

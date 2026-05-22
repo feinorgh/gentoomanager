@@ -100,14 +100,15 @@
 # Detect bash executable (NixOS and other non-FHS distros lack /bin/bash)
 # ---------------------------------------------------------------------------
 - name: Detect bash executable path
-  ansible.builtin.raw: command -v bash 2>/dev/null || echo /bin/bash
+  ansible.builtin.raw: command -v bash 2>/dev/null || echo /usr/local/bin/bash
   register: run_benchmarks_bash_probe
   changed_when: false
   failed_when: false
 
 - name: Set bash executable variable
   ansible.builtin.set_fact:
-    _run_benchmarks_bash: "{{ run_benchmarks_bash_probe.stdout | default('/bin/bash') | trim }}"
+    _run_benchmarks_bash: >-
+      {{ run_benchmarks_bash_probe.stdout | default('/usr/local/bin/bash') | trim }}
 
 # ---------------------------------------------------------------------------
 # Detect resolved commands (python/python3, gcc/cc, sudo/doas)

@@ -46,7 +46,7 @@
         --command-name "fork-exec-1k" \
           "{{ run_benchmarks_work_dir }}/bench_fork 1000" \
         --command-name "shell-spawn-500" \
-          "sh -c 'for i in \$(seq 500); do /bin/true; done'" \
+          "sh -c 'i=0; while [ \"\$i\" -lt 500 ]; do /bin/true; i=\$((i + 1)); done'" \
         --command-name "python3-import" \
           "{{ run_benchmarks_python_cmd }} -c 'import os, sys, json, re, hashlib, pathlib, ast, socket, threading, subprocess, collections, itertools'"
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"

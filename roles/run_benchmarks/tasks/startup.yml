@@ -33,8 +33,10 @@
       if command -v {{ app }} >/dev/null 2>&1; then
       {% if app == 'firefox' %}
         # Firefox: measure startup to first window with a timeout
-        CMDS+=(--command-name "firefox-startup"
-          "timeout 10 firefox --headless --screenshot /dev/null about:blank 2>/dev/null || true")
+        if command -v timeout >/dev/null 2>&1; then
+          CMDS+=(--command-name "firefox-startup"
+            "timeout 10 firefox --headless --screenshot /dev/null about:blank 2>/dev/null || true")
+        fi
       {% elif app == 'gimp' %}
         # GIMP: use batch mode for startup measurement
         CMDS+=(--command-name "gimp-startup" "gimp -i --quit 2>/dev/null")

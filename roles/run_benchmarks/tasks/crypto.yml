@@ -362,71 +362,76 @@
 
       # ── Build hyperfine command list ─────────────────────────────────────
       CMDS=()
+      repeat_cmd() {
+        _body="$1"
+        # shellcheck disable=SC2016  # Emits a literal shell snippet for hyperfine to run later.
+        printf '_i=0; while [ "$_i" -lt %s ]; do %s; _i=$((_i + 1)); done' "$N" "$_body"
+      }
 
       CMDS+=(--command-name "rsa-2048-sign-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -sign rsa2048.pem -out sig.bin signdata.bin')")
       CMDS+=(--command-name "rsa-2048-verify-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -verify rsa2048pub.pem -signature sig_rsa2048.bin signdata.bin')")
 
       CMDS+=(--command-name "rsa-3072-sign-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -sign rsa3072.pem -out sig.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -sign rsa3072.pem -out sig.bin signdata.bin')")
       CMDS+=(--command-name "rsa-3072-verify-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -verify rsa3072pub.pem -signature sig_rsa3072.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -verify rsa3072pub.pem -signature sig_rsa3072.bin signdata.bin')")
 
       CMDS+=(--command-name "rsa-4096-sign-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -sign rsa4096.pem -out sig.bin signdata.bin')")
       CMDS+=(--command-name "rsa-4096-verify-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -verify rsa4096pub.pem -signature sig_rsa4096.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -verify rsa4096pub.pem -signature sig_rsa4096.bin signdata.bin')")
 
       CMDS+=(--command-name "ecdsa-p256-sign-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -sign ec256.pem -out sig.bin signdata.bin')")
       CMDS+=(--command-name "ecdsa-p256-verify-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -verify ec256pub.pem -signature sig_ec256.bin signdata.bin')")
 
       CMDS+=(--command-name "ecdsa-p384-sign-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -sign ec384.pem -out sig.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -sign ec384.pem -out sig.bin signdata.bin')")
       CMDS+=(--command-name "ecdsa-p384-verify-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -verify ec384pub.pem -signature sig_ec384.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -verify ec384pub.pem -signature sig_ec384.bin signdata.bin')")
 
       CMDS+=(--command-name "ecdsa-p521-sign-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -sign ec521.pem -out sig.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -sign ec521.pem -out sig.bin signdata.bin')")
       CMDS+=(--command-name "ecdsa-p521-verify-${N}x"
-        "for _i in \$(seq $N); do openssl dgst -sha256 -verify ec521pub.pem -signature sig_ec521.bin signdata.bin; done")
+        "$(repeat_cmd 'openssl dgst -sha256 -verify ec521pub.pem -signature sig_ec521.bin signdata.bin')")
 
       CMDS+=(--command-name "ed25519-sign-${N}x"
-        "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin; done")
+        "$(repeat_cmd 'openssl pkeyutl -sign -inkey ed25519.pem -in signdata.bin -out sig.bin')")
       CMDS+=(--command-name "ed25519-verify-${N}x"
-        "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin; done")
+        "$(repeat_cmd 'openssl pkeyutl -verify -pubin -inkey ed25519pub.pem -in signdata.bin -sigfile sig_ed25519.bin')")
 
       CMDS+=(--command-name "ed448-sign-${N}x"
-        "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey ed448.pem -in signdata.bin -out sig.bin; done")
+        "$(repeat_cmd 'openssl pkeyutl -sign -inkey ed448.pem -in signdata.bin -out sig.bin')")
       CMDS+=(--command-name "ed448-verify-${N}x"
-        "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey ed448pub.pem -in signdata.bin -sigfile sig_ed448.bin; done")
+        "$(repeat_cmd 'openssl pkeyutl -verify -pubin -inkey ed448pub.pem -in signdata.bin -sigfile sig_ed448.bin')")
 
       # Post-quantum: add only if key generation and pre-signing succeeded
       if [ -f mldsa44pub.pem ] && [ -f sig_mldsa44.bin ]; then
         CMDS+=(--command-name "ml-dsa-44-sign-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey mldsa44.pem -in signdata.bin -out sig.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -sign -inkey mldsa44.pem -in signdata.bin -out sig.bin')")
         CMDS+=(--command-name "ml-dsa-44-verify-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey mldsa44pub.pem -in signdata.bin -sigfile sig_mldsa44.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -verify -pubin -inkey mldsa44pub.pem -in signdata.bin -sigfile sig_mldsa44.bin')")
       fi
       if [ -f mldsa65pub.pem ] && [ -f sig_mldsa65.bin ]; then
         CMDS+=(--command-name "ml-dsa-65-sign-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey mldsa65.pem -in signdata.bin -out sig.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -sign -inkey mldsa65.pem -in signdata.bin -out sig.bin')")
         CMDS+=(--command-name "ml-dsa-65-verify-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey mldsa65pub.pem -in signdata.bin -sigfile sig_mldsa65.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -verify -pubin -inkey mldsa65pub.pem -in signdata.bin -sigfile sig_mldsa65.bin')")
       fi
       if [ -f mldsa87pub.pem ] && [ -f sig_mldsa87.bin ]; then
         CMDS+=(--command-name "ml-dsa-87-sign-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey mldsa87.pem -in signdata.bin -out sig.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -sign -inkey mldsa87.pem -in signdata.bin -out sig.bin')")
         CMDS+=(--command-name "ml-dsa-87-verify-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey mldsa87pub.pem -in signdata.bin -sigfile sig_mldsa87.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -verify -pubin -inkey mldsa87pub.pem -in signdata.bin -sigfile sig_mldsa87.bin')")
       fi
       if [ -f slhdsa128fpub.pem ] && [ -f sig_slhdsa128f.bin ]; then
         CMDS+=(--command-name "slh-dsa-sha2-128f-sign-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -sign -inkey slhdsa128f.pem -in signdata.bin -out sig.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -sign -inkey slhdsa128f.pem -in signdata.bin -out sig.bin')")
         CMDS+=(--command-name "slh-dsa-sha2-128f-verify-${N}x"
-          "for _i in \$(seq $N); do openssl pkeyutl -verify -pubin -inkey slhdsa128fpub.pem -in signdata.bin -sigfile sig_slhdsa128f.bin; done")
+          "$(repeat_cmd 'openssl pkeyutl -verify -pubin -inkey slhdsa128fpub.pem -in signdata.bin -sigfile sig_slhdsa128f.bin')")
       fi
 
       {{ run_benchmarks_hyperfine_bin }} \
@@ -641,41 +646,46 @@
 
       # ── Build hyperfine command list ─────────────────────────────────────
       CMDS=()
+      repeat_cmd() {
+        _body="$1"
+        # shellcheck disable=SC2016  # Emits a literal shell snippet for hyperfine to run later.
+        printf '_i=0; while [ "$_i" -lt %s ]; do %s; _i=$((_i + 1)); done' "$N" "$_body"
+      }
 
       CMDS+=(--command-name "ssh-ed25519-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ed25519 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_ed25519 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-ed25519-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ed25519 -n benchmark -s ssh_sig_ed25519.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ed25519 -n benchmark -s ssh_sig_ed25519.sig < signdata.bin >/dev/null 2>&1')")
 
       CMDS+=(--command-name "ssh-rsa-2048-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_rsa2048 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_rsa2048 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-rsa-2048-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa2048 -n benchmark -s ssh_sig_rsa2048.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa2048 -n benchmark -s ssh_sig_rsa2048.sig < signdata.bin >/dev/null 2>&1')")
 
       CMDS+=(--command-name "ssh-rsa-3072-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_rsa3072 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_rsa3072 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-rsa-3072-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa3072 -n benchmark -s ssh_sig_rsa3072.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa3072 -n benchmark -s ssh_sig_rsa3072.sig < signdata.bin >/dev/null 2>&1')")
 
       CMDS+=(--command-name "ssh-rsa-4096-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_rsa4096 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_rsa4096 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-rsa-4096-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa4096 -n benchmark -s ssh_sig_rsa4096.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-rsa4096 -n benchmark -s ssh_sig_rsa4096.sig < signdata.bin >/dev/null 2>&1')")
 
       CMDS+=(--command-name "ssh-ecdsa-p256-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ecdsa256 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_ecdsa256 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-ecdsa-p256-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa256 -n benchmark -s ssh_sig_ecdsa256.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa256 -n benchmark -s ssh_sig_ecdsa256.sig < signdata.bin >/dev/null 2>&1')")
 
       CMDS+=(--command-name "ssh-ecdsa-p384-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ecdsa384 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_ecdsa384 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-ecdsa-p384-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa384 -n benchmark -s ssh_sig_ecdsa384.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa384 -n benchmark -s ssh_sig_ecdsa384.sig < signdata.bin >/dev/null 2>&1')")
 
       CMDS+=(--command-name "ssh-ecdsa-p521-sign-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y sign -f ssh_ecdsa521 -n benchmark signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y sign -f ssh_ecdsa521 -n benchmark signdata.bin >/dev/null 2>&1')")
       CMDS+=(--command-name "ssh-ecdsa-p521-verify-${N}x"
-        "for _i in \$(seq $N); do ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa521 -n benchmark -s ssh_sig_ecdsa521.sig < signdata.bin >/dev/null 2>&1; done")
+        "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa521 -n benchmark -s ssh_sig_ecdsa521.sig < signdata.bin >/dev/null 2>&1')")
 
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
