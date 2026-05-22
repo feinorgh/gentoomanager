@@ -141,14 +141,10 @@ def test_openbsd_playbook_integration(worktree_root):
     assert len(openbsd_tasks) > 0, "OpenBSD play should have tasks"
 
     role_task = openbsd_tasks[0]
-    assert (
-        "ansible.builtin.include_role" in role_task
-    ), "First task should include_role"
-    assert (
-        role_task["ansible.builtin.include_role"]["name"]
-        == "provision_benchmarks"
-    ), "Should include provision_benchmarks role"
-    assert (
-        role_task["ansible.builtin.include_role"]["tasks_from"]
-        == "os/openbsd.yml"
-    ), "Should use tasks_from: os/openbsd.yml"
+    assert "ansible.builtin.include_role" in role_task, "First task should include_role"
+    assert role_task["ansible.builtin.include_role"]["name"] == "provision_benchmarks", (
+        "Should include provision_benchmarks role"
+    )
+    assert role_task["ansible.builtin.include_role"]["tasks_from"] == "os/openbsd.yml", (
+        "Should use tasks_from: os/openbsd.yml"
+    )
