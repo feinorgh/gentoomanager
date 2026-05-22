@@ -9,7 +9,9 @@ Supports Linux (all major distributions), macOS, FreeBSD, OpenBSD, and Windows.
 
 **OpenBSD support:** Most benchmark categories run successfully on OpenBSD.
 The suite uses sync-only normalization (system-wide cache drop via
-`/proc/sys/vm/drop_caches` is unavailable). Some categories are unsupported:
+`/proc/sys/vm/drop_caches` is unavailable). OpenBSD memory latency is recorded
+by default; the Linux-style shared-memory bandwidth artifact is not treated as
+required there. Some categories are unsupported:
 disk I/O benchmarks are Tier 3 (Linux-specific df/dd commands and cache-drop
 mechanism not yet verified for OpenBSD); boot-time is Tier 3 (systemd-analyze
 unavailable, dmesg parsing not yet verified). The disk category skip reason is

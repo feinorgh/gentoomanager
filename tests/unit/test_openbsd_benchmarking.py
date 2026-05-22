@@ -1100,8 +1100,8 @@ def test_runtime_category_tasks_use_resolved_command_facts(worktree_root):
             assert needle not in content, f"{file_name} should not hardcode {needle!r}"
 
 
-def test_openbsd_disk_skip_counts_as_intentional_completion(worktree_root):
-    """OpenBSD disk gating should not keep skip_existing/skip_complete from ever completing."""
+def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_root):
+    """OpenBSD completion logic should expect the artifact set OpenBSD can honestly produce."""
     role_main_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "main.yml")
     with open(role_main_path, encoding="utf-8") as file_handle:
         role_main = file_handle.read()
@@ -1117,6 +1117,9 @@ def test_openbsd_disk_skip_counts_as_intentional_completion(worktree_root):
         assert "unsupported_on_openbsd" in content or "cat == 'disk'" in content, (
             f"{file_name} should explicitly treat OpenBSD disk as an intentional skip"
         )
+        assert "memory_latency.json" in content, (
+            f"{file_name} should use the OpenBSD-safe memory artifact in completion logic"
+        )
 
 
 def test_openbsd_support_is_documented(worktree_root):
@@ -1128,6 +1131,9 @@ def test_openbsd_support_is_documented(worktree_root):
 
     assert "OpenBSD" in readme_content, (
         "roles/run_benchmarks/README.md should mention OpenBSD as a supported platform"
+    )
+    assert "memory latency" in readme_content.lower(), (
+        "roles/run_benchmarks/README.md should explain the OpenBSD memory category behavior"
     )
     # Check that reduced normalization is mentioned
     assert "sync" in readme_content.lower() or "normalization" in readme_content.lower(), (
@@ -1162,6 +1168,9 @@ def test_openbsd_support_is_documented(worktree_root):
         benchmarks_doc_content = file_handle.read()
 
     assert "OpenBSD" in benchmarks_doc_content, "docs/benchmarks.md should document OpenBSD support"
+    assert "memory latency" in benchmarks_doc_content.lower(), (
+        "docs/benchmarks.md should explain the OpenBSD memory category behavior"
+    )
 
     # Check concrete facts about provisioning defaults (based on defaults/main.yml)
     # These packages ARE in the OpenBSD provisioning list

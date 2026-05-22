@@ -1404,7 +1404,11 @@ platform capabilities.
 Most categories run successfully on OpenBSD:
 
 - **Fully supported (with sync-only normalization):** compression, crypto,
-  compiler, python, numeric, sqlite, coreutils, memory, process, linker, startup, bash
+  compiler, python, numeric, sqlite, coreutils, process, linker, startup, bash
+- **Memory category on OpenBSD:** OpenBSD memory latency is supported and
+  counted as the primary OpenBSD memory result. The Linux-style `memory_bandwidth.json`
+  artifact is not required on OpenBSD because the suite does not assume a
+  portable `/dev/shm`-style RAM-disk path there.
 - **Sync-only normalization:** OpenBSD does not support system-wide cache drops
   (no `/proc/sys/vm/drop_caches`). The suite uses `sync`-only preparation
   between benchmark runs.

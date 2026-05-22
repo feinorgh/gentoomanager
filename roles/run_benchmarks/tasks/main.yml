@@ -77,7 +77,9 @@
             'ffmpeg':             'ffmpeg_video_encode.json',
             'imagemagick':        'imagemagick_resize.json',
             'coreutils':          'coreutils.json',
-            'memory':             'memory_bandwidth.json',
+            'memory':             ('memory_latency.json'
+                                   if ansible_system == 'OpenBSD'
+                                   else 'memory_bandwidth.json'),
             'process':            'process.json',
             'disk':               'disk.json',
             'linker':             'linker.json',
