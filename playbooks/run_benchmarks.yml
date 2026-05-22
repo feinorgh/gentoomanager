@@ -241,16 +241,21 @@
     - name: Resolve active categories for completeness check
       ansible.builtin.set_fact:
         _skip_check_categories: >-
+          {%- set selected = (
+                (run_benchmarks_categories | default([]))
+                if (run_benchmarks_categories | default([]) | length > 0)
+                else ['compression', 'crypto', 'compiler', 'python', 'numeric',
+                      'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
+                      'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
+                      'startup', 'boot_time', 'bash', 'octave']
+                     + (['gentoo_build_times']
+                        if inventory_hostname in (groups['gentoo'] | default([]))
+                        else [])
+             ) -%}
           {{
-            (run_benchmarks_categories | default([]) | length > 0)
-            | ternary(run_benchmarks_categories | default([]),
-                      ['compression', 'crypto', 'compiler', 'python', 'numeric',
-                       'sqlite', 'ffmpeg', 'imagemagick', 'coreutils', 'memory',
-                       'process', 'disk', 'linker', 'opencv', 'gimp', 'inkscape',
-                       'startup', 'boot_time', 'bash', 'octave']
-                      + (['gentoo_build_times']
-                         if inventory_hostname in (groups['gentoo'] | default([]))
-                         else []))
+            selected
+            if run_benchmarks_preflight_system != 'Windows'
+            else selected | intersect(run_benchmarks_windows_categories | default([]))
           }}
       when: run_benchmarks_skip_complete | default(false) | bool
 

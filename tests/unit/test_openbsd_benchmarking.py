@@ -1230,6 +1230,10 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
         "run_benchmarks.yml should avoid POSIX raw OS detection on Windows hosts "
         "during skip_complete"
     )
+    assert "run_benchmarks_windows_categories" in playbook and "intersect" in playbook, (
+        "run_benchmarks.yml should restrict Windows skip_complete expectations to "
+        "the Windows-executable category set"
+    )
 
     for file_name, content in {"main.yml": role_main, "run_benchmarks.yml": playbook}.items():
         assert "OpenBSD" in content and "'disk'" in content, (
