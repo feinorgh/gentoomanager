@@ -1110,6 +1110,10 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
     with open(playbook_path, encoding="utf-8") as file_handle:
         playbook = file_handle.read()
 
+    assert "Gather minimal OS facts for completion gating" in playbook, (
+        "run_benchmarks.yml should gather the OS fact needed by skip_complete"
+    )
+
     for file_name, content in {"main.yml": role_main, "run_benchmarks.yml": playbook}.items():
         assert "OpenBSD" in content and "'disk'" in content, (
             f"{file_name} should special-case OpenBSD disk gating in completion logic"

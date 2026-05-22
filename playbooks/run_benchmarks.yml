@@ -200,8 +200,21 @@
          _reachable_check.rc | default(1) != 0)
 
     # ── Skip host if results are already complete (optional) ────────────
-    # These tasks only read local files on the controller — no remote facts
-    # are needed, so they can safely run before RAM scaling and fact gathering.
+    # Completion semantics need the remote OS name because OpenBSD expects a
+    # slightly different artifact set (for example memory latency vs the Linux
+    # shared-memory bandwidth artifact). Gather only the minimum OS fact needed
+    # before the controller-side completeness check.
+    - name: Gather minimal OS facts for completion gating
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - distribution
+          - os_family
+        filter:
+          - ansible_system
+      when: run_benchmarks_skip_complete | default(false) | bool
+
     - name: Check existing result files for this host on controller
       ansible.builtin.find:
         paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
