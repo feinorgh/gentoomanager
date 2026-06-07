@@ -57,14 +57,41 @@ def test_load_benchmark_rows_reads_metadata_and_hyperfine_json(tmp_path: Path) -
         )
     )
 
-    rows = bad.load_benchmark_rows(tmp_path)
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
 
     assert len(rows) == 2
     assert {row["benchmark"] for row in rows} == {"gzip -9", "zstd -19"}
     assert all(row["host"] == "gentoo-example" for row in rows)
     assert all(row["category"] == "compression" for row in rows)
+    assert all(row["os_version"] == "" for row in rows)
+    assert all(row["os_label"] == "Gentoo" for row in rows)
     assert all(row["lto_enabled"] is True for row in rows)
     assert all(row["tool_versions"]["ffmpeg"].startswith("ffmpeg version") for row in rows)
+
+
+def test_load_benchmark_rows_preserves_distro_label_from_metadata(tmp_path: Path) -> None:
+    host_dir = tmp_path / "cachyos-jessica"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "hostname": "cachyos-jessica",
+                "os": "Archlinux",
+                "os_version": "rolling",
+                "os_family": "Archlinux",
+                "distro_label": "CachyOS rolling",
+                "versions": [],
+            }
+        )
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["distro_label"] == "CachyOS rolling"
 
 
 def test_load_benchmark_rows_skips_invalid_json_files(tmp_path: Path) -> None:
@@ -85,10 +112,74 @@ def test_load_benchmark_rows_skips_invalid_json_files(tmp_path: Path) -> None:
         json.dumps({"results": [{"command": "sha256sum", "mean": 0.77, "stddev": 0.02}]})
     )
 
-    rows = bad.load_benchmark_rows(tmp_path)
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
 
     assert len(rows) == 1
     assert rows[0]["category"] == "crypto_hash"
+
+
+def test_load_benchmark_rows_anonymizes_hosts_by_default(tmp_path: Path) -> None:
+    host_a = tmp_path / "host-zeta"
+    host_b = tmp_path / "host-alpha"
+    host_a.mkdir()
+    host_b.mkdir()
+    (host_a / "metadata.json").write_text(json.dumps({"hostname": "host-zeta", "versions": []}))
+    (host_b / "metadata.json").write_text(json.dumps({"hostname": "host-alpha", "versions": []}))
+    (host_a / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+    (host_b / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.2, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path)
+    hosts = sorted({row["host"] for row in rows})
+
+    assert hosts == ["Hera", "Zeus"]
+    assert "host-alpha" not in hosts
+    assert "host-zeta" not in hosts
+
+
+def test_load_benchmark_rows_preserves_hosts_when_anonymization_disabled(tmp_path: Path) -> None:
+    host_dir = tmp_path / "gentoo-example"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps(
+            {"hostname": "gentoo-example", "os": "Gentoo", "os_family": "Gentoo", "versions": []}
+        )
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.25, "stddev": 0.07}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo-example"
+
+
+def test_load_benchmark_rows_uses_variant_os_labels_for_archlinux_hosts(tmp_path: Path) -> None:
+    host_dir = tmp_path / "cachyos-jessica"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "hostname": "cachyos-jessica",
+                "os": "Archlinux",
+                "os_version": "rolling",
+                "os_family": "Archlinux",
+                "versions": [],
+            }
+        )
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["os_label"] == "CachyOS rolling"
 
 
 def test_benchmarks_article_data_has_no_shebang() -> None:
