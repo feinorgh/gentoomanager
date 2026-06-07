@@ -145,6 +145,10 @@ run_benchmarks_ffmpeg_task_timeout_sec: 5400
 # Hyperfine binary name
 run_benchmarks_hyperfine_bin: hyperfine
 
+# Fallback command used by standalone task includes (e.g. boot_time.yml in
+# integration tests). setup.yml probes and overrides this with a resolved path.
+run_benchmarks_python_cmd: python3
+
 # Include Windows hosts in benchmark runs (opt-in)
 run_benchmarks_include_windows: false
 

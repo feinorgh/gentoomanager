@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Helpers for loading benchmark JSON into article-friendly row data."""
 
 from __future__ import annotations

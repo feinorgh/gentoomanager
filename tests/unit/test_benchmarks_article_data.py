@@ -89,3 +89,12 @@ def test_load_benchmark_rows_skips_invalid_json_files(tmp_path: Path) -> None:
 
     assert len(rows) == 1
     assert rows[0]["category"] == "crypto_hash"
+
+
+def test_benchmarks_article_data_has_no_shebang() -> None:
+    script_path = REPO_ROOT / "scripts" / "benchmarks_article_data.py"
+    first_line = script_path.read_text(encoding="utf-8").splitlines()[0]
+    assert not first_line.startswith("#!"), (
+        "scripts/benchmarks_article_data.py must not have a shebang "
+        "to satisfy ansible-test sanity for non-module files"
+    )
