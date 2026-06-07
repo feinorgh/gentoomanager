@@ -214,6 +214,27 @@ def test_setup_yml_version_gathering_uses_resolved_commands(worktree_root):
     )
 
 
+def test_setup_yml_writes_distro_label_metadata(worktree_root):
+    """Test that setup.yml writes a distro_label field into metadata."""
+    setup_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "setup.yml")
+    with open(setup_path, encoding="utf-8") as file_handle:
+        setup_tasks = yaml.safe_load(file_handle.read())
+
+    metadata_task = None
+    for task in setup_tasks:
+        if task.get("name") == "Parse host metadata":
+            metadata_task = task
+            break
+
+    assert metadata_task is not None, "metadata task not found in setup.yml"
+    metadata_fact = metadata_task.get("ansible.builtin.set_fact", {}).get("run_benchmarks_metadata")
+    assert "distro_label" in metadata_fact, "setup.yml should populate distro_label in metadata"
+    distro_label_fact = metadata_fact["distro_label"].replace("\n", "")
+    assert "default(ansible_distribution" in distro_label_fact, (
+        "setup.yml should fall back to ansible_distribution when no distro_label override exists"
+    )
+
+
 def test_sanity_check_yml_python_detection_openbsd_friendly(worktree_root):
     """Test that sanity_check.yml probe checks for python3 OR python (OpenBSD-friendly)."""
     sanity_path = os.path.join(

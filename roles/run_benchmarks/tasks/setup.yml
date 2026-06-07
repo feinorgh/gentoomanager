@@ -668,6 +668,11 @@
       os: "{{ ansible_distribution | default('unknown') }}"
       os_version: "{{ ansible_distribution_version | default('') }}"
       os_family: "{{ ansible_os_family | default('unknown') }}"
+      distro_label: >-
+        {{
+          distro_label
+          | default(ansible_distribution | default('unknown'))
+        }}
       cpu_model: "{{ ansible_processor[2] | default('unknown') }}"
       cpu_cores: "{{ ansible_processor_vcpus | default(1) }}"
       cpu_mhz: >-
