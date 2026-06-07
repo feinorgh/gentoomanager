@@ -14,6 +14,9 @@ on: # yamllint disable-line rule:truthy
   # schedule:
   #   - cron: '0 0 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   changelog:
     uses: ansible/ansible-content-actions/.github/workflows/changelog.yaml@main
@@ -40,6 +43,94 @@ jobs:
     uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@main
   unit-source:
     uses: ansible-network/github_actions/.github/workflows/unit_source.yml@main
+    with:
+      matrix_exclude: >-
+        [
+          {
+            "ansible-version": "devel",
+            "python-version": "3.11"
+          },
+          {
+            "ansible-version": "devel",
+            "python-version": "3.12"
+          },
+          {
+            "ansible-version": "devel",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "milestone",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "stable-2.20",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "devel",
+            "python-version": "3.10"
+          },
+          {
+            "ansible-version": "milestone",
+            "python-version": "3.11"
+          },
+          {
+            "ansible-version": "milestone",
+            "python-version": "3.10"
+          },
+          {
+            "ansible-version": "stable-2.21",
+            "python-version": "3.11"
+          },
+          {
+            "ansible-version": "stable-2.21",
+            "python-version": "3.10"
+          },
+          {
+            "ansible-version": "stable-2.20",
+            "python-version": "3.11"
+          },
+          {
+            "ansible-version": "stable-2.20",
+            "python-version": "3.10"
+          },
+          {
+            "ansible-version": "stable-2.19",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "stable-2.19",
+            "python-version": "3.10"
+          },
+          {
+            "ansible-version": "stable-2.18",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "stable-2.18",
+            "python-version": "3.10"
+          },
+          {
+            "ansible-version": "stable-2.17",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "stable-2.17",
+            "python-version": "3.13"
+          },
+          {
+            "ansible-version": "stable-2.16",
+            "python-version": "3.14"
+          },
+          {
+            "ansible-version": "stable-2.16",
+            "python-version": "3.13"
+          },
+          {
+            "ansible-version": "stable-2.16",
+            "python-version": "3.12"
+          }
+        ]
   shellcheck:
     runs-on: ubuntu-latest
     steps:

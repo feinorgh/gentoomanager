@@ -41,7 +41,11 @@ class TestUrlConstants:
         assert dbf.KODAK_COUNT == 24
 
     def test_sqlite_url_points_to_sqlite_org(self) -> None:
-        assert "sqlite.org" in dbf.SQLITE_URL
+        from urllib.parse import urlparse
+
+        parsed = urlparse(dbf.SQLITE_URL)
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "www.sqlite.org"
         assert dbf.SQLITE_URL.endswith(".zip")
 
     def test_sqlite_url_contains_version(self) -> None:
