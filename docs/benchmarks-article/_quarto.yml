@@ -1,0 +1,24 @@
+---
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Gentoo Benchmark Analysis"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Article
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: show
+    code-summary: "Show analysis code"
+    css: styles.css
+
+execute:
+  echo: false
+  warning: false
+  message: false

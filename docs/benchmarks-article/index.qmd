@@ -1,0 +1,147 @@
+---
+title: "Gentoo Linux Benchmark Analysis vs Other Operating Systems"
+author: "local.gentoomanager"
+date: last-modified
+format:
+  html:
+    code-tools: true
+---
+
+This article compares benchmark outcomes across supported operating systems, with focused analysis of
+Gentoo tuning choices (`CFLAGS`, PGO, LTO, Graphite).
+
+```{python}
+from pathlib import Path
+import sys
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+
+sys.path.insert(0, str(Path("../../scripts").resolve()))
+from benchmarks_article_data import load_benchmark_rows
+
+rows = load_benchmark_rows(Path("../../benchmarks/results"))
+df = pd.DataFrame(rows)
+
+if df.empty:
+    raise RuntimeError("No benchmark rows found in benchmarks/results. Run benchmarks first.")
+
+df["mean_s"] = pd.to_numeric(df["mean_s"], errors="coerce")
+df["stddev_s"] = pd.to_numeric(df["stddev_s"], errors="coerce")
+df = df.dropna(subset=["mean_s"])
+```
+
+## Dataset Summary
+
+```{python}
+summary = (
+    df.groupby(["os", "os_family", "host"], as_index=False)
+    .agg(
+        benchmarks=("benchmark", "count"),
+        categories=("category", "nunique"),
+        lto_enabled=("lto_enabled", "max"),
+        pgo_enabled=("pgo_enabled", "max"),
+        graphite_enabled=("graphite_enabled", "max"),
+    )
+    .sort_values(["os", "host"])
+)
+summary
+```
+
+::: {.gentoo-note}
+For Gentoo hosts, the tuning dimensions in this analysis are inferred from metadata flags:
+`common_flags`, `cflags`, and `ldflags`.
+:::
+
+## Cross-OS Comparison (Lower is Better)
+
+```{python}
+host_median = (
+    df.groupby(["host", "os", "os_family"], as_index=False)["mean_s"]
+    .median()
+    .rename(columns={"mean_s": "median_seconds"})
+    .sort_values("median_seconds")
+)
+
+fig = px.bar(
+    host_median,
+    x="host",
+    y="median_seconds",
+    color="os_family",
+    title="Median benchmark runtime per host",
+    labels={"median_seconds": "Median runtime (seconds)", "host": "Host"},
+)
+fig.update_layout(xaxis_tickangle=-35)
+fig
+```
+
+## Category-Normalized Performance Heatmap
+
+```{python}
+cat_host = (
+    df.groupby(["category", "host", "os_family"], as_index=False)["mean_s"]
+    .median()
+    .rename(columns={"mean_s": "median_s"})
+)
+cat_host["best_in_category"] = cat_host.groupby("category")["median_s"].transform("min")
+cat_host["relative_to_best"] = cat_host["median_s"] / cat_host["best_in_category"]
+
+pivot = cat_host.pivot(index="category", columns="host", values="relative_to_best")
+
+fig = px.imshow(
+    pivot,
+    aspect="auto",
+    color_continuous_scale="Viridis",
+    labels={"color": "Relative runtime (1.0 = best)", "x": "Host", "y": "Category"},
+    title="Category-normalized runtime by host",
+)
+fig
+```
+
+## Gentoo Tuning Focus: LTO / PGO / Graphite
+
+```{python}
+gentoo_df = df[df["os"] == "Gentoo"].copy()
+gentoo_df["tuning_profile"] = (
+    np.where(gentoo_df["lto_enabled"], "LTO:on", "LTO:off")
+    + " | "
+    + np.where(gentoo_df["pgo_enabled"], "PGO:on", "PGO:off")
+    + " | "
+    + np.where(gentoo_df["graphite_enabled"], "Graphite:on", "Graphite:off")
+)
+
+gentoo_profile_median = (
+    gentoo_df.groupby(["host", "gentoo_profile", "tuning_profile"], as_index=False)["mean_s"]
+    .median()
+    .rename(columns={"mean_s": "median_seconds"})
+    .sort_values("median_seconds")
+)
+
+fig = px.bar(
+    gentoo_profile_median,
+    x="host",
+    y="median_seconds",
+    color="tuning_profile",
+    hover_data=["gentoo_profile"],
+    title="Gentoo host median runtime by inferred tuning profile",
+    labels={"median_seconds": "Median runtime (seconds)", "host": "Gentoo host"},
+)
+fig.update_layout(xaxis_tickangle=-35)
+fig
+```
+
+::: {.metric-callout}
+Interpretation guide:
+
+- Values lower than peers indicate faster execution for this benchmark corpus.
+- The tuning profile chart is causal **hypothesis support**, not proof; host hardware, package versions,
+  and enabled benchmark categories can also drive differences.
+- Use per-category sections to confirm whether improvements are broad or concentrated.
+:::
+
+## Next Draft Sections to Expand
+
+1. Per-category deep dives (compiler, crypto, ffmpeg, numeric, memory).
+2. Gentoo profile and flag-level narrative with concrete command outputs.
+3. Statistical stability and confidence discussion from hyperfine variance fields.
