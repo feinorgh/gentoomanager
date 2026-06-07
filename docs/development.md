@@ -14,6 +14,7 @@ run the test suite, and use the project tooling.
   - [Unit Tests](#unit-tests)
   - [Integration Tests](#integration-tests)
   - [Sanity Tests](#sanity-tests)
+  - [tox-ansible Matrix Checks](#tox-ansible-matrix-checks)
 - [Linting and Formatting](#linting-and-formatting)
 - [Dependency Management](#dependency-management)
   - [Adding a New Dependency](#adding-a-new-dependency)
@@ -178,6 +179,23 @@ ansible-test sanity --python 3.11
 
 Sanity tests are also run automatically in CI
 (see [CI / GitHub Actions](#ci--github-actions)).
+
+### tox-ansible Matrix Checks
+
+Run the same tox-driven matrix generation used by CI:
+
+```bash
+# list generated environments
+uv run tox --ansible --conf tox-ansible.ini --listenvs
+
+# print GitHub matrix JSON for each scope
+uv run tox --ansible --gh-matrix --matrix-scope unit --conf tox-ansible.ini
+uv run tox --ansible --gh-matrix --matrix-scope sanity --conf tox-ansible.ini
+uv run tox --ansible --gh-matrix --matrix-scope integration --conf tox-ansible.ini
+
+# run one environment locally
+uv run tox --ansible -e integration-py3.13-2.21 --conf tox-ansible.ini
+```
 
 ---
 

@@ -17,6 +17,8 @@ dev = [
   "local-gentoomanager[test]",
   "ruff",
   "ansible-lint",
+  "tox",
+  "tox-ansible",
 ]
 
 [dependency-groups]
@@ -29,6 +31,8 @@ dev = [
   "ruff",
   "ansible-lint",
   "antsibull-changelog>=0.35.0",
+  "tox",
+  "tox-ansible",
 ]
 
 [tool.black]
