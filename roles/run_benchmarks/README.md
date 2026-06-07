@@ -5,7 +5,7 @@ Runs a comprehensive cross-platform benchmark suite using
 cryptography, compiler (C/C++ compile and runtime), linker, disk I/O,
 memory bandwidth, Python interpreter, and coreutils categories.
 
-Supports Linux (all major distributions), macOS, FreeBSD, OpenBSD, and Windows.
+Supports Linux (all major distributions), FreeBSD, OpenBSD, and Windows.
 
 **OpenBSD support:** Most benchmark categories run successfully on OpenBSD.
 The suite uses sync-only normalization (system-wide cache drop via

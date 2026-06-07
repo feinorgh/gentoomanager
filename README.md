@@ -73,7 +73,7 @@ It reads host configuration files and produces groups including:
 | `fedora`, `rhel`, `ubuntu`, `debian`, … | Per-distro groups |
 | `hypervisor_hv1`, `hypervisor_hv2` | VMs on each KVM hypervisor |
 | `baremetal` | Physical machines (hostnames in `baremetal.txt`) |
-| `win`, `win10`, `win11` | Windows VMs |
+| `mswindows`, `win`, `win10`, `win11` | Windows VMs |
 
 ```bash
 # List all hosts
@@ -99,6 +99,7 @@ Supported OS families:
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — |
 | SUSE (openSUSE) | zypper | — |
 | FreeBSD | ports (`make BATCH=yes`) | — |
+| OpenBSD | pkg_add | — |
 | Void Linux | xbps-install | — |
 | NixOS | nix-env | — |
 | Solus | eopkg | — |

@@ -1,7 +1,7 @@
 # local.gentoomanager provision_benchmarks Role
 
 Installs benchmark dependencies on target hosts across multiple operating
-systems (Gentoo, Debian/Ubuntu, Fedora/RHEL, Arch Linux, FreeBSD, macOS,
+systems (Gentoo, Debian/Ubuntu, Fedora/RHEL, Arch Linux, FreeBSD, OpenBSD,
 Windows).  Handles package installation, Python/NumPy setup, and optional
 FFmpeg installation.
 
