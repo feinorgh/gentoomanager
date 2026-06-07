@@ -7,11 +7,73 @@ format:
     code-tools: true
 ---
 
+I have been using Gentoo Linux since some some time around 2005 on various platforms, and for
+different purposes.
+
+As for myself, I have almost always trusted the default settings mentioned in the handbook, i.e. the
+"conservative" `CFLAGS` parameters, using `-march=native` to optimize for the given processor
+architecture, and rarely venturing further into "optimization" land.
+
+However, throughout forums, Reddit, chat channels, and other places, there's been constant debates on
+what "the best" optimization flags are (or should be), with many swearing by their magical incantations
+of compilers, compiler flags, and linkers, to produce seemingly fantastic, but vague, claims of
+performance gains.
+
+I hadn't given much thought as to how my own systems should be optimized, until I got an Intel NUC,
+with a 12th Gen Intel(R) Core(TM) i7-1260P processor. This processor has differentiated performance
+("P-Cores") and efficient-cores ("E-Cores") in Intel's lingo, and sometimes fail to produce binaries
+that can execute on all cores with automatic `-march=native` settings. So I started digging deeper
+to find out exactly what compiler flags I _should_ use on a given architecture, and which ones actually
+made a difference performance-wise.
+
+The [GCC optimization](https://wiki.gentoo.org/wiki/GCC_optimization) article on the Gentoo Wiki also
+provided some interesting food for thought.
+
+So how would I actually test this systematically? I set up virtual machines in [libvirt](https://libvirt.org/)
+on two of my machines to find out, in general terms, what would produce the most optimized system, with
+everything else (installed software, kernel versions, filesystems, schedulers, etc.) being the same.
+
+These two machines are
+
+  1. the previously mentioned Intel NUC12WSHi7 (M42761-303) with 64GiB of RAM, running Gentoo Linux as the
+     host operating system. The NUC has an Intel i7-1260P, which is part of the
+     [Alder Lake](https://en.wikipedia.org/wiki/Alder_Lake) series of processors, with 16 cores.
+  2. a [Compulab Airtop3](https://edge.compulab.com/products/airtop3/) with 128GiB RAM, also running
+     Gentoo as the host OS. This particular Airtop3 has an Intel
+     i7-9700, a [Coffee Lake](https://en.wikipedia.org/wiki/Coffee_Lake) 9th generation CPU with 8 cores.
+
+I ended up with a set of Gentoo Linux VM:s, each with different combinations of `CFLAGS`/`CXXFLAGS`,
+[hardened](https://wiki.gentoo.org/wiki/Hardened_Gentoo)/unhardened profiles, link-time optimization
+([LTO](https://wiki.gentoo.org/wiki/LTO)), profile-guided optimization
+([PGO](https://en.wikipedia.org/wiki/Profile-guided_optimization)) (where applicable),
+and [Graphite](https://gcc.gnu.org/wiki/Graphite) loop optimizations. I rebuilt all of these systems from the ground up (`emerge --emptytree`)
+and kept them updated continously over a period of several months in order to properly log compile times, etc.
+
+Optimization is usually a set of trade-off between simplicity, stability, compilation time, execution time,
+and maintainability. As an example, if a program takes an extra 20 minutes to compile every time you
+install or upgrade it, and the gain in performance each time you use it is measured in seconds, it might not
+be worthwhile to optimize it from a technical perspective. Many, however, have a complementary -- lets call it a
+_psychological_ perspective -- and derives peace-of-mind from knowing their system is optimized, and uses ALL
+of their processor. So I knew I needed to be able to compare compilation times, and cross-reference them with
+any performance data I could derive.
+
+As previously mentioned, the NUC has differentiated cores, which means that the compiler cannot reliably
+use `-march=native` to resolve the correct parameters for the CPU. Instead, on that platform
+[resolve-march-native](https://github.com/hartwork/resolve-march-native) resolves the actual (usable)
+compiler flags.
+
 This article compares benchmark outcomes across supported operating systems, with focused analysis of
-Gentoo tuning choices (`CFLAGS`, PGO, LTO, Graphite).
+Gentoo tuning choices (`CFLAGS`, `PGO`, `LTO`, `Graphite`).
+
+The real hostnames have been replaced by names from Greek Mythology so we can refer to them later in this
+article.
+
+The virtual machines are run on `app-emulation/libvirt-12.0.0`/`app-emulation/qemu-10.2.2` through an
+Ansible-based harness that provisions and collects the benchmark data.
 
 ```{python}
 from pathlib import Path
+import os
 import sys
 
 import numpy as np
@@ -21,7 +83,8 @@ import plotly.express as px
 sys.path.insert(0, str(Path("../../scripts").resolve()))
 from benchmarks_article_data import load_benchmark_rows
 
-rows = load_benchmark_rows(Path("../../benchmarks/results"))
+anonymize_hosts = os.getenv("QUARTO_BENCHMARKS_ANONYMIZE", "1").lower() not in {"0", "false", "no"}
+rows = load_benchmark_rows(Path("../../benchmarks/results"), anonymize_hosts=anonymize_hosts)
 df = pd.DataFrame(rows)
 
 if df.empty:
@@ -32,11 +95,149 @@ df["stddev_s"] = pd.to_numeric(df["stddev_s"], errors="coerce")
 df = df.dropna(subset=["mean_s"])
 ```
 
+## How the Benchmarks Are Performed
+
+The benchmark suite is executed by the Ansible role `roles/run_benchmarks`, which prepares each VM, runs
+benchmark categories, and writes raw JSON artifacts for every host. Most workloads are measured with
+Hyperfine-style repeated command timing, with category outputs stored as one JSON file per category.
+
+To reduce noise, the workflow applies a normalization/denormalization pass around benchmark execution.
+This keeps host state and scheduling more consistent between runs and avoids permanent benchmark-side
+changes after completion.
+
+## How Data Is Collected
+
+Each host writes to `benchmarks/results/<host>/`:
+
+1. `metadata.json` with host/build context (OS, compiler flags, profile, tool versions, platform details).
+2. Category result files with per-command timing data (`mean`, `stddev`, command string).
+3. Optional benchmark notes where present.
+
+This article loads those files through `scripts/benchmarks_article_data.py`, converts them to long-form
+rows, applies optional hostname anonymization, and then derives aggregate comparisons (cross-OS and
+Gentoo tuning-focused).
+
+## Gentoo VMs / Compiler Flags
+
+The two host machines have the following characteristics:
+
+| Host | Manufacturer | Model | CPU | CPU Gen | GPU | RAM | Disk | Filesystem | Kernel | Virtualization Host CPU | Host OS |
+|------|--------------|-------|-----|---------|-----|-----|------|------------|--------|-------------------------|---------|
+| Coffee Lake | Compulab | Airtop3 | Intel(R) Core(TM) i7-9700 (8) @ 4.70 GHz | 9th Gen | Intel UHD Graphics 630 @ 1.20 GHz [Integrated] | VENGEANCE® LPX 128GB (4 x 32GB) DDR4 | Samsung Electronics Co Ltd SSD 970 EVO/PRO | btrfs | 6.18.33-p1-gentoo-dist | ☕ Coffee Lake | Gentoo (Coffee Lake) |
+| Alder Lake | Intel | NUC12WSHi7 | Intel(R) Core(TM) i7-1260P (16) @ 4.70 GHz | 12th Gen | Intel Iris Xe Graphics @ 1.40 GHz [Integrated] | Kingston FURY KF432S20IB/32 x 2 | Samsung Electronics Co Ltd SSD 990 PRO | btrfs | 6.18.33-p1-gentoo-dist | 🧊 Alder Lake | Gentoo (Alder Lake) |
+
+
+```{python}
+from html import escape
+
+import pandas as pd
+from benchmarks_article_data import _translate_march_to_codename
+
+# Extract unique Gentoo hosts and their configuration
+gentoo_hosts = (
+    df[df["os"] == "Gentoo"][["host", "gentoo_profile", "march_native", "pgo_enabled", "lto_enabled", "graphite_enabled", "common_flags", "cflags"]]
+    .drop_duplicates()
+    .sort_values("host")
+)
+
+
+def virtualization_host_fields(march_native):
+    if march_native == "alderlake":
+        return "🧊 Alder Lake", "Gentoo (Alder Lake)"
+    if march_native == "skylake":
+        return "☕ Coffee Lake", "Gentoo (Coffee Lake)"
+    return "?", "unknown"
+
+def build_table_for_arch(hosts_df, arch_filter):
+    """Build an HTML table for a specific architecture."""
+    filtered = hosts_df[hosts_df["march_native"] == arch_filter].copy()
+    if filtered.empty:
+        return None
+
+    # Sort by CFLAGS complexity (length of expanded string)
+    def cflags_length(row):
+        cflags_val = row["cflags"] or ""
+        cflags_val = cflags_val.replace("${COMMON_FLAGS}", row["common_flags"] or "")
+        cflags_val = cflags_val.replace("${WARNING_FLAGS}", "")
+        return len(cflags_val.strip())
+
+    filtered["_cflags_len"] = filtered.apply(cflags_length, axis=1)
+    filtered = filtered.sort_values("_cflags_len")
+
+    rows_html = []
+    for _, row in filtered.iterrows():
+        host = row["host"]
+        virt_host, host_os = virtualization_host_fields(row["march_native"])
+        profile = (row["gentoo_profile"] or "—").replace("default/linux/", "")
+        lto = "✓" if row["lto_enabled"] else ""
+        pgo = "✓" if row["pgo_enabled"] else ""
+        graphite = "✓" if row["graphite_enabled"] else ""
+
+        # Expand template variables in cflags
+        cflags_val = row["cflags"] or ""
+        cflags_val = cflags_val.replace("${COMMON_FLAGS}", row["common_flags"] or "")
+        cflags_val = cflags_val.replace("${WARNING_FLAGS}", "")
+        cflags_expanded = cflags_val.strip() if cflags_val.strip() else "—"
+
+        rows_html.append(
+            "<tr>"
+            f"<td>{escape(str(host))}</td>"
+            f"<td>{escape(str(virt_host))}</td>"
+            f"<td>{escape(str(host_os))}</td>"
+            f"<td>{escape(str(profile))}</td>"
+            f"<td class='opt-col'>{lto}</td>"
+            f"<td class='opt-col'>{pgo}</td>"
+            f"<td class='opt-col'>{graphite}</td>"
+            f"<td class='cflags-col'><code>{escape(cflags_expanded)}</code></td>"
+            "</tr>"
+        )
+
+    return (
+        "<div class='gentoo-config-table-wrap'>"
+        "<table class='table table-sm gentoo-config-table'>"
+        "<colgroup>"
+        "<col><col><col><col><col class='opt-col'><col class='opt-col'><col class='opt-col'><col>"
+        "</colgroup>"
+        "<thead><tr>"
+        "<th>Host</th><th>Virtualization Host CPU</th><th>Host OS</th><th>Profile</th>"
+        "<th class='opt-col'>LTO</th><th class='opt-col'>PGO</th>"
+        "<th class='opt-col'>Graphite</th><th class='cflags-col'>CFLAGS</th>"
+        "</tr></thead>"
+        f"<tbody>{''.join(rows_html)}</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+if not gentoo_hosts.empty:
+    from IPython.display import HTML, Markdown, display
+
+    # Display Intel Alder Lake hosts
+    alder_lake_table = build_table_for_arch(gentoo_hosts, "alderlake")
+    if alder_lake_table:
+        display(Markdown("### Intel Alder Lake"))
+        display(HTML(alder_lake_table))
+
+    # Display Intel Coffee Lake hosts (detected as skylake by gcc)
+    coffee_lake_table = build_table_for_arch(gentoo_hosts, "skylake")
+    if coffee_lake_table:
+        display(Markdown("### Intel Coffee Lake"))
+        display(HTML(coffee_lake_table))
+
+    # Display other architectures
+    for arch in sorted(gentoo_hosts["march_native"].unique()):
+        if arch not in ["alderlake", "skylake"]:
+            arch_table = build_table_for_arch(gentoo_hosts, arch)
+            if arch_table:
+                arch_name = _translate_march_to_codename(arch)
+                display(Markdown(f"### {arch_name}"))
+                display(HTML(arch_table))
+```
+
 ## Dataset Summary
 
 ```{python}
 summary = (
-    df.groupby(["os", "os_family", "host"], as_index=False)
+    df.groupby(["distro_label", "os_family", "host"], as_index=False)
     .agg(
         benchmarks=("benchmark", "count"),
         categories=("category", "nunique"),
@@ -44,7 +245,7 @@ summary = (
         pgo_enabled=("pgo_enabled", "max"),
         graphite_enabled=("graphite_enabled", "max"),
     )
-    .sort_values(["os", "host"])
+    .sort_values(["distro_label", "host"])
 )
 summary
 ```
@@ -140,8 +341,188 @@ Interpretation guide:
 - Use per-category sections to confirm whether improvements are broad or concentrated.
 :::
 
-## Next Draft Sections to Expand
+## Per-Category Deep Dives
 
-1. Per-category deep dives (compiler, crypto, ffmpeg, numeric, memory).
-2. Gentoo profile and flag-level narrative with concrete command outputs.
-3. Statistical stability and confidence discussion from hyperfine variance fields.
+```{python}
+from IPython.display import Markdown, display
+
+category_names = sorted(df["category"].dropna().unique())
+
+def describe_series(series, label):
+    stddev = series.std(ddof=1)
+    stddev_text = f"{stddev:.3f}s" if pd.notna(stddev) else "n/a"
+    return (
+        f"{label}: min **{series.min():.3f}s**, max **{series.max():.3f}s**, "
+        f"median **{series.median():.3f}s**, stddev **{stddev_text}**"
+    )
+
+
+def describe_host_outliers(category_frame):
+    host_medians = (
+        category_frame.groupby("host", as_index=False)["mean_s"]
+        .median()
+        .rename(columns={"mean_s": "median_s"})
+    )
+    mean_median = float(host_medians["median_s"].mean())
+    std_median = float(host_medians["median_s"].std(ddof=1))
+    if pd.isna(std_median) or std_median == 0.0:
+        return (
+            f"Across hosts, the mean of host medians is **{mean_median:.3f}s** and no statistically "
+            "meaningful outliers are present."
+        )
+
+    host_medians["zscore"] = (host_medians["median_s"] - mean_median) / std_median
+    outliers = host_medians[host_medians["zscore"].abs() >= 2.0].sort_values("zscore")
+    if outliers.empty:
+        return (
+            f"Across hosts, the mean of host medians is **{mean_median:.3f}s** with stddev "
+            f"**{std_median:.3f}s**; no host is more than 2 standard deviations from that mean."
+        )
+
+    parts = []
+    for _, row in outliers.iterrows():
+        direction = "above" if row["zscore"] > 0 else "below"
+        parts.append(
+            f"`{row['host']}` ({row['median_s']:.3f}s, {row['zscore']:.1f}σ {direction} the mean)"
+        )
+    return (
+        f"Across hosts, the mean of host medians is **{mean_median:.3f}s** with stddev "
+        f"**{std_median:.3f}s**; extreme outliers are {'; '.join(parts)}."
+    )
+
+
+for category in category_names:
+    cat_df = df[df["category"] == category].copy()
+    if cat_df.empty:
+        continue
+
+    cat_df["os_display"] = cat_df.apply(
+        lambda row: row["distro_label"] if str(row.get("distro_label", "")).strip() else row["os"],
+        axis=1,
+    )
+
+    display(Markdown(f"### {category.replace('_', ' ').title()}"))
+    display(
+        Markdown(
+            f"This section analyzes **{category}** across all available operating systems. The table above "
+            "is sorted by **host-level median runtime** for the category, while the winner text below is based "
+            "on the **per-OS median of the raw `mean_s` values**. That means the first row in the table can be "
+            "faster than, slower than, or unrelated to the OS-level winner. Gentoo tuning combinations "
+            "(LTO/PGO/Graphite/CFLAGS) are then compared separately for the same workload."
+        )
+    )
+
+    coverage = (
+        cat_df.groupby(["os_display", "host"], as_index=False)
+        .agg(
+            benchmarks=("benchmark", "nunique"),
+            samples=("mean_s", "count"),
+            median_s=("mean_s", "median"),
+            stddev_s=("stddev_s", "median"),
+        )
+        .sort_values(["median_s", "os_display", "host"], ascending=[True, True, True])
+    )
+    display(Markdown("**Coverage and central tendency**"))
+    display(coverage)
+
+    os_median = (
+        cat_df.groupby("os_display", as_index=False)["mean_s"]
+        .median()
+        .rename(columns={"mean_s": "median_s"})
+        .sort_values("median_s")
+    )
+
+    best_os = os_median.iloc[0]["os_display"]
+    worst_os = os_median.iloc[-1]["os_display"]
+    best_time = float(os_median.iloc[0]["median_s"])
+    worst_time = float(os_median.iloc[-1]["median_s"])
+    spread = (worst_time / best_time) if best_time > 0 else float("nan")
+
+    fig_os = px.bar(
+        os_median,
+        x="os_display",
+        y="median_s",
+        title=f"{category}: Median runtime by OS (lower is better)",
+        labels={"os_display": "Operating system", "median_s": "Median runtime (seconds)"},
+    )
+    fig_os.update_layout(xaxis_tickangle=-30)
+    fig_os
+
+    display(
+        Markdown(
+            f"**Cross-OS interpretation (OS-level median):** `{best_os}` is currently fastest in this category "
+            f"(median **{best_time:.3f}s**), while `{worst_os}` is slowest "
+            f"(median **{worst_time:.3f}s**), a spread of about **{spread:.2f}x**."
+        )
+    )
+    display(
+        Markdown(
+            describe_series(
+                cat_df.loc[cat_df["os_display"] == best_os, "mean_s"],
+                f"Winner OS `{best_os}` sample distribution",
+            )
+        )
+    )
+    display(Markdown(describe_host_outliers(cat_df)))
+
+    gentoo_cat = cat_df[cat_df["os"] == "Gentoo"].copy()
+    if not gentoo_cat.empty:
+        gentoo_cat["tuning_profile"] = (
+            np.where(gentoo_cat["lto_enabled"], "LTO:on", "LTO:off")
+            + " | "
+            + np.where(gentoo_cat["pgo_enabled"], "PGO:on", "PGO:off")
+            + " | "
+            + np.where(gentoo_cat["graphite_enabled"], "Graphite:on", "Graphite:off")
+        )
+
+        fig_gentoo = px.box(
+            gentoo_cat,
+            x="host",
+            y="mean_s",
+            color="tuning_profile",
+            title=f"{category}: Gentoo host-level distribution by tuning profile",
+            labels={"host": "Gentoo host", "mean_s": "Runtime (seconds)"},
+            points="all",
+        )
+        fig_gentoo.update_layout(xaxis_tickangle=-30)
+        fig_gentoo
+
+        tuning_median = (
+            gentoo_cat.groupby("tuning_profile", as_index=False)["mean_s"]
+            .median()
+            .rename(columns={"mean_s": "median_s"})
+            .sort_values("median_s")
+        )
+        best_tuning = tuning_median.iloc[0]["tuning_profile"]
+        best_tuning_time = float(tuning_median.iloc[0]["median_s"])
+        display(
+            Markdown(
+                f"**Gentoo tuning interpretation (host-level median):** Best median result in this category comes "
+                f"from **{best_tuning}** at **{best_tuning_time:.3f}s**. Compare this against compile-time cost "
+                "and maintainability before treating it as a globally optimal profile."
+            )
+        )
+        display(
+            Markdown(
+                describe_series(
+                    gentoo_cat.loc[gentoo_cat["tuning_profile"] == best_tuning, "mean_s"],
+                    f"Winner tuning profile `{best_tuning}` sample distribution",
+                )
+            )
+        )
+    else:
+        display(
+            Markdown(
+                "**Gentoo tuning interpretation:** No Gentoo rows are available in this category for detailed "
+                "tuning-level comparison."
+            )
+        )
+
+    display(
+        Markdown(
+            "**Caveats:** Category-level winners are not universal winners. Hardware differences, package "
+            "versions, microarchitecture behavior, and benchmark command mix can shift results. Use this deep-dive "
+            "together with compile-time and maintenance trade-offs before choosing production defaults."
+        )
+    )
+```
