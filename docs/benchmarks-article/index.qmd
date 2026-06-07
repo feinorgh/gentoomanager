@@ -121,10 +121,51 @@ Gentoo tuning-focused).
 
 The two host machines have the following characteristics:
 
-| Host | Manufacturer | Model | CPU | CPU Gen | GPU | RAM | Disk | Filesystem | Kernel | Virtualization Host CPU | Host OS |
-|------|--------------|-------|-----|---------|-----|-----|------|------------|--------|-------------------------|---------|
-| Coffee Lake | Compulab | Airtop3 | Intel(R) Core(TM) i7-9700 (8) @ 4.70 GHz | 9th Gen | Intel UHD Graphics 630 @ 1.20 GHz [Integrated] | VENGEANCE® LPX 128GB (4 x 32GB) DDR4 | Samsung Electronics Co Ltd SSD 970 EVO/PRO | btrfs | 6.18.33-p1-gentoo-dist | ☕ Coffee Lake | Gentoo (Coffee Lake) |
-| Alder Lake | Intel | NUC12WSHi7 | Intel(R) Core(TM) i7-1260P (16) @ 4.70 GHz | 12th Gen | Intel Iris Xe Graphics @ 1.40 GHz [Integrated] | Kingston FURY KF432S20IB/32 x 2 | Samsung Electronics Co Ltd SSD 990 PRO | btrfs | 6.18.33-p1-gentoo-dist | 🧊 Alder Lake | Gentoo (Alder Lake) |
+<table class="table table-sm intro-host-summary">
+<thead>
+<tr>
+<th>Host</th>
+<th>Manufacturer</th>
+<th>Model</th>
+<th>CPU</th>
+<th>CPU Gen</th>
+<th>GPU</th>
+<th>RAM</th>
+<th>Disk</th>
+<th>Filesystem</th>
+<th>Kernel</th>
+<th class="virt-host-cpu-col">Virtualization Host CPU</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Coffee Lake</td>
+<td>Compulab</td>
+<td>Airtop3</td>
+<td>Intel(R) Core(TM) i7-9700 (8) @ 4.70 GHz</td>
+<td>9th Gen</td>
+<td>Intel UHD Graphics 630 @ 1.20 GHz [Integrated]</td>
+<td>VENGEANCE® LPX 128GB (4 x 32GB) DDR4</td>
+<td>Samsung Electronics Co Ltd SSD 970 EVO/PRO</td>
+<td>btrfs</td>
+<td>6.18.33-p1-gentoo-dist</td>
+<td class="virt-host-cpu-col">☕ Coffee Lake</td>
+</tr>
+<tr>
+<td>Alder Lake</td>
+<td>Intel</td>
+<td>NUC12WSHi7</td>
+<td>Intel(R) Core(TM) i7-1260P (16) @ 4.70 GHz</td>
+<td>12th Gen</td>
+<td>Intel Iris Xe Graphics @ 1.40 GHz [Integrated]</td>
+<td>Kingston FURY KF432S20IB/32 x 2</td>
+<td>Samsung Electronics Co Ltd SSD 990 PRO</td>
+<td>btrfs</td>
+<td>6.18.33-p1-gentoo-dist</td>
+<td class="virt-host-cpu-col">🧊 Alder Lake</td>
+</tr>
+</tbody>
+</table>
 
 
 ```{python}
@@ -141,12 +182,12 @@ gentoo_hosts = (
 )
 
 
-def virtualization_host_fields(march_native):
+def virtualization_host_cpu(march_native):
     if march_native == "alderlake":
-        return "🧊 Alder Lake", "Gentoo (Alder Lake)"
+        return "🧊 Alder Lake"
     if march_native == "skylake":
-        return "☕ Coffee Lake", "Gentoo (Coffee Lake)"
-    return "?", "unknown"
+        return "☕ Coffee Lake"
+    return "?"
 
 def build_table_for_arch(hosts_df, arch_filter):
     """Build an HTML table for a specific architecture."""
@@ -167,7 +208,7 @@ def build_table_for_arch(hosts_df, arch_filter):
     rows_html = []
     for _, row in filtered.iterrows():
         host = row["host"]
-        virt_host, host_os = virtualization_host_fields(row["march_native"])
+        virt_host = virtualization_host_cpu(row["march_native"])
         profile = (row["gentoo_profile"] or "—").replace("default/linux/", "")
         lto = "✓" if row["lto_enabled"] else ""
         pgo = "✓" if row["pgo_enabled"] else ""
@@ -183,7 +224,6 @@ def build_table_for_arch(hosts_df, arch_filter):
             "<tr>"
             f"<td>{escape(str(host))}</td>"
             f"<td>{escape(str(virt_host))}</td>"
-            f"<td>{escape(str(host_os))}</td>"
             f"<td>{escape(str(profile))}</td>"
             f"<td class='opt-col'>{lto}</td>"
             f"<td class='opt-col'>{pgo}</td>"
@@ -196,10 +236,10 @@ def build_table_for_arch(hosts_df, arch_filter):
         "<div class='gentoo-config-table-wrap'>"
         "<table class='table table-sm gentoo-config-table'>"
         "<colgroup>"
-        "<col><col><col><col><col class='opt-col'><col class='opt-col'><col class='opt-col'><col>"
+        "<col><col><col><col class='opt-col'><col class='opt-col'><col class='opt-col'><col>"
         "</colgroup>"
         "<thead><tr>"
-        "<th>Host</th><th>Virtualization Host CPU</th><th>Host OS</th><th>Profile</th>"
+        "<th>Host</th><th>Virtualization Host CPU</th><th>Profile</th>"
         "<th class='opt-col'>LTO</th><th class='opt-col'>PGO</th>"
         "<th class='opt-col'>Graphite</th><th class='cflags-col'>CFLAGS</th>"
         "</tr></thead>"
@@ -408,12 +448,15 @@ for category in category_names:
             "is sorted by **host-level median runtime** for the category, while the winner text below is based "
             "on the **per-OS median of the raw `mean_s` values**. That means the first row in the table can be "
             "faster than, slower than, or unrelated to the OS-level winner. Gentoo tuning combinations "
-            "(LTO/PGO/Graphite/CFLAGS) are then compared separately for the same workload."
+            "(LTO/PGO/Graphite/CFLAGS) are then compared separately for the same workload. The coverage table "
+            "also shows the physical virtualization host CPU so host effects are visible inline."
         )
     )
 
+    cat_df["virt_host_cpu"] = cat_df["march_native"].apply(virtualization_host_cpu)
+
     coverage = (
-        cat_df.groupby(["os_display", "host"], as_index=False)
+        cat_df.groupby(["os_display", "host", "virt_host_cpu"], as_index=False)
         .agg(
             benchmarks=("benchmark", "nunique"),
             samples=("mean_s", "count"),
@@ -422,8 +465,18 @@ for category in category_names:
         )
         .sort_values(["median_s", "os_display", "host"], ascending=[True, True, True])
     )
+    coverage = coverage.rename(
+        columns={
+            "os_display": "Operating System",
+            "virt_host_cpu": "Virtualization Host CPU",
+            "benchmarks": "Benchmarks",
+            "samples": "Samples",
+            "median_s": "Median_s",
+            "stddev_s": "Stddev_s",
+        }
+    )
     display(Markdown("**Coverage and central tendency**"))
-    display(coverage)
+    display(HTML(coverage.to_html(index=False, classes="table table-sm coverage-table")))
 
     os_median = (
         cat_df.groupby("os_display", as_index=False)["mean_s"]
