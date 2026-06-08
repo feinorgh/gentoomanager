@@ -73,13 +73,6 @@ _MARCH_TO_CODENAME = {
     "znver4": "Zen 4",
 }
 
-_ARCHLINUX_VARIANT_LABELS = {
-    "cachyos-": "CachyOS",
-    "manjaro-": "Manjaro Linux",
-    "arch-": "Arch Linux",
-}
-
-
 def _translate_march_to_codename(march: str) -> str:
     """Translate GCC march value to human-readable CPU codename."""
     if not march:
@@ -87,14 +80,9 @@ def _translate_march_to_codename(march: str) -> str:
     return _MARCH_TO_CODENAME.get(march.lower(), march)
 
 
-def _build_os_label(os_name: str, os_version: str, hostname: str = "") -> str:
+def _build_os_label(os_name: str, os_version: str) -> str:
     if not os_name:
         return "unknown"
-    if os_name == "Archlinux":
-        for prefix, label in _ARCHLINUX_VARIANT_LABELS.items():
-            if hostname.startswith(prefix):
-                return f"{label} {os_version}".strip()
-        return f"Arch Linux {os_version}".strip()
     if not os_version:
         return os_name
     return f"{os_name} {os_version}".strip()
@@ -199,10 +187,8 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
                         "host": host_alias,
                         "os": os_name,
                         "os_version": os_version,
-                        "os_label": _build_os_label(os_name, os_version, host_name),
-                        "distro_label": metadata.get(
-                            "distro_label", _build_os_label(os_name, os_version, host_name)
-                        ),
+                        "os_label": _build_os_label(os_name, os_version),
+                        "distro_label": metadata.get("distro_label", _build_os_label(os_name, os_version)),
                         "os_family": metadata.get("os_family", "unknown"),
                         "gentoo_profile": metadata.get("gentoo_profile", ""),
                         "common_flags": metadata.get("common_flags", ""),

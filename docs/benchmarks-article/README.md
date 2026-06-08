@@ -19,6 +19,13 @@ through:
 
 `scripts/benchmarks_article_data.py`
 
+Hostnames are anonymized by default using deterministic Greek mythology aliases.
+To disable anonymization for local drafting:
+
+```bash
+QUARTO_BENCHMARKS_ANONYMIZE=0 quarto preview docs/benchmarks-article
+```
+
 ## GitHub Pages
 
 The workflow `.github/workflows/quarto-pages.yml` renders this project and deploys it through

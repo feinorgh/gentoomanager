@@ -13,6 +13,7 @@ website:
 format:
   html:
     theme: cosmo
+    page-layout: full
     toc: true
     code-fold: show
     code-summary: "Show analysis code"

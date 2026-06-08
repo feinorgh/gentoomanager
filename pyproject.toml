@@ -20,6 +20,12 @@ dev = [
   "tox",
   "tox-ansible",
 ]
+docs = [
+  "jupyter",
+  "pandas",
+  "numpy",
+  "plotly",
+]
 
 [dependency-groups]
 dev = [
@@ -33,6 +39,12 @@ dev = [
   "antsibull-changelog>=0.35.0",
   "tox",
   "tox-ansible",
+]
+docs = [
+  "jupyter",
+  "pandas",
+  "numpy",
+  "plotly",
 ]
 
 [tool.black]

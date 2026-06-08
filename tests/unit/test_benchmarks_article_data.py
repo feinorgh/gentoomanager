@@ -79,7 +79,7 @@ def test_load_benchmark_rows_preserves_distro_label_from_metadata(tmp_path: Path
                 "os": "Archlinux",
                 "os_version": "rolling",
                 "os_family": "Archlinux",
-                "distro_label": "CachyOS rolling",
+                "distro_label": "CachyOS Linux rolling",
                 "versions": [],
             }
         )
@@ -91,7 +91,7 @@ def test_load_benchmark_rows_preserves_distro_label_from_metadata(tmp_path: Path
     rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
 
     assert len(rows) == 1
-    assert rows[0]["distro_label"] == "CachyOS rolling"
+    assert rows[0]["distro_label"] == "CachyOS Linux rolling"
 
 
 def test_load_benchmark_rows_skips_invalid_json_files(tmp_path: Path) -> None:
@@ -158,7 +158,7 @@ def test_load_benchmark_rows_preserves_hosts_when_anonymization_disabled(tmp_pat
     assert rows[0]["host"] == "gentoo-example"
 
 
-def test_load_benchmark_rows_uses_variant_os_labels_for_archlinux_hosts(tmp_path: Path) -> None:
+def test_load_benchmark_rows_uses_raw_os_label_when_distro_label_missing(tmp_path: Path) -> None:
     host_dir = tmp_path / "cachyos-jessica"
     host_dir.mkdir()
     (host_dir / "metadata.json").write_text(
@@ -179,7 +179,8 @@ def test_load_benchmark_rows_uses_variant_os_labels_for_archlinux_hosts(tmp_path
     rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
 
     assert len(rows) == 1
-    assert rows[0]["os_label"] == "CachyOS rolling"
+    assert rows[0]["os_label"] == "Archlinux rolling"
+    assert rows[0]["distro_label"] == "Archlinux rolling"
 
 
 def test_benchmarks_article_data_has_no_shebang() -> None:
