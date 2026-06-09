@@ -83,6 +83,7 @@ provision_benchmarks_packages:
   Suse:
     - gcc
     - clang
+    - make
     - openssl
     - python3
     - rust

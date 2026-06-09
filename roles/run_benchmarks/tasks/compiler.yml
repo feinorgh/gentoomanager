@@ -738,6 +738,23 @@
   failed_when: false
   register: run_benchmarks_multifile_gen
 
+- name: Check make availability for compiler_multifile
+  ansible.builtin.shell:
+    cmd: command -v make >/dev/null 2>&1
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_compiler_multifile_make_check
+  changed_when: false
+  failed_when: run_benchmarks_compiler_multifile_make_check.rc != 0
+  when: run_benchmarks_multifile_gen is not failed
+
+- name: Check resolved compiler command list for compiler_multifile
+  ansible.builtin.assert:
+    that:
+      - run_benchmarks_cc_resolved.stdout_lines | default([]) | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }}: compiler_multifile requires at least one resolved C compiler.
+  when: run_benchmarks_multifile_gen is not failed
+
 - name: Run multi-file C project compile benchmarks
   ansible.builtin.shell:
     cmd: |
@@ -763,7 +780,6 @@
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_large_compile_runs }} \
         --warmup {{ run_benchmarks_large_compile_warmup }} \
-        --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/compiler_multifile.json \
         "${CMDS[@]}"
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
@@ -774,7 +790,34 @@
     - run_benchmarks_cc_resolved.stdout_lines | default([]) | length > 0
   register: run_benchmarks_compiler_multifile_result
   changed_when: false
-  failed_when: false
+  failed_when: run_benchmarks_compiler_multifile_result.rc | default(1) != 0
+
+- name: Validate compiler_multifile exit codes
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_python_cmd }} - <<'PY'
+      import json
+      from pathlib import Path
+
+      results_file = Path("{{ run_benchmarks_work_dir }}/compiler_multifile.json")
+      data = json.loads(results_file.read_text(encoding="utf-8"))
+      non_zero_exit_codes = []
+      for entry in data.get("results", []):
+          for exit_code in entry.get("exit_codes", []):
+              if exit_code != 0:
+                  non_zero_exit_codes.append((entry.get("command", "unknown"), exit_code))
+      if non_zero_exit_codes:
+          formatted = ", ".join(
+              f"{command_name}:{exit_code}" for command_name, exit_code in non_zero_exit_codes
+          )
+          raise SystemExit(f"non-zero exit codes in compiler_multifile: {formatted}")
+      PY
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  changed_when: false
+  when:
+    - run_benchmarks_compiler_multifile_result is not skipped
+    - run_benchmarks_compiler_multifile_result.rc | default(1) == 0
 
 - name: Warn on compiler_multifile benchmark failure
   ansible.builtin.debug:

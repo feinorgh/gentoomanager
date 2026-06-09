@@ -8,6 +8,7 @@
     - hyperfine
     - gcc
     - clang
+    - gnumake
     - openssl
     - python3
     - rustc
