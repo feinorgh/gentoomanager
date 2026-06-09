@@ -83,6 +83,7 @@ import plotly.express as px
 sys.path.insert(0, str(Path("../../scripts").resolve()))
 from benchmarks_article_catalog import get_category_meta
 from benchmarks_article_data import load_benchmark_rows
+from benchmarks_cflags_analysis import enrich_gentoo_cflags_dimensions
 
 anonymize_hosts = os.getenv("QUARTO_BENCHMARKS_ANONYMIZE", "1").lower() not in {"0", "false", "no"}
 rows = load_benchmark_rows(Path("../../benchmarks/results"), anonymize_hosts=anonymize_hosts)
@@ -621,4 +622,157 @@ for category in category_names:
             "maintenance trade-offs before choosing production defaults."
         )
     )
+```
+
+## Gentoo CFLAGS Deep-Dive
+
+The analysis below focuses specifically on Gentoo hosts, breaking down the impact of key CFLAGS
+dimensions (`-march` class, optimization level, LTO, PGO, and Graphite) on performance across
+all benchmark categories. This section enriches the benchmark data with normalized CFLAGS parsing
+to extract these dimensions from the original metadata.
+
+```{python}
+# Enrich Gentoo dataframe with normalized CFLAGS dimensions
+gentoo_df = df[df["os"] == "Gentoo"].copy()
+if not gentoo_df.empty:
+    gentoo_df = enrich_gentoo_cflags_dimensions(gentoo_df)
+else:
+    # Still initialize columns even if empty (for consistency)
+    gentoo_df["march_class"] = "unknown"
+    gentoo_df["opt_level"] = "unknown"
+    gentoo_df["lto_mode"] = "unknown"
+    gentoo_df["pgo_mode"] = "unknown"
+    gentoo_df["graphite_mode"] = "unknown"
+
+display(Markdown("### CFLAGS Coverage by Host and Dimension"))
+
+# Create coverage table: hosts × dimension values
+if not gentoo_df.empty:
+    coverage_parts = []
+    for host in sorted(gentoo_df["host"].unique()):
+        host_data = gentoo_df[gentoo_df["host"] == host]
+        coverage_parts.append({
+            "Host": host,
+            "march_class": ", ".join(sorted(set(host_data["march_class"].dropna().unique()))),
+            "opt_level": ", ".join(sorted(set(host_data["opt_level"].dropna().unique()))),
+            "lto_mode": ", ".join(sorted(set(host_data["lto_mode"].dropna().unique()))),
+            "pgo_mode": ", ".join(sorted(set(host_data["pgo_mode"].dropna().unique()))),
+            "graphite_mode": ", ".join(sorted(set(host_data["graphite_mode"].dropna().unique()))),
+        })
+    
+    coverage_table = pd.DataFrame(coverage_parts)
+    display(Markdown("**Host × Dimension Coverage:**"))
+    display(HTML(coverage_table.to_html(index=False, classes="table table-sm coverage-table")))
+    
+    display(Markdown("### Aggregate Effect Charts by Dimension"))
+    
+    # For each dimension, show median benchmark results by dimension value
+    dimensions = ["march_class", "opt_level", "lto_mode", "pgo_mode", "graphite_mode"]
+    
+    for dim in dimensions:
+        dim_display_name = dim.replace("_", " ").title()
+        display(Markdown(f"#### {dim_display_name}"))
+        
+        # Aggregate medians across all samples by dimension value
+        dim_medians = (
+            gentoo_df.groupby(dim, as_index=False)["mean_s"]
+            .median()
+            .rename(columns={"mean_s": "median_s"})
+            .sort_values("median_s")
+        )
+        dim_medians = dim_medians.rename(columns={dim: "Value"})
+        
+        if not dim_medians.empty:
+            fig = px.bar(
+                dim_medians,
+                x="Value",
+                y="median_s",
+                title=f"Median benchmark time by {dim_display_name}",
+                labels={"median_s": "Median time (seconds)", "Value": dim_display_name},
+            )
+            fig.update_layout(xaxis_tickangle=-30)
+            display(fig)
+            
+            # Add brief interpretation
+            best_val = dim_medians.iloc[0]["Value"]
+            best_time = float(dim_medians.iloc[0]["median_s"])
+            worst_val = dim_medians.iloc[-1]["Value"]
+            worst_time = float(dim_medians.iloc[-1]["median_s"])
+            spread = (worst_time / best_time) if best_time > 0 else 1.0
+            
+            display(Markdown(
+                f"**{dim_display_name} Summary:** Best performing value is "
+                f"`{best_val}` (median **{best_time:.3f}s**), "
+                f"while `{worst_val}` is slowest (median **{worst_time:.3f}s**), "
+                f"a spread of approximately **{spread:.2f}×**."
+            ))
+        else:
+            display(Markdown(f"*No data available for {dim_display_name}.*"))
+    
+    display(Markdown("### Per-Category Dimension Effects"))
+    
+    # Create heatmap showing which dimensions most affect which categories
+    display(Markdown(
+        "The heatmap below shows the spread (ratio of slowest to fastest) for each "
+        "dimension within each category. Higher values indicate greater impact of that dimension on that category."
+    ))
+    
+    heatmap_data = []
+    categories = sorted(gentoo_df["category"].dropna().unique())
+    
+    for category in categories:
+        cat_data = gentoo_df[gentoo_df["category"] == category]
+        for dim in dimensions:
+            dim_groups = cat_data.groupby(dim)["mean_s"].median()
+            if len(dim_groups) > 1:
+                min_val = dim_groups.min()
+                max_val = dim_groups.max()
+                spread = (max_val / min_val) if min_val > 0 else 1.0
+            else:
+                spread = 1.0
+            heatmap_data.append({
+                "Category": category.replace("_", " ").title(),
+                "Dimension": dim.replace("_", " ").title(),
+                "Spread": spread
+            })
+    
+    if heatmap_data:
+        heatmap_df = pd.DataFrame(heatmap_data)
+        pivot_heatmap = heatmap_df.pivot(index="Category", columns="Dimension", values="Spread")
+        
+        fig = px.imshow(
+            pivot_heatmap,
+            aspect="auto",
+            color_continuous_scale="YlOrRd",
+            labels={"color": "Spread (max/min)"},
+            title="CFLAGS Dimension Impact on Benchmark Categories (spread ratio)",
+        )
+        display(fig)
+    
+    display(Markdown("### Interpretation and Caveats"))
+    
+    display(Markdown("""
+::: {.callout-warning}
+**Key Caveats:**
+
+- **Confounders:** The dimension values are not orthogonal—hosts with `-march=native` may also differ in 
+  optimization level, LTO, PGO, or Graphite settings. This analysis shows *association*, not causation.
+  
+- **Stability:** Benchmark results are influenced by hardware (CPU, cache, thermal throttling), system load,
+  kernel version, package versions, and other factors beyond CFLAGS.
+  
+- **Limited sample size:** If a host uses only one value for a dimension (e.g., all samples have `lto_mode=off`),
+  that dimension cannot be evaluated within that host.
+  
+- **Category bias:** Some categories may be more sensitive to certain optimizations (e.g., crypto to LTO),
+  while others show little variation.
+  
+- **Interaction effects:** The combined effect of multiple flags may not be the sum of individual effects.
+
+**Conclusion:** Use these results to form hypotheses about which dimensions *might* affect your workload,
+then validate by profiling on representative hardware with controlled experiments.
+:::
+"""))
+else:
+    display(Markdown("*No Gentoo data available for CFLAGS deep-dive analysis.*"))
 ```
