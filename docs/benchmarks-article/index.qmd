@@ -81,6 +81,7 @@ import pandas as pd
 import plotly.express as px
 
 sys.path.insert(0, str(Path("../../scripts").resolve()))
+from benchmarks_article_catalog import get_category_meta
 from benchmarks_article_data import load_benchmark_rows
 
 anonymize_hosts = os.getenv("QUARTO_BENCHMARKS_ANONYMIZE", "1").lower() not in {"0", "false", "no"}
@@ -383,16 +384,26 @@ Interpretation guide:
 
 ## Per-Category Deep Dives
 
+Each category section starts with a description of what the workload measures and why it matters,
+followed by a cross-OS comparison chart, a Gentoo-specific tuning chart, and qualitative
+interpretation. **All stored metrics are wall-clock times in seconds** (from Hyperfine), so
+**lower is always better** for every chart below.  Where a benchmark conceptually measures
+*throughput* (e.g. crypto MB/s, memory bandwidth), the note in each section explains the
+relationship between the stored time and the underlying throughput concept.
+
 ```{python}
-from IPython.display import Markdown, display
+from IPython.display import HTML, Markdown, display
 
 category_names = sorted(df["category"].dropna().unique())
 
-def describe_series(series, label):
+
+def describe_series(series, label, lower_is_better: bool = True):
     stddev = series.std(ddof=1)
     stddev_text = f"{stddev:.3f}s" if pd.notna(stddev) else "n/a"
+    best_val = series.min() if lower_is_better else series.max()
+    worst_val = series.max() if lower_is_better else series.min()
     return (
-        f"{label}: min **{series.min():.3f}s**, max **{series.max():.3f}s**, "
+        f"{label}: best **{best_val:.3f}s**, worst **{worst_val:.3f}s**, "
         f"median **{series.median():.3f}s**, stddev **{stddev_text}**"
     )
 
@@ -407,8 +418,8 @@ def describe_host_outliers(category_frame):
     std_median = float(host_medians["median_s"].std(ddof=1))
     if pd.isna(std_median) or std_median == 0.0:
         return (
-            f"Across hosts, the mean of host medians is **{mean_median:.3f}s** and no statistically "
-            "meaningful outliers are present."
+            f"Across hosts, the mean of host medians is **{mean_median:.3f}s** and no "
+            "statistically meaningful outliers are present."
         )
 
     host_medians["zscore"] = (host_medians["median_s"] - mean_median) / std_median
@@ -416,40 +427,50 @@ def describe_host_outliers(category_frame):
     if outliers.empty:
         return (
             f"Across hosts, the mean of host medians is **{mean_median:.3f}s** with stddev "
-            f"**{std_median:.3f}s**; no host is more than 2 standard deviations from that mean."
+            f"**{std_median:.3f}s**; no host is more than 2 standard deviations from the mean."
         )
 
     parts = []
-    for _, row in outliers.iterrows():
+    for _idx, row in outliers.iterrows():
         direction = "above" if row["zscore"] > 0 else "below"
         parts.append(
-            f"`{row['host']}` ({row['median_s']:.3f}s, {row['zscore']:.1f}σ {direction} the mean)"
+            f"`{row['host']}` ({row['median_s']:.3f}s, {row['zscore']:.1f}σ {direction} mean)"
         )
     return (
         f"Across hosts, the mean of host medians is **{mean_median:.3f}s** with stddev "
-        f"**{std_median:.3f}s**; extreme outliers are {'; '.join(parts)}."
+        f"**{std_median:.3f}s**; extreme outliers: {'; '.join(parts)}."
     )
 
 
 for category in category_names:
     cat_df = df[df["category"] == category].copy()
     if cat_df.empty:
+        display(Markdown(f"### {category.replace('_', ' ').title()}"))
+        display(Markdown("*No data available for this category.*"))
         continue
+
+    meta = get_category_meta(category)
 
     cat_df["os_display"] = cat_df.apply(
         lambda row: row["distro_label"] if str(row.get("distro_label", "")).strip() else row["os"],
         axis=1,
     )
 
-    display(Markdown(f"### {category.replace('_', ' ').title()}"))
+    display(Markdown(f"### {meta.title}"))
+
+    # Workload description from catalog
+    display(Markdown(
+        f"::: {{.callout-note}}\n"
+        f"**What this measures:** {meta.description}\n"
+        f":::"
+    ))
+
     display(
         Markdown(
-            f"This section analyzes **{category}** across all available operating systems. The table above "
-            "is sorted by **host-level median runtime** for the category, while the winner text below is based "
-            "on the **per-OS median of the raw `mean_s` values**. That means the first row in the table can be "
-            "faster than, slower than, or unrelated to the OS-level winner. Gentoo tuning combinations "
-            "(LTO/PGO/Graphite/CFLAGS) are then compared separately for the same workload. The coverage table "
-            "also shows the physical virtualization host CPU so host effects are visible inline."
+            f"Metric direction: **{meta.direction_note}** (stored as wall-clock seconds). "
+            "The coverage table below is sorted by host-level median. The OS-level winner is "
+            "determined by per-OS median of raw `mean_s` values. The virtualization host CPU "
+            "is shown inline so hardware-sourced effects remain visible."
         )
     )
 
@@ -463,7 +484,10 @@ for category in category_names:
             median_s=("mean_s", "median"),
             stddev_s=("stddev_s", "median"),
         )
-        .sort_values(["median_s", "os_display", "host"], ascending=[True, True, True])
+        .sort_values(
+            ["median_s", "os_display", "host"],
+            ascending=[meta.sort_ascending, True, True],
+        )
     )
     coverage = coverage.rename(
         columns={
@@ -482,37 +506,44 @@ for category in category_names:
         cat_df.groupby("os_display", as_index=False)["mean_s"]
         .median()
         .rename(columns={"mean_s": "median_s"})
-        .sort_values("median_s")
+        .sort_values("median_s", ascending=meta.sort_ascending)
     )
 
+    # For time metrics: best=lowest (iloc[0]), worst=highest (iloc[-1])
+    # For rate metrics: best=highest (iloc[0] after desc sort), worst=lowest (iloc[-1])
     best_os = os_median.iloc[0]["os_display"]
     worst_os = os_median.iloc[-1]["os_display"]
-    best_time = float(os_median.iloc[0]["median_s"])
-    worst_time = float(os_median.iloc[-1]["median_s"])
-    spread = (worst_time / best_time) if best_time > 0 else float("nan")
+    best_val = float(os_median.iloc[0]["median_s"])
+    worst_val = float(os_median.iloc[-1]["median_s"])
+    if meta.lower_is_better:
+        spread = (worst_val / best_val) if best_val > 0 else float("nan")
+    else:
+        spread = (best_val / worst_val) if worst_val > 0 else float("nan")
 
     fig_os = px.bar(
         os_median,
         x="os_display",
         y="median_s",
-        title=f"{category}: Median runtime by OS (lower is better)",
-        labels={"os_display": "Operating system", "median_s": "Median runtime (seconds)"},
+        title=f"{meta.title}: Median {meta.unit_label} by OS ({meta.direction_note})",
+        labels={"os_display": "Operating system", "median_s": meta.y_axis_label},
     )
     fig_os.update_layout(xaxis_tickangle=-30)
-    fig_os
+    display(fig_os)
 
     display(
         Markdown(
-            f"**Cross-OS interpretation (OS-level median):** `{best_os}` is currently fastest in this category "
-            f"(median **{best_time:.3f}s**), while `{worst_os}` is slowest "
-            f"(median **{worst_time:.3f}s**), a spread of about **{spread:.2f}x**."
+            f"**Cross-OS interpretation ({meta.direction_note}, OS-level median):** "
+            f"`{best_os}` is currently {meta.winner_label} in this category "
+            f"(median **{best_val:.3f}s**), while `{worst_os}` is at the other end "
+            f"(median **{worst_val:.3f}s**), a spread of about **{spread:.2f}×**."
         )
     )
     display(
         Markdown(
             describe_series(
                 cat_df.loc[cat_df["os_display"] == best_os, "mean_s"],
-                f"Winner OS `{best_os}` sample distribution",
+                f"{meta.winner_label.capitalize()} OS `{best_os}` sample distribution",
+                lower_is_better=meta.lower_is_better,
             )
         )
     )
@@ -533,49 +564,59 @@ for category in category_names:
             x="host",
             y="mean_s",
             color="tuning_profile",
-            title=f"{category}: Gentoo host-level distribution by tuning profile",
-            labels={"host": "Gentoo host", "mean_s": "Runtime (seconds)"},
+            title=f"{meta.title}: Gentoo host distribution by tuning profile ({meta.direction_note})",
+            labels={"host": "Gentoo host", "mean_s": meta.y_axis_label},
             points="all",
         )
         fig_gentoo.update_layout(xaxis_tickangle=-30)
-        fig_gentoo
+        display(fig_gentoo)
 
         tuning_median = (
             gentoo_cat.groupby("tuning_profile", as_index=False)["mean_s"]
             .median()
             .rename(columns={"mean_s": "median_s"})
-            .sort_values("median_s")
+            .sort_values("median_s", ascending=meta.sort_ascending)
         )
         best_tuning = tuning_median.iloc[0]["tuning_profile"]
-        best_tuning_time = float(tuning_median.iloc[0]["median_s"])
+        best_tuning_val = float(tuning_median.iloc[0]["median_s"])
         display(
             Markdown(
-                f"**Gentoo tuning interpretation (host-level median):** Best median result in this category comes "
-                f"from **{best_tuning}** at **{best_tuning_time:.3f}s**. Compare this against compile-time cost "
-                "and maintainability before treating it as a globally optimal profile."
+                f"**Gentoo tuning interpretation ({meta.direction_note}, host-level median):** "
+                f"The {meta.winner_label} result in this category comes from "
+                f"**{best_tuning}** at **{best_tuning_val:.3f}s**. Compare this against "
+                "compile-time cost and maintainability before treating it as globally optimal."
             )
         )
         display(
             Markdown(
                 describe_series(
                     gentoo_cat.loc[gentoo_cat["tuning_profile"] == best_tuning, "mean_s"],
-                    f"Winner tuning profile `{best_tuning}` sample distribution",
+                    f"{meta.winner_label.capitalize()} tuning `{best_tuning}` sample distribution",
+                    lower_is_better=meta.lower_is_better,
                 )
             )
         )
     else:
         display(
             Markdown(
-                "**Gentoo tuning interpretation:** No Gentoo rows are available in this category for detailed "
-                "tuning-level comparison."
+                "**Gentoo tuning interpretation:** No Gentoo rows are available in this "
+                "category for detailed tuning-level comparison."
             )
         )
 
+    # Analysis hint from catalog
+    display(Markdown(
+        f"::: {{.callout-tip}}\n"
+        f"**Analysis hint:** {meta.analysis_hint}\n"
+        f":::"
+    ))
+
     display(
         Markdown(
-            "**Caveats:** Category-level winners are not universal winners. Hardware differences, package "
-            "versions, microarchitecture behavior, and benchmark command mix can shift results. Use this deep-dive "
-            "together with compile-time and maintenance trade-offs before choosing production defaults."
+            "**Caveats:** Category-level winners are not universal winners. Hardware "
+            "differences, package versions, microarchitecture behavior, and benchmark command "
+            "mix can shift results. Use this deep-dive together with compile-time and "
+            "maintenance trade-offs before choosing production defaults."
         )
     )
 ```

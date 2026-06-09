@@ -1,0 +1,6 @@
+minor_changes:
+  - "docs/benchmarks-article: each category now shows a qualitative workload description,
+    metric-direction callout (lower is better / higher is better), chart labels driven
+    by catalog metadata, and a per-category analysis hint callout."
+  - "scripts/benchmarks_article_catalog: new helper module providing title, description,
+    metric kind, unit label, y-axis label, and analysis hint for every benchmark category."
