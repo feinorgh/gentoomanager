@@ -68,7 +68,7 @@ def parse_opt_level(flag_text: str) -> str:
     # Split by -Wl to exclude linker-passed flags
     compiler_flags = flag_text.split("-wl")[0]
 
-    matches = re.findall(r"-o[0-3szf]|fast", compiler_flags)
+    matches = re.findall(r"-o[0-3szf]", compiler_flags)
     if not matches:
         return "unknown"
     if len(matches) > 1:
