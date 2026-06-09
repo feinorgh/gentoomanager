@@ -62,6 +62,14 @@ class TestParseOptLevel:
         """No -O flag returns 'unknown'."""
         assert cflags_parser.parse_opt_level("-pipe") == "unknown"
 
+    def test_parse_opt_level_ofast(self) -> None:
+        """Parse -Ofast optimization level."""
+        assert cflags_parser.parse_opt_level("-Ofast -pipe") == "Ofast"
+
+    def test_parse_opt_level_ofast_conflict(self) -> None:
+        """Multiple -O flags with -Ofast return 'other'."""
+        assert cflags_parser.parse_opt_level("-O2 -Ofast") == "other"
+
 
 class TestParseLtoMode:
     """Tests for parse_lto_mode function."""
