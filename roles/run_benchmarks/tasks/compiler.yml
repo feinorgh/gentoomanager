@@ -818,13 +818,3 @@
   when:
     - run_benchmarks_compiler_multifile_result is not skipped
     - run_benchmarks_compiler_multifile_result.rc | default(1) == 0
-
-- name: Warn on compiler_multifile benchmark failure
-  ansible.builtin.debug:
-    msg: >-
-      [WARN] {{ inventory_hostname }}: compiler_multifile benchmark exited
-      rc={{ run_benchmarks_compiler_multifile_result.rc }}.
-      {{ run_benchmarks_compiler_multifile_result.stderr | default('') | truncate(300) | trim }}
-  when:
-    - run_benchmarks_compiler_multifile_result is not skipped
-    - run_benchmarks_compiler_multifile_result.rc | default(0) != 0

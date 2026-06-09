@@ -25,6 +25,7 @@ provision_benchmarks_packages:
   RedHat:
     - gcc
     - clang
+    - make
     - openssl
     - python3
     - rust

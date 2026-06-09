@@ -23,6 +23,11 @@ def test_suse_packages_include_make() -> None:
     assert "make" in defaults["provision_benchmarks_packages"]["Suse"]
 
 
+def test_redhat_packages_include_make() -> None:
+    defaults = _read_yaml("roles/provision_benchmarks/defaults/main.yml")
+    assert "make" in defaults["provision_benchmarks_packages"]["RedHat"]
+
+
 def test_nixos_packages_include_gnumake() -> None:
     tasks = _read_yaml("roles/provision_benchmarks/tasks/os/nixos.yml")
     install_task = next(
@@ -52,3 +57,8 @@ def test_compiler_multifile_has_preflight_and_exitcode_validation() -> None:
     content = _read("roles/run_benchmarks/tasks/compiler.yml")
     assert "Check make availability for compiler_multifile" in content
     assert "Validate compiler_multifile exit codes" in content
+
+
+def test_compiler_multifile_has_no_warning_task() -> None:
+    content = _read("roles/run_benchmarks/tasks/compiler.yml")
+    assert "Warn on compiler_multifile benchmark failure" not in content
