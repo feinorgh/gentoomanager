@@ -32,7 +32,7 @@ def _check_pgo_in_host_vars(hostname: str, host_vars_dir: Path) -> bool:
     # Check package_use
     package_use = data.get("package_use", {})
     if isinstance(package_use, dict):
-        for package, flags in package_use.items():
+        for _package, flags in package_use.items():
             if isinstance(flags, list) and any("pgo" in str(flag) for flag in flags):
                 return True
 

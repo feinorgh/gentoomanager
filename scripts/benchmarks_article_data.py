@@ -73,6 +73,7 @@ _MARCH_TO_CODENAME = {
     "znver4": "Zen 4",
 }
 
+
 def _translate_march_to_codename(march: str) -> str:
     """Translate GCC march value to human-readable CPU codename."""
     if not march:
@@ -169,6 +170,7 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
         host_alias = host_alias_map.get(host_name, host_name)
         os_name = str(metadata.get("os", "unknown"))
         os_version = str(metadata.get("os_version", ""))
+        distro_label = metadata.get("distro_label", _build_os_label(os_name, os_version))
 
         for result_file in sorted(host_dir.glob("*.json")):
             if result_file.name in {"metadata.json", "benchmark_notes.json"}:
@@ -188,7 +190,7 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
                         "os": os_name,
                         "os_version": os_version,
                         "os_label": _build_os_label(os_name, os_version),
-                        "distro_label": metadata.get("distro_label", _build_os_label(os_name, os_version)),
+                        "distro_label": distro_label,
                         "os_family": metadata.get("os_family", "unknown"),
                         "gentoo_profile": metadata.get("gentoo_profile", ""),
                         "common_flags": metadata.get("common_flags", ""),

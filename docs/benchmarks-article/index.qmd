@@ -397,18 +397,18 @@ from IPython.display import HTML, Markdown, display
 category_names = sorted(df["category"].dropna().unique())
 
 
-def describe_series(series, label, lower_is_better: bool = True):
+def describe_series(series, label, unit_label: str, lower_is_better: bool = True):
     stddev = series.std(ddof=1)
-    stddev_text = f"{stddev:.3f}s" if pd.notna(stddev) else "n/a"
+    stddev_text = f"{stddev:.3f}{unit_label}" if pd.notna(stddev) else "n/a"
     best_val = series.min() if lower_is_better else series.max()
     worst_val = series.max() if lower_is_better else series.min()
     return (
-        f"{label}: best **{best_val:.3f}s**, worst **{worst_val:.3f}s**, "
-        f"median **{series.median():.3f}s**, stddev **{stddev_text}**"
+        f"{label}: best **{best_val:.3f}{unit_label}**, worst **{worst_val:.3f}{unit_label}**, "
+        f"median **{series.median():.3f}{unit_label}**, stddev **{stddev_text}**"
     )
 
 
-def describe_host_outliers(category_frame):
+def describe_host_outliers(category_frame, unit_label: str):
     host_medians = (
         category_frame.groupby("host", as_index=False)["mean_s"]
         .median()
@@ -418,7 +418,7 @@ def describe_host_outliers(category_frame):
     std_median = float(host_medians["median_s"].std(ddof=1))
     if pd.isna(std_median) or std_median == 0.0:
         return (
-            f"Across hosts, the mean of host medians is **{mean_median:.3f}s** and no "
+            f"Across hosts, the mean of host medians is **{mean_median:.3f}{unit_label}** and no "
             "statistically meaningful outliers are present."
         )
 
@@ -426,19 +426,19 @@ def describe_host_outliers(category_frame):
     outliers = host_medians[host_medians["zscore"].abs() >= 2.0].sort_values("zscore")
     if outliers.empty:
         return (
-            f"Across hosts, the mean of host medians is **{mean_median:.3f}s** with stddev "
-            f"**{std_median:.3f}s**; no host is more than 2 standard deviations from the mean."
+            f"Across hosts, the mean of host medians is **{mean_median:.3f}{unit_label}** with stddev "
+            f"**{std_median:.3f}{unit_label}**; no host is more than 2 standard deviations from the mean."
         )
 
     parts = []
     for _idx, row in outliers.iterrows():
         direction = "above" if row["zscore"] > 0 else "below"
         parts.append(
-            f"`{row['host']}` ({row['median_s']:.3f}s, {row['zscore']:.1f}σ {direction} mean)"
+            f"`{row['host']}` ({row['median_s']:.3f}{unit_label}, {row['zscore']:.1f}σ {direction} mean)"
         )
     return (
-        f"Across hosts, the mean of host medians is **{mean_median:.3f}s** with stddev "
-        f"**{std_median:.3f}s**; extreme outliers: {'; '.join(parts)}."
+        f"Across hosts, the mean of host medians is **{mean_median:.3f}{unit_label}** with stddev "
+        f"**{std_median:.3f}{unit_label}**; extreme outliers: {'; '.join(parts)}."
     )
 
 
@@ -534,8 +534,8 @@ for category in category_names:
         Markdown(
             f"**Cross-OS interpretation ({meta.direction_note}, OS-level median):** "
             f"`{best_os}` is currently {meta.winner_label} in this category "
-            f"(median **{best_val:.3f}s**), while `{worst_os}` is at the other end "
-            f"(median **{worst_val:.3f}s**), a spread of about **{spread:.2f}×**."
+            f"(median **{best_val:.3f}{meta.unit_label}**), while `{worst_os}` is at the other end "
+            f"(median **{worst_val:.3f}{meta.unit_label}**), a spread of about **{spread:.2f}×**."
         )
     )
     display(
@@ -543,11 +543,12 @@ for category in category_names:
             describe_series(
                 cat_df.loc[cat_df["os_display"] == best_os, "mean_s"],
                 f"{meta.winner_label.capitalize()} OS `{best_os}` sample distribution",
+                meta.unit_label,
                 lower_is_better=meta.lower_is_better,
             )
         )
     )
-    display(Markdown(describe_host_outliers(cat_df)))
+    display(Markdown(describe_host_outliers(cat_df, meta.unit_label)))
 
     gentoo_cat = cat_df[cat_df["os"] == "Gentoo"].copy()
     if not gentoo_cat.empty:
@@ -583,7 +584,7 @@ for category in category_names:
             Markdown(
                 f"**Gentoo tuning interpretation ({meta.direction_note}, host-level median):** "
                 f"The {meta.winner_label} result in this category comes from "
-                f"**{best_tuning}** at **{best_tuning_val:.3f}s**. Compare this against "
+                f"**{best_tuning}** at **{best_tuning_val:.3f}{meta.unit_label}**. Compare this against "
                 "compile-time cost and maintainability before treating it as globally optimal."
             )
         )
@@ -592,6 +593,7 @@ for category in category_names:
                 describe_series(
                     gentoo_cat.loc[gentoo_cat["tuning_profile"] == best_tuning, "mean_s"],
                     f"{meta.winner_label.capitalize()} tuning `{best_tuning}` sample distribution",
+                    meta.unit_label,
                     lower_is_better=meta.lower_is_better,
                 )
             )
