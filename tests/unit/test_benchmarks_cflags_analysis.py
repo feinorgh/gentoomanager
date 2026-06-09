@@ -70,6 +70,14 @@ class TestParseOptLevel:
         """Multiple -O flags with -Ofast return 'other'."""
         assert cflags_parser.parse_opt_level("-O2 -Ofast") == "other"
 
+    def test_parse_opt_level_wl_at_start(self) -> None:
+        """Handle -Wl linker flags at string start."""
+        assert cflags_parser.parse_opt_level("-Wl,-O2") == "O2"
+
+    def test_parse_opt_level_wl_conflict(self) -> None:
+        """Detect conflict when -Wl contains -O flag and compiler has different one."""
+        assert cflags_parser.parse_opt_level("-Wl,-O3 -O2") == "other"
+
 
 class TestParseLtoMode:
     """Tests for parse_lto_mode function."""
@@ -162,7 +170,7 @@ def sample_df() -> pd.DataFrame:
                 "-march=x86-64",
                 "-march=native",
             ],
-            "ldflags": ["-Wl,-O1", "-Wl,-O1", "", ""],
+            "ldflags": ["-Wl,-as-needed", "-Wl,-as-needed", "", ""],
             "benchmark_name": ["test1", "test2", "test3", "test4"],
         }
     )

@@ -65,8 +65,8 @@ def parse_opt_level(flag_text: str) -> str:
     flag_text = flag_text.lower()
 
     # Find all -O flags that are NOT part of linker flags (-Wl,...)
-    # Split by -Wl to exclude linker-passed flags
-    compiler_flags = flag_text.split("-wl")[0]
+    # Remove -Wl, prefix but keep any flags after it using regex
+    compiler_flags = re.sub(r"-wl,", "", flag_text, flags=re.IGNORECASE)
 
     matches = re.findall(r"-o[0-3szf]", compiler_flags)
     if not matches:
