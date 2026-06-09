@@ -14,20 +14,38 @@ def _read(path: str) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
+def _read_yaml(path: str) -> dict | list:
+    return yaml.safe_load(_read(path))
+
+
 def test_suse_packages_include_make() -> None:
-    defaults = yaml.safe_load(_read("roles/provision_benchmarks/defaults/main.yml"))
+    defaults = _read_yaml("roles/provision_benchmarks/defaults/main.yml")
     assert "make" in defaults["provision_benchmarks_packages"]["Suse"]
 
 
 def test_nixos_packages_include_gnumake() -> None:
-    content = _read("roles/provision_benchmarks/tasks/os/nixos.yml")
-    assert "gnumake" in content
+    tasks = _read_yaml("roles/provision_benchmarks/tasks/os/nixos.yml")
+    install_task = next(
+        (task for task in tasks if task.get("name") == "Install benchmark dependencies (NixOS)"),
+        None,
+    )
+    assert install_task is not None, "Expected NixOS install task not found"
+    assert "gnumake" in install_task.get("loop", [])
 
 
 def test_compiler_multifile_block_has_no_ignore_failure() -> None:
-    content = _read("roles/run_benchmarks/tasks/compiler.yml")
-    multifile_section = content.split("# Multi-file C project compile benchmark", maxsplit=1)[1]
-    assert "--ignore-failure" not in multifile_section
+    tasks = _read_yaml("roles/run_benchmarks/tasks/compiler.yml")
+    multifile_task = next(
+        (
+            task
+            for task in tasks
+            if task.get("name") == "Run multi-file C project compile benchmarks"
+        ),
+        None,
+    )
+    assert multifile_task is not None, "Expected compiler_multifile run task not found"
+    command = multifile_task.get("ansible.builtin.shell", {}).get("cmd", "")
+    assert "--ignore-failure" not in command
 
 
 def test_compiler_multifile_has_preflight_and_exitcode_validation() -> None:
