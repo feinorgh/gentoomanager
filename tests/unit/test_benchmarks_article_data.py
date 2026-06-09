@@ -190,3 +190,8 @@ def test_benchmarks_article_data_has_no_shebang() -> None:
         "scripts/benchmarks_article_data.py must not have a shebang "
         "to satisfy ansible-test sanity for non-module files"
     )
+
+
+def test_article_includes_cflags_deep_dive_heading() -> None:
+    qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
+    assert "## Gentoo CFLAGS Deep-Dive" in qmd
