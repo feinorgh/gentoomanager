@@ -84,7 +84,6 @@ def parse_opt_level(flag_text: str) -> str:
         "-os": "Os",
         "-oz": "Oz",
         "-of": "Ofast",
-        "fast": "Ofast",
     }
     return opt_map.get(opt, "other")
 
