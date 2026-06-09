@@ -1,0 +1,3 @@
+minor_changes:
+  - "docs/benchmarks-article: added a Gentoo CFLAGS deep-dive covering -march=native vs generic, optimization-level groups, and LTO/PGO/Graphite effect comparisons."
+  - "scripts/benchmarks_cflags_analysis: added normalized CFLAGS-dimension parsing for article-side analysis."
