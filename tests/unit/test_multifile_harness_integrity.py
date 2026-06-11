@@ -58,6 +58,12 @@ def test_compiler_multifile_has_preflight_and_exitcode_validation() -> None:
     assert "Validate compiler_multifile exit codes" in content
 
 
+def test_multifile_makefile_template_is_portable() -> None:
+    content = _read("roles/run_benchmarks/files/generate_multifile_bench.py")
+    assert "SRCS    := $(wildcard mod_*.c) main.c" not in content
+    assert "OBJS    := $(SRCS:.c=.o)" not in content
+
+
 def test_compiler_multifile_has_no_warning_task() -> None:
     content = _read("roles/run_benchmarks/tasks/compiler.yml")
     assert "Warn on compiler_multifile benchmark failure" not in content
