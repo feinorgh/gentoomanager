@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import yaml
@@ -15,6 +16,15 @@ def _read(path: str) -> str:
 
 def _read_yaml(path: str) -> dict | list:
     return yaml.safe_load(_read(path))
+
+
+def _load_multifile_generator():
+    module_path = REPO_ROOT / "roles/run_benchmarks/files/generate_multifile_bench.py"
+    spec = importlib.util.spec_from_file_location("generate_multifile_bench", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_suse_packages_include_make() -> None:
@@ -59,9 +69,15 @@ def test_compiler_multifile_has_preflight_and_exitcode_validation() -> None:
 
 
 def test_multifile_makefile_template_is_portable() -> None:
-    content = _read("roles/run_benchmarks/files/generate_multifile_bench.py")
-    assert "SRCS    := $(wildcard mod_*.c) main.c" not in content
-    assert "OBJS    := $(SRCS:.c=.o)" not in content
+    module = _load_multifile_generator()
+    makefile = module._render_makefile(3)
+
+    assert "SRCS    = mod_00.c mod_01.c mod_02.c main.c" in makefile
+    assert "OBJS    = mod_00.o mod_01.o mod_02.o main.o" in makefile
+    assert "$(wildcard mod_*.c)" not in makefile
+    assert "$(SRCS:.c=.o)" not in makefile
+    assert "$(BIN): $(OBJS)" in makefile
+    assert "\t$(CC) $(CFLAGS) -o $@ $(OBJS) -lm" in makefile
 
 
 def test_compiler_multifile_has_no_warning_task() -> None:
