@@ -22,20 +22,24 @@ from pathlib import Path
 # Makefile template
 # ---------------------------------------------------------------------------
 
-MAKEFILE = """\
+
+def _render_makefile(module_count: int) -> str:
+    srcs = [f"mod_{module_index:02d}.c" for module_index in range(module_count)] + ["main.c"]
+    objs = [f"mod_{module_index:02d}.o" for module_index in range(module_count)] + ["main.o"]
+    return f"""\
 # Auto-generated Makefile for multi-file compilation benchmark.
 CC      ?= gcc
 CFLAGS  ?= -O2
-SRCS    := $(wildcard mod_*.c) main.c
-OBJS    := $(SRCS:.c=.o)
-BIN     := multifile_bench
+SRCS    = {" ".join(srcs)}
+OBJS    = {" ".join(objs)}
+BIN     = multifile_bench
 
 .PHONY: all clean
 
 all: $(BIN)
 
 $(BIN): $(OBJS)
-\t$(CC) $(CFLAGS) -o $@ $^ -lm
+\t$(CC) $(CFLAGS) -o $@ $(OBJS) -lm
 
 %.o: %.c
 \t$(CC) $(CFLAGS) -c -o $@ $<
@@ -291,7 +295,7 @@ def gen_main(n_modules: int, proj_dir: Path) -> None:
 
 def generate(proj_dir: Path, n_modules: int) -> None:
     proj_dir.mkdir(parents=True, exist_ok=True)
-    (proj_dir / "Makefile").write_text(MAKEFILE)
+    (proj_dir / "Makefile").write_text(_render_makefile(n_modules))
     for n in range(n_modules):
         gen_module(n, proj_dir)
     gen_main(n_modules, proj_dir)

@@ -1,0 +1,2 @@
+bugfixes:
+  - "roles/run_benchmarks: generate a portable compiler_multifile Makefile so BSD and Linux use the same build graph without GNU make-only syntax."
