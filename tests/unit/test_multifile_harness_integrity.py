@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,9 +19,9 @@ def _read_yaml(path: str) -> dict | list:
     return yaml.safe_load(_read(path))
 
 
-def _load_multifile_generator():
-    module_path = REPO_ROOT / "roles/run_benchmarks/files/generate_multifile_bench.py"
-    spec = importlib.util.spec_from_file_location("generate_multifile_bench", module_path)
+def _load_python_module(relative_path: str, module_name: str):
+    module_path = REPO_ROOT / relative_path
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -68,16 +69,35 @@ def test_compiler_multifile_has_preflight_and_exitcode_validation() -> None:
     assert "Validate compiler_multifile exit codes" in content
 
 
-def test_multifile_makefile_template_is_portable() -> None:
-    module = _load_multifile_generator()
+@pytest.mark.parametrize(
+    ("generator_path", "module_name"),
+    [
+        ("roles/run_benchmarks/files/generate_multifile_bench.py", "roles_multifile_generator"),
+        ("scripts/generate_multifile_bench.py", "scripts_multifile_generator"),
+    ],
+)
+def test_multifile_makefile_template_is_portable(generator_path: str, module_name: str) -> None:
+    module = _load_python_module(generator_path, module_name)
     makefile = module._render_makefile(3)
 
     assert "SRCS    = mod_00.c mod_01.c mod_02.c main.c" in makefile
     assert "OBJS    = mod_00.o mod_01.o mod_02.o main.o" in makefile
-    assert "$(wildcard mod_*.c)" not in makefile
-    assert "$(SRCS:.c=.o)" not in makefile
     assert "$(BIN): $(OBJS)" in makefile
     assert "\t$(CC) $(CFLAGS) -o $@ $(OBJS) -lm" in makefile
+
+
+@pytest.mark.parametrize(
+    "generator_path",
+    [
+        "roles/run_benchmarks/files/generate_multifile_bench.py",
+        "scripts/generate_multifile_bench.py",
+    ],
+)
+def test_multifile_generators_do_not_use_gnu_make_only_patterns(generator_path: str) -> None:
+    content = _read(generator_path)
+
+    assert "$(wildcard mod_*.c)" not in content
+    assert "$(SRCS:.c=.o)" not in content
 
 
 def test_compiler_multifile_has_no_warning_task() -> None:
