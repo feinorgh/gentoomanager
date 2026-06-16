@@ -19,19 +19,14 @@ def _require_hosts_module():
         ) from exc
 
 
-def test_build_host_detail_href_uses_hosts_relative_path() -> None:
+def test_host_link_markdown_wraps_label_and_href() -> None:
     bah = _require_hosts_module()
-    assert bah.build_host_detail_href("Zeus") == "hosts/Zeus.html"
+    assert bah.host_link_markdown("Zeus") == "[Zeus](hosts/Zeus.html)"
 
 
-def test_render_host_markdown_link_wraps_label_and_href() -> None:
+def test_host_link_markdown_trims_surrounding_whitespace() -> None:
     bah = _require_hosts_module()
-    assert bah.render_host_markdown_link("Zeus") == "[Zeus](hosts/Zeus.html)"
-
-
-def test_render_host_markdown_link_trims_surrounding_whitespace() -> None:
-    bah = _require_hosts_module()
-    assert bah.render_host_markdown_link("  Hera  ") == "[Hera](hosts/Hera.html)"
+    assert bah.host_link_markdown("  Hera  ") == "[Hera](hosts/Hera.html)"
 
 
 def test_parse_versions_ignores_entries_without_equals() -> None:
