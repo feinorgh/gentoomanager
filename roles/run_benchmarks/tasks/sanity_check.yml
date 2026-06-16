@@ -279,6 +279,7 @@
       distro_notes: "{{ run_benchmarks_sanity_distro_notes | default([]) }}"
       normalization_notes: "{{ run_benchmarks_sanity_normalization_notes | default([]) }}"
       platform_notes: "{{ run_benchmarks_sanity_platform_notes | default([]) }}"
+      benchmark_failures: []
       category_skip_reasons:
         disk: "{{ run_benchmarks_disk_skip_reason | default('') }}"
   changed_when: false

@@ -531,6 +531,101 @@
           loop_control:
             label: "{{ item.path | basename }}"
 
+      rescue:
+        - name: Record benchmark suite failure artifact
+          ansible.builtin.copy:
+            dest: "{{ run_benchmarks_effective_work_dir }}/benchmark_failure.json"
+            content: "{{ _bench_failure | to_nice_json }}"
+            mode: "0644"
+          vars:
+            _bench_failure:
+              host: "{{ inventory_hostname }}"
+              failed_task: "{{ ansible_failed_task.name | default('unknown') }}"
+              failed_action: "{{ ansible_failed_task.action | default('unknown') }}"
+              rc: "{{ ansible_failed_result.rc | default(-1) }}"
+              message: "{{ ansible_failed_result.msg | default('') }}"
+              command: "{{ ansible_failed_result.cmd | default('') }}"
+              stdout: "{{ ansible_failed_result.stdout | default('') }}"
+              stderr: "{{ ansible_failed_result.stderr | default('') }}"
+          changed_when: false
+          failed_when: false
+
+        - name: Append benchmark failure to benchmark notes
+          ansible.builtin.shell:
+            cmd: |
+              set -eo pipefail
+              python3 - <<'PY'
+              import json
+              from pathlib import Path
+
+              notes_path = Path("{{ run_benchmarks_effective_work_dir }}/benchmark_notes.json")
+              failure = {{ {
+                  'host': inventory_hostname,
+                  'failed_task': ansible_failed_task.name | default('unknown'),
+                  'failed_action': ansible_failed_task.action | default('unknown'),
+                  'rc': ansible_failed_result.rc | default(-1),
+                  'message': ansible_failed_result.msg | default(''),
+                  'command': ansible_failed_result.cmd | default(''),
+                  'stdout': ansible_failed_result.stdout | default(''),
+                  'stderr': ansible_failed_result.stderr | default('')
+                } | to_json }}
+
+              if notes_path.exists():
+                  notes = json.loads(notes_path.read_text(encoding="utf-8"))
+              else:
+                  notes = {}
+              failures = notes.setdefault("benchmark_failures", [])
+              failures.append(failure)
+              notes_path.write_text(json.dumps(notes, indent=2, sort_keys=True), encoding="utf-8")
+              PY
+            executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+          changed_when: false
+          failed_when: false
+
+        - name: Find partial benchmark result files after failure (Unix)
+          ansible.builtin.find:
+            paths: "{{ run_benchmarks_effective_work_dir }}"
+            patterns: "*.json"
+          register: _bench_result_files
+          when: ansible_os_family | default('') != 'Windows'
+
+        - name: Find partial benchmark result files after failure (Windows)
+          ansible.windows.win_find:
+            paths: "{{ run_benchmarks_effective_work_dir }}"
+            patterns: "*.json"
+          register: _bench_result_files_win
+          when: ansible_os_family | default('') == 'Windows'
+
+        - name: Unify partial result file list after failure
+          ansible.builtin.set_fact:
+            _bench_all_result_files: >-
+              {{ (_bench_result_files.files | default([]))
+                 + (_bench_result_files_win.files | default([])) }}
+
+        - name: Create local results directory after failure
+          ansible.builtin.file:
+            path: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
+            state: directory
+            mode: "0755"
+          delegate_to: localhost
+          become: false
+
+        - name: Fetch partial benchmark results to controller after failure
+          ansible.builtin.fetch:
+            src: "{{ item.path }}"
+            dest: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}/"
+            flat: true
+          loop: "{{ _bench_all_result_files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+        - name: Re-raise benchmark suite failure
+          ansible.builtin.fail:
+            msg: >-
+              {{ inventory_hostname }} benchmark run failed in task
+              "{{ ansible_failed_task.name | default('unknown') }}":
+              {{ ansible_failed_result.msg | default('no message') }}
+
       # ── Always restore RAM, even on failure ─────────────────────────
       always:
         # Remove all fixture and result files from the remote work directory

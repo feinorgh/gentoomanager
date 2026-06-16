@@ -196,6 +196,7 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
                         "common_flags": metadata.get("common_flags", ""),
                         "cflags": metadata.get("cflags", ""),
                         "ldflags": metadata.get("ldflags", ""),
+                        "cpu_model": metadata.get("cpu_model", "unknown"),
                         "march_native": metadata.get("march_native", ""),
                         "pgo_enabled": metadata.get("pgo_enabled", False),
                         "tool_versions": versions,

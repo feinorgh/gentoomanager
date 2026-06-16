@@ -39,6 +39,7 @@ def test_load_benchmark_rows_reads_metadata_and_hyperfine_json(tmp_path: Path) -
                 "common_flags": "-O2 -pipe -flto=auto",
                 "cflags": "-O2 -pipe",
                 "ldflags": "-Wl,-O1",
+                "cpu_model": "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
                 "versions": [
                     "ffmpeg=ffmpeg version 8.1",
                     "gcc=gcc (Gentoo) 15.2.1",
@@ -66,6 +67,7 @@ def test_load_benchmark_rows_reads_metadata_and_hyperfine_json(tmp_path: Path) -
     assert all(row["os_version"] == "" for row in rows)
     assert all(row["os_label"] == "Gentoo" for row in rows)
     assert all(row["lto_enabled"] is True for row in rows)
+    assert all(row["cpu_model"] == "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz" for row in rows)
     assert all(row["tool_versions"]["ffmpeg"].startswith("ffmpeg version") for row in rows)
 
 

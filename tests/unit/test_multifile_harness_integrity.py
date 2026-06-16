@@ -100,6 +100,13 @@ def test_multifile_generators_do_not_use_gnu_make_only_patterns(generator_path: 
     assert "$(SRCS:.c=.o)" not in content
 
 
+def test_compiler_multifile_captures_failure_diagnostics() -> None:
+    content = _read("roles/run_benchmarks/tasks/compiler.yml")
+    assert "Diagnose compiler_multifile benchmark failure" in content
+    assert "Write compiler_multifile failure artifact" in content
+    assert "compiler_multifile_failure.json" in content
+
+
 def test_compiler_multifile_has_no_warning_task() -> None:
     content = _read("roles/run_benchmarks/tasks/compiler.yml")
     assert "Warn on compiler_multifile benchmark failure" not in content

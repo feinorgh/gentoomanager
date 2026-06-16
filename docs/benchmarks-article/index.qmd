@@ -184,12 +184,21 @@ gentoo_hosts = (
 )
 
 
-def virtualization_host_cpu(march_native):
+def virtualization_host_cpu(march_native, cpu_model=""):
+    march_native = str(march_native or "").strip().lower()
+    cpu_model = str(cpu_model or "").strip()
+    cpu_model_lower = cpu_model.lower()
     if march_native == "alderlake":
         return "🧊 Alder Lake"
     if march_native == "skylake":
         return "☕ Coffee Lake"
-    return "?"
+    if "1260p" in cpu_model_lower or "12th gen" in cpu_model_lower or "alder" in cpu_model_lower:
+        return "🧊 Alder Lake"
+    if "9700" in cpu_model_lower or "coffee lake" in cpu_model_lower:
+        return "☕ Coffee Lake"
+    if cpu_model and cpu_model_lower != "unknown":
+        return cpu_model
+    return "—"
 
 def build_table_for_arch(hosts_df, arch_filter):
     """Build an HTML table for a specific architecture."""
@@ -475,7 +484,10 @@ for category in category_names:
         )
     )
 
-    cat_df["virt_host_cpu"] = cat_df["march_native"].apply(virtualization_host_cpu)
+    cat_df["virt_host_cpu"] = cat_df.apply(
+        lambda row: virtualization_host_cpu(row["march_native"], row.get("cpu_model", "")),
+        axis=1,
+    )
 
     coverage = (
         cat_df.groupby(["os_display", "host", "virt_host_cpu"], as_index=False)

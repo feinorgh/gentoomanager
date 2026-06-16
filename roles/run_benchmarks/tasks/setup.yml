@@ -309,6 +309,15 @@
   changed_when: false
   failed_when: false
 
+- name: Get hardware CPU model on BSD
+  ansible.builtin.command:
+    cmd: sysctl -n hw.model
+  register: run_benchmarks_cpu_model_raw
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_system | default('') in ['FreeBSD', 'OpenBSD']
+
 # ---------------------------------------------------------------------------
 # libc variant and version (glibc vs musl — significant perf difference)
 # ---------------------------------------------------------------------------
@@ -673,7 +682,15 @@
           distro_label
           | default(ansible_distribution | default('unknown'))
         }}
-      cpu_model: "{{ ansible_processor[2] | default('unknown') }}"
+      cpu_model: >-
+        {{
+          (run_benchmarks_cpu_model_raw.stdout | default('') | trim)
+          if (
+            run_benchmarks_cpu_model_raw is defined
+            and (run_benchmarks_cpu_model_raw.stdout | default('') | trim)
+          )
+          else (ansible_processor[2] | default('unknown'))
+        }}
       cpu_cores: "{{ ansible_processor_vcpus | default(1) }}"
       cpu_mhz: >-
         {{
