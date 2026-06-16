@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -187,6 +188,11 @@ def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
     """Generate host detail ``.qmd`` pages from ``metadata.json`` files."""
     results_root = Path(results_dir)
     output_root = Path(output_dir)
+    if not results_root.exists():
+        raise FileNotFoundError(f"'{results_root}' does not exist")
+    if not results_root.is_dir():
+        raise NotADirectoryError(f"'{results_root}' is not a directory")
+
     output_root.mkdir(parents=True, exist_ok=True)
 
     generated_pages: list[Path] = []
@@ -255,7 +261,17 @@ def main() -> int:
     if results_dir is None or output_dir is None:
         parser.error("provide both --results and --output (or two positional paths)")
 
-    pages = generate_host_pages(results_dir, output_dir)
+    try:
+        pages = generate_host_pages(results_dir, output_dir)
+    except (FileNotFoundError, NotADirectoryError, PermissionError, OSError) as exc:
+        print(
+            "Error: Unable to read results directory "
+            f"'{results_dir}': {exc}. "
+            "Use --results with a readable benchmarks results directory.",
+            file=sys.stderr,
+        )
+        return 1
+
     print(f"Generated {len(pages)} host detail page(s) in {output_dir}")
     return 0
 

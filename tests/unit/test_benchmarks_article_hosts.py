@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -89,3 +91,39 @@ def test_generate_host_pages_raises_on_filename_collision(tmp_path: Path) -> Non
         assert "hera_01.qmd" in str(exc)
     else:
         raise AssertionError("Expected explicit filename collision error")
+
+
+def _run_hosts_script(args: list[str]) -> subprocess.CompletedProcess[str]:
+    script_path = REPO_ROOT / "scripts" / "benchmarks_article_hosts.py"
+    return subprocess.run(
+        [sys.executable, str(script_path), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_hosts_script_reports_missing_results_dir_without_traceback(tmp_path: Path) -> None:
+    output_dir = tmp_path / "hosts"
+    missing_dir = tmp_path / "does-not-exist"
+
+    completed = _run_hosts_script(["--results", str(missing_dir), "--output", str(output_dir)])
+
+    assert completed.returncode != 0
+    assert "Unable to read results directory" in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
+def test_hosts_script_reports_unreadable_results_dir_without_traceback(tmp_path: Path) -> None:
+    output_dir = tmp_path / "hosts"
+    unreadable_dir = tmp_path / "unreadable-results"
+    unreadable_dir.mkdir()
+    unreadable_dir.chmod(0)
+    try:
+        completed = _run_hosts_script(["--results", str(unreadable_dir), "--output", str(output_dir)])
+    finally:
+        unreadable_dir.chmod(0o755)
+
+    assert completed.returncode != 0
+    assert "Unable to read results directory" in completed.stderr
+    assert "Traceback" not in completed.stderr

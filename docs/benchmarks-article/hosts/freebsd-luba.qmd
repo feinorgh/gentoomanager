@@ -1,0 +1,98 @@
+---
+title: "Host details: freebsd-luba"
+format: html
+---
+
+## Identity and platform
+
+| Field | Value |
+| --- | --- |
+| Hostname | freebsd-luba |
+| Operating system | FreeBSD |
+| OS version | 15.0 |
+| OS family | FreeBSD |
+
+## Hardware and runtime
+
+| Field | Value |
+| --- | --- |
+| CPU model | unknown |
+| -march=native | n/a |
+
+## Build and tuning
+
+| Field | Value |
+| --- | --- |
+| Gentoo profile | n/a |
+| Common flags | n/a |
+| CFLAGS | n/a |
+| LDFLAGS | n/a |
+
+## Tool versions
+
+| Tool | Version |
+| --- | --- |
+| 7z | n/a |
+| bash | GNU bash, version 5.3.9(0)-release (amd64-portbld-freebsd15.0) |
+| clang | FreeBSD clang version 19.1.7 (https://github.com/llvm/llvm-project.git llvmorg-19.1.7-0-gcd708029e0b2) |
+| ffmpeg | ffmpeg version 8.1.1 Copyright (c) 2000-2026 the FFmpeg developers |
+| gcc | FreeBSD clang version 19.1.7 (https://github.com/llvm/llvm-project.git llvmorg-19.1.7-0-gcd708029e0b2) |
+| gimp | GNU Image Manipulation Program version 3.2.0 |
+| go | go version go1.25.10 freebsd/amd64 |
+| imagemagick | Version: ImageMagick 7.1.2-23 Q16-HDRI amd64 24055 https://imagemagick.org |
+| inkscape | not installed |
+| kernel | 15.0-RELEASE-p8 |
+| lld | not installed |
+| node | not installed |
+| numpy | 2.4.6 |
+| openssl | OpenSSL 3.5.4 30 Sep 2025 (Library: OpenSSL 3.5.4 30 Sep 2025) |
+| perl | This is perl 5, version 42, subversion 2 (v5.42.2) built for amd64-freebsd-thread-multi |
+| python | Python 3.14.5 |
+| ruby | ruby 3.4.9 (2026-03-11 revision 76cca827ab) +PRISM [amd64-freebsd15] |
+| rustc | rustc 1.95.0 (59807616e 2026-04-14) (built from a source tarball) |
+| sqlite3 | 3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e64751alt1 (64-bit) |
+
+## Full metadata dump
+
+| Key | Value |
+| --- | --- |
+| calibration_mips | 6805 |
+| cflags | n/a |
+| common_flags | n/a |
+| cpu_cache_l3 | n/a |
+| cpu_cores | 1 |
+| cpu_flags_x86 | n/a |
+| cpu_governor | unknown |
+| cpu_mhz | 0 |
+| cpu_model | unknown |
+| cxxflags | n/a |
+| distro_label | FreeBSD |
+| features | n/a |
+| filesystem | unknown |
+| gcc_config | default-pie=no, default-ssp=no, lto-support=no |
+| gentoo_profile | n/a |
+| hostname | freebsd-luba |
+| io_scheduler | unknown |
+| is_hypervisor | False |
+| ldflags | n/a |
+| libc_variant | unknown |
+| libc_version | n/a |
+| makeflags | n/a |
+| makeopts | n/a |
+| march_native | n/a |
+| mem_speed | n/a |
+| mitigations | unknown |
+| normalization_mode | platform-default |
+| normalization_reduced | False |
+| numa_nodes | 1 |
+| os | FreeBSD |
+| os_family | FreeBSD |
+| os_version | 15.0 |
+| preempt_model | unknown |
+| rustflags | n/a |
+| scheduler | unknown |
+| smt_active | unknown |
+| swap_enabled | False |
+| thp | unknown |
+| versions | gcc=FreeBSD clang version 19.1.7 (https://github.com/llvm/llvm-project.git llvmorg-19.1.7-0-gcd708029e0b2), clang=FreeBSD clang version 19.1.7 (https://github.com/llvm/llvm-project.git llvmorg-19.1.7-0-gcd708029e0b2), rustc=rustc 1.95.0 (59807616e 2026-04-14) (built from a source tarball), go=go version go1.25.10 freebsd/amd64, python=Python 3.14.5, ffmpeg=ffmpeg version 8.1.1 Copyright (c) 2000-2026 the FFmpeg developers, openssl=OpenSSL 3.5.4 30 Sep 2025 (Library: OpenSSL 3.5.4 30 Sep 2025), kernel=15.0-RELEASE-p8, bash=GNU bash, version 5.3.9(0)-release (amd64-portbld-freebsd15.0), 7z=, imagemagick=Version: ImageMagick 7.1.2-23 Q16-HDRI amd64 24055 https://imagemagick.org, lld=not installed, sqlite3=3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e64751alt1 (64-bit), numpy=2.4.6, gimp=GNU Image Manipulation Program version 3.2.0, inkscape=not installed, perl=This is perl 5, version 42, subversion 2 (v5.42.2) built for amd64-freebsd-thread-multi, ruby=ruby 3.4.9 (2026-03-11 revision 76cca827ab) +PRISM [amd64-freebsd15], node=not installed |
+| virt_type | unknown |
