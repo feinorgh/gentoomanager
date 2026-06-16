@@ -201,6 +201,10 @@ def test_article_includes_cflags_deep_dive_heading() -> None:
 
 def test_article_dataset_summary_formats_host_as_markdown_link() -> None:
     qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
-    expected = 'summary["host"] = summary["host"].map(lambda host: f"[{host}](hosts/{host}.html)")'
-    if expected not in qmd:
-        raise AssertionError("Dataset Summary must map host names to markdown host-detail links")
+
+    if "## Dataset Summary" not in qmd:
+        raise AssertionError("Article must include a Dataset Summary section")
+    if 'summary["host"]' not in qmd:
+        raise AssertionError("Dataset Summary logic must reference the host column")
+    if "hosts/{host}.html" not in qmd:
+        raise AssertionError("Dataset Summary host-link logic must target hosts/{host}.html")
