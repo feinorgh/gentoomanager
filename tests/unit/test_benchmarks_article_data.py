@@ -163,6 +163,64 @@ def test_load_benchmark_rows_preserves_hosts_when_anonymization_disabled(tmp_pat
     assert rows[0]["host_slug"] == "gentoo-example"
 
 
+def test_load_benchmark_rows_uses_shared_slug_rules_for_separators(tmp_path: Path) -> None:
+    host_dir = tmp_path / "host-from-dir"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "hostname": "gentoo/edge\\01",
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "versions": [],
+            }
+        )
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo/edge\\01"
+    assert rows[0]["host_slug"] == "gentoo_edge_01"
+
+
+def test_load_benchmark_rows_falls_back_to_dir_name_for_blank_hostname(tmp_path: Path) -> None:
+    host_dir = tmp_path / "gentoo-from-dir"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps({"hostname": "  ", "os": "Gentoo", "os_family": "Gentoo", "versions": []})
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo-from-dir"
+    assert rows[0]["host_slug"] == "gentoo-from-dir"
+
+
+def test_load_benchmark_rows_falls_back_to_dir_name_for_none_hostname(tmp_path: Path) -> None:
+    host_dir = tmp_path / "gentoo-from-none"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps({"hostname": None, "os": "Gentoo", "os_family": "Gentoo", "versions": []})
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo-from-none"
+    assert rows[0]["host_slug"] == "gentoo-from-none"
+
+
 def test_load_benchmark_rows_uses_raw_os_label_when_distro_label_missing(tmp_path: Path) -> None:
     host_dir = tmp_path / "cachyos-jessica"
     host_dir.mkdir()

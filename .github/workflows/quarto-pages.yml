@@ -9,6 +9,7 @@ on: # yamllint disable-line rule:truthy
     paths:
       - "docs/benchmarks-article/**"
       - "scripts/benchmarks_article_data.py"
+      - "scripts/benchmarks_article_hosts.py"
       - "benchmarks/results/**"
 
 permissions:
@@ -39,6 +40,16 @@ jobs:
 
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Generate host detail pages
+        run: |
+          if [ -d benchmarks/results ]; then
+            python scripts/benchmarks_article_hosts.py \
+              --results benchmarks/results \
+              --output docs/benchmarks-article/hosts
+          else
+            echo "benchmarks/results not found; skipping host-page generation and using committed host pages."
+          fi
 
       - name: Render Quarto project
         uses: quarto-dev/quarto-actions/render@v2

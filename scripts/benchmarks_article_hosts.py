@@ -32,6 +32,17 @@ def _safe_host_filename(hostname: str) -> str:
     return hostname.replace("/", "_").replace("\\", "_")
 
 
+def canonical_host_slug(hostname: Any, fallback: str = "") -> str:
+    """Build the canonical host slug used for page filenames and links."""
+    preferred = _stringify(hostname)
+    if preferred:
+        return _safe_host_filename(preferred)
+    fallback_label = _stringify(fallback)
+    if fallback_label:
+        return _safe_host_filename(fallback_label)
+    return _safe_host_filename(NA_VALUE)
+
+
 def _yaml_quoted(value: str) -> str:
     return json.dumps(value)
 
@@ -45,7 +56,7 @@ def host_link_markdown(hostname: str) -> str:
     label = _stringify(hostname)
     if not label:
         label = NA_VALUE
-    file_stem = _safe_host_filename(label)
+    file_stem = canonical_host_slug(label)
     return f"[{label}](hosts/{file_stem}.html)"
 
 
@@ -213,7 +224,7 @@ def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
 
         host_name = _stringify(metadata.get("hostname", "")) or host_dir.name
         normalized = normalize_metadata({**metadata, "hostname": host_name})
-        safe_name = _safe_host_filename(host_name)
+        safe_name = canonical_host_slug(host_name, fallback=host_dir.name)
         output_path = output_root / f"{safe_name}.qmd"
 
         previous_host = output_to_host_map.get(output_path.name)
