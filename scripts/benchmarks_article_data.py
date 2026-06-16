@@ -99,6 +99,10 @@ def _parse_versions(values: list[str]) -> dict[str, str]:
     return versions
 
 
+def _safe_host_slug(hostname: str) -> str:
+    return hostname.replace("/", "_").replace("\\", "_")
+
+
 def extract_gentoo_tuning(metadata: dict[str, Any]) -> dict[str, bool]:
     """Extract booleans describing Gentoo tuning choices from metadata flags."""
     flag_text = " ".join(
@@ -167,6 +171,7 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
         versions = _parse_versions(list(metadata.get("versions", [])))
         tuning = extract_gentoo_tuning(metadata)
         host_name = str(metadata.get("hostname", host_dir.name))
+        host_slug = _safe_host_slug(host_name)
         host_alias = host_alias_map.get(host_name, host_name)
         os_name = str(metadata.get("os", "unknown"))
         os_version = str(metadata.get("os_version", ""))
@@ -187,6 +192,7 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
                 rows.append(
                     {
                         "host": host_alias,
+                        "host_slug": host_slug,
                         "os": os_name,
                         "os_version": os_version,
                         "os_label": _build_os_label(os_name, os_version),

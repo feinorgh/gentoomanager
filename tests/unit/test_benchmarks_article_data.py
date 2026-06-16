@@ -136,8 +136,10 @@ def test_load_benchmark_rows_anonymizes_hosts_by_default(tmp_path: Path) -> None
 
     rows = bad.load_benchmark_rows(tmp_path)
     hosts = sorted({row["host"] for row in rows})
+    host_slugs = sorted({row["host_slug"] for row in rows})
 
     assert hosts == ["Hera", "Zeus"]
+    assert host_slugs == ["host-alpha", "host-zeta"]
     assert "host-alpha" not in hosts
     assert "host-zeta" not in hosts
 
@@ -158,6 +160,7 @@ def test_load_benchmark_rows_preserves_hosts_when_anonymization_disabled(tmp_pat
 
     assert len(rows) == 1
     assert rows[0]["host"] == "gentoo-example"
+    assert rows[0]["host_slug"] == "gentoo-example"
 
 
 def test_load_benchmark_rows_uses_raw_os_label_when_distro_label_missing(tmp_path: Path) -> None:
@@ -206,5 +209,7 @@ def test_article_dataset_summary_formats_host_as_markdown_link() -> None:
         raise AssertionError("Article must include a Dataset Summary section")
     if 'summary["host"]' not in qmd:
         raise AssertionError("Dataset Summary logic must reference the host column")
-    if "hosts/{host}.html" not in qmd:
-        raise AssertionError("Dataset Summary host-link logic must target hosts/{host}.html")
+    if 'summary["host_slug"]' not in qmd:
+        raise AssertionError("Dataset Summary logic must reference the canonical host_slug column")
+    if "hosts/{host_slug}.html" not in qmd:
+        raise AssertionError("Dataset Summary host-link logic must target hosts/{host_slug}.html")
