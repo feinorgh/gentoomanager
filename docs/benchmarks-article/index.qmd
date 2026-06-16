@@ -298,7 +298,22 @@ summary = (
     )
     .sort_values(["distro_label", "host"])
 )
-summary
+summary["host"] = summary["host"].map(str).str.strip()
+summary["host"] = summary["host"].replace("", "n/a")
+summary["host_filename"] = (
+    summary["host"].str.replace("/", "_", regex=False).str.replace("\\", "_", regex=False)
+)
+
+def _host_markdown_link(row):
+    label = row["host"]
+    host = row["host_filename"]
+    return f"[{label}](hosts/{host}.html)"
+
+
+summary["host"] = summary.apply(_host_markdown_link, axis=1)
+from IPython.display import Markdown, display
+
+display(Markdown(summary.drop(columns=["host_filename"]).to_markdown(index=False)))
 ```
 
 ::: {.gentoo-note}

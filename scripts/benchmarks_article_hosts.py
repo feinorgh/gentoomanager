@@ -234,14 +234,29 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate host detail Quarto pages from benchmark metadata"
     )
-    parser.add_argument("results_dir", type=Path, help="Path to benchmarks/results directory")
     parser.add_argument(
-        "output_dir", type=Path, help="Path to docs/benchmarks-article/hosts output dir"
+        "--results",
+        dest="results_dir_opt",
+        type=Path,
+        help="Path to benchmarks/results directory",
     )
+    parser.add_argument(
+        "--output",
+        dest="output_dir_opt",
+        type=Path,
+        help="Path to docs/benchmarks-article/hosts output dir",
+    )
+    parser.add_argument("results_dir", type=Path, nargs="?", help=argparse.SUPPRESS)
+    parser.add_argument("output_dir", type=Path, nargs="?", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    pages = generate_host_pages(args.results_dir, args.output_dir)
-    print(f"Generated {len(pages)} host detail page(s) in {args.output_dir}")
+    results_dir = args.results_dir_opt or args.results_dir
+    output_dir = args.output_dir_opt or args.output_dir
+    if results_dir is None or output_dir is None:
+        parser.error("provide both --results and --output (or two positional paths)")
+
+    pages = generate_host_pages(results_dir, output_dir)
+    print(f"Generated {len(pages)} host detail page(s) in {output_dir}")
     return 0
 
 
