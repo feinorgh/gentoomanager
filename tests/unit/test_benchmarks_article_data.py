@@ -120,6 +120,47 @@ def test_load_benchmark_rows_skips_invalid_json_files(tmp_path: Path) -> None:
     assert rows[0]["category"] == "crypto_hash"
 
 
+def test_load_benchmark_rows_excludes_non_successful_hyperfine_results(tmp_path: Path) -> None:
+    host_dir = tmp_path / "arch-example"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "hostname": "arch-example",
+                "os": "Archlinux",
+                "os_family": "Archlinux",
+                "versions": [],
+            }
+        )
+    )
+    (host_dir / "compiler_multifile.json").write_text(
+        json.dumps(
+            {
+                "results": [
+                    {
+                        "command": "gcc-j1",
+                        "mean": 0.001,
+                        "stddev": 0.0,
+                        "exit_codes": [127, 127],
+                    },
+                    {
+                        "command": "gcc-jN",
+                        "mean": 0.42,
+                        "stddev": 0.02,
+                        "exit_codes": [0, 0],
+                    },
+                ]
+            }
+        )
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["benchmark"] == "gcc-jN"
+    assert rows[0]["mean_s"] == 0.42
+
+
 def test_load_benchmark_rows_anonymizes_hosts_by_default(tmp_path: Path) -> None:
     host_a = tmp_path / "host-zeta"
     host_b = tmp_path / "host-alpha"
@@ -197,3 +238,9 @@ def test_benchmarks_article_data_has_no_shebang() -> None:
 def test_article_includes_cflags_deep_dive_heading() -> None:
     qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
     assert "## Gentoo CFLAGS Deep-Dive" in qmd
+
+
+def test_article_marks_non_gentoo_tuning_as_unknown_in_dataset_summary() -> None:
+    qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
+    assert "n/a (unknown)" in qmd
+    assert 'summary["os_family"] == "Gentoo"' in qmd

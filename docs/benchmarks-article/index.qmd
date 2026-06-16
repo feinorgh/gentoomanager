@@ -298,6 +298,12 @@ summary = (
     )
     .sort_values(["distro_label", "host"])
 )
+for tuning_column in ["lto_enabled", "pgo_enabled", "graphite_enabled"]:
+    summary[tuning_column] = np.where(
+        summary["os_family"] == "Gentoo",
+        np.where(summary[tuning_column], "True", "False"),
+        "n/a (unknown)",
+    )
 summary
 ```
 

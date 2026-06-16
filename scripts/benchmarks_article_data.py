@@ -125,6 +125,9 @@ def _iter_hyperfine_rows(category: str, payload: dict[str, Any]) -> list[dict[st
         command = str(bench.get("command", "")).strip()
         if not command:
             continue
+        exit_codes = bench.get("exit_codes", [])
+        if isinstance(exit_codes, list) and exit_codes and any(code != 0 for code in exit_codes):
+            continue
         rows.append(
             {
                 "category": category,

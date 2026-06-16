@@ -1,0 +1,45 @@
+.gentoo-note {
+  border-left: 4px solid #4caf50;
+  background: #f3fff4;
+  padding: 0.8rem 1rem;
+}
+
+.metric-callout {
+  border-left: 4px solid #3f51b5;
+  background: #f6f7ff;
+  padding: 0.8rem 1rem;
+}
+
+/* Keep wide markdown tables fully accessible instead of visually clipping. */
+.content table {
+  display: block;
+  max-width: 100%;
+  width: max-content;
+  overflow-x: auto;
+}
+
+.content th,
+.content td {
+  white-space: nowrap;
+}
+
+.gentoo-config-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.gentoo-config-table .opt-col {
+  width: 3.5rem;
+  text-align: center;
+}
+
+.gentoo-config-table .cflags-col {
+  text-align: left;
+}
+
+.intro-host-summary .virt-host-cpu-col,
+.coverage-table th:nth-child(3),
+.coverage-table td:nth-child(3) {
+  width: 10rem;
+  max-width: 10rem;
+}
