@@ -56,3 +56,36 @@ def test_normalize_metadata_defaults_optional_fields_to_na() -> None:
     assert normalized["common_flags"] == "n/a"
     assert normalized["cflags"] == "n/a"
     assert normalized["ldflags"] == "n/a"
+
+
+def test_render_host_qmd_escapes_front_matter_title() -> None:
+    bah = _require_hosts_module()
+    title_host = 'hera"\nformat: pdf'
+    rendered = bah.render_host_qmd(title_host, {"hostname": "hera"})
+
+    lines = rendered.splitlines()
+    assert lines[0] == "---"
+    assert lines[1] == 'title: "Host details: hera\\"\\nformat: pdf"'
+    assert lines[2] == "format: html"
+    assert lines[3] == "---"
+
+
+def test_generate_host_pages_raises_on_filename_collision(tmp_path: Path) -> None:
+    bah = _require_hosts_module()
+    results_dir = tmp_path / "results"
+    output_dir = tmp_path / "hosts"
+    first_host = results_dir / "first"
+    second_host = results_dir / "second"
+    first_host.mkdir(parents=True)
+    second_host.mkdir(parents=True)
+
+    (first_host / "metadata.json").write_text('{"hostname": "hera/01"}')
+    (second_host / "metadata.json").write_text('{"hostname": "hera\\\\01"}')
+
+    try:
+        bah.generate_host_pages(results_dir, output_dir)
+    except ValueError as exc:
+        assert "Filename collision for host detail page" in str(exc)
+        assert "hera_01.qmd" in str(exc)
+    else:
+        raise AssertionError("Expected explicit filename collision error")

@@ -31,6 +31,10 @@ def _safe_host_filename(hostname: str) -> str:
     return hostname.replace("/", "_").replace("\\", "_")
 
 
+def _yaml_quoted(value: str) -> str:
+    return json.dumps(value)
+
+
 def _md_escape(value: str) -> str:
     return value.replace("|", r"\|")
 
@@ -118,7 +122,7 @@ def render_host_qmd(hostname: str, metadata: dict[str, Any]) -> str:
 
     lines = [
         "---",
-        f'title: "Host details: {hostname}"',
+        f"title: {_yaml_quoted(f'Host details: {hostname}')}",
         "format: html",
         "---",
         "",
@@ -187,6 +191,7 @@ def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
 
     generated_pages: list[Path] = []
     generated_names: set[str] = set()
+    output_to_host_map: dict[str, str] = {}
 
     for host_dir in sorted(path for path in results_root.iterdir() if path.is_dir()):
         metadata_path = host_dir / "metadata.json"
@@ -200,14 +205,23 @@ def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
         if not isinstance(metadata, dict):
             continue
 
-        normalized = normalize_metadata(metadata)
-        host_name = _stringify(normalized.get("hostname", "")) or host_dir.name
+        host_name = _stringify(metadata.get("hostname", "")) or host_dir.name
+        normalized = normalize_metadata({**metadata, "hostname": host_name})
         safe_name = _safe_host_filename(host_name)
         output_path = output_root / f"{safe_name}.qmd"
+
+        previous_host = output_to_host_map.get(output_path.name)
+        if previous_host is not None and previous_host != host_name:
+            raise ValueError(
+                "Filename collision for host detail page "
+                f"'{output_path.name}' between '{previous_host}' and '{host_name}'"
+            )
+
         output_text = render_host_qmd(host_name, normalized)
         output_path.write_text(output_text, encoding="utf-8")
         generated_pages.append(output_path)
         generated_names.add(output_path.name)
+        output_to_host_map[output_path.name] = host_name
 
     for existing_page in sorted(output_root.glob("*.qmd")):
         if existing_page.name not in generated_names:
