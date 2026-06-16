@@ -1,0 +1,98 @@
+---
+title: "Host details: oraclelinux-olivia"
+format: html
+---
+
+## Identity and platform
+
+| Field | Value |
+| --- | --- |
+| Hostname | oraclelinux-olivia |
+| Operating system | OracleLinux |
+| OS version | 10.1 |
+| OS family | RedHat |
+
+## Hardware and runtime
+
+| Field | Value |
+| --- | --- |
+| CPU model | Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz |
+| -march=native | skylake |
+
+## Build and tuning
+
+| Field | Value |
+| --- | --- |
+| Gentoo profile | n/a |
+| Common flags | -O2 -g |
+| CFLAGS | -O2 -g |
+| LDFLAGS | %{build_ldflags} |
+
+## Tool versions
+
+| Tool | Version |
+| --- | --- |
+| 7z | not installed |
+| bash | GNU bash, version 5.2.26(1)-release (x86_64-redhat-linux-gnu) |
+| clang | clang version 20.1.8 (Oracle America 20.1.8-1.el10) |
+| ffmpeg | not installed |
+| gcc | gcc (GCC) 14.3.1 20250617 (Red Hat 14.3.1-2) |
+| gimp | not installed |
+| go | go version go1.25.9 (Red Hat 1.25.9-3.el10_1) linux/amd64 |
+| imagemagick | not installed |
+| inkscape | not installed |
+| kernel | 6.12.0-202.76.4.4.el10uek.x86_64 |
+| lld | not installed |
+| node | not installed |
+| numpy | 1.26.4 |
+| openssl | OpenSSL 3.5.1 1 Jul 2025 (Library: OpenSSL 3.5.1 1 Jul 2025) |
+| perl | This is perl 5, version 40, subversion 2 (v5.40.2) built for x86_64-linux-thread-multi |
+| python | Python 3.12.12 |
+| ruby | not installed |
+| rustc | rustc 1.88.0 (6b00bc388 2025-06-23) (Red Hat 1.88.0-1.el10) |
+| sqlite3 | not installed |
+
+## Full metadata dump
+
+| Key | Value |
+| --- | --- |
+| calibration_mips | 0 |
+| cflags | -O2 -g |
+| common_flags | -O2 -g |
+| cpu_cache_l3 | 128 MiB (8 instances) |
+| cpu_cores | 8 |
+| cpu_flags_x86 | n/a |
+| cpu_governor | unknown |
+| cpu_mhz | 3000 |
+| cpu_model | Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz |
+| cxxflags | -O2 -g |
+| features | n/a |
+| filesystem | xfs |
+| gcc_config | default-pie=no, default-ssp=no, lto-support=no, bootstrap-lto=yes |
+| gentoo_profile | n/a |
+| hostname | oraclelinux-olivia |
+| io_scheduler | unknown |
+| is_hypervisor | False |
+| ldflags | %{build_ldflags} |
+| libc_variant | glibc |
+| libc_version | 2.39 |
+| makeflags | -j${RPM_BUILD_NCPUS} |
+| makeopts | n/a |
+| march_native | skylake |
+| mem_speed | n/a |
+| mitigations | default |
+| normalization_mode | platform-default |
+| normalization_reduced | False |
+| numa_nodes | 1 |
+| os | OracleLinux |
+| os_family | RedHat |
+| os_version | 10.1 |
+| pgo_enabled | False |
+| preempt_model | DYNAMIC |
+| rustflags | n/a |
+| scheduler | sched_ext |
+| smt_active | False |
+| swap_enabled | True |
+| thp | always |
+| versions | gcc=gcc (GCC) 14.3.1 20250617 (Red Hat 14.3.1-2), clang=clang version 20.1.8 (Oracle America 20.1.8-1.el10), rustc=rustc 1.88.0 (6b00bc388 2025-06-23) (Red Hat 1.88.0-1.el10), go=go version go1.25.9 (Red Hat 1.25.9-3.el10_1) linux/amd64, python=Python 3.12.12, ffmpeg=not installed, openssl=OpenSSL 3.5.1 1 Jul 2025 (Library: OpenSSL 3.5.1 1 Jul 2025), kernel=6.12.0-202.76.4.4.el10uek.x86_64, bash=GNU bash, version 5.2.26(1)-release (x86_64-redhat-linux-gnu), 7z=not installed, imagemagick=not installed, lld=not installed, sqlite3=not installed, numpy=1.26.4, gimp=not installed, inkscape=not installed, perl=This is perl 5, version 40, subversion 2 (v5.40.2) built for x86_64-linux-thread-multi, ruby=not installed, node=not installed |
+| virt_type | kvm |

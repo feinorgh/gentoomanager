@@ -1,0 +1,98 @@
+---
+title: "Host details: nixos-gabrielle"
+format: html
+---
+
+## Identity and platform
+
+| Field | Value |
+| --- | --- |
+| Hostname | nixos-gabrielle |
+| Operating system | NixOS |
+| OS version | 25.11 |
+| OS family | NixOS |
+
+## Hardware and runtime
+
+| Field | Value |
+| --- | --- |
+| CPU model | 12th Gen Intel(R) Core(TM) i7-1260P |
+| -march=native | alderlake |
+
+## Build and tuning
+
+| Field | Value |
+| --- | --- |
+| Gentoo profile | n/a |
+| Common flags | -fstack-protector-strong -fPIE |
+| CFLAGS | -fstack-protector-strong -fPIE |
+| LDFLAGS | n/a |
+
+## Tool versions
+
+| Tool | Version |
+| --- | --- |
+| 7z | n/a |
+| bash | GNU bash, version 5.3.3(1)-release (x86_64-pc-linux-gnu) |
+| clang | not installed |
+| ffmpeg | ffmpeg version 8.0 Copyright (c) 2000-2025 the FFmpeg developers |
+| gcc | gcc (GCC) 14.3.0 |
+| gimp | not installed |
+| go | go version go1.25.9 linux/amd64 |
+| imagemagick | Version: ImageMagick 7.1.2-19 Q16-HDRI x86_64 77d89c30f:20260412 https://imagemagick.org |
+| inkscape | not installed |
+| kernel | 6.12.90 |
+| lld | not installed |
+| node | not installed |
+| numpy | not installed |
+| openssl | OpenSSL 3.6.2 7 Apr 2026 (Library: OpenSSL 3.6.2 7 Apr 2026) |
+| perl | This is perl 5, version 40, subversion 0 (v5.40.0) built for x86_64-linux-thread-multi |
+| python | Python 3.13.12 |
+| ruby | not installed |
+| rustc | rustc 1.91.1 (ed61e7d7e 2025-11-07) (built from a source tarball) |
+| sqlite3 | 3.50.4 2025-07-30 19:33:53 4d8adfb30e03f9cf27f800a2c1ba3c48fb4ca1b08b0f5ed59a4d5ecbf45e20a3 (64-bit) |
+
+## Full metadata dump
+
+| Key | Value |
+| --- | --- |
+| calibration_mips | 5347 |
+| cflags | -fstack-protector-strong -fPIE |
+| common_flags | -fstack-protector-strong -fPIE |
+| cpu_cache_l3 | 128 MiB (8 instances) |
+| cpu_cores | 8 |
+| cpu_flags_x86 | n/a |
+| cpu_governor | unknown |
+| cpu_mhz | 2496 |
+| cpu_model | 12th Gen Intel(R) Core(TM) i7-1260P |
+| cxxflags | n/a |
+| distro_label | NixOS |
+| features | n/a |
+| filesystem | ext4 |
+| gcc_config | default-pie=yes, default-ssp=no, lto-support=yes |
+| gentoo_profile | n/a |
+| hostname | nixos-gabrielle |
+| io_scheduler | none |
+| is_hypervisor | False |
+| ldflags | n/a |
+| libc_variant | glibc |
+| libc_version | 2.40 |
+| makeflags | n/a |
+| makeopts | n/a |
+| march_native | alderlake |
+| mem_speed | n/a |
+| mitigations | default |
+| normalization_mode | platform-default |
+| normalization_reduced | False |
+| numa_nodes | 1 |
+| os | NixOS |
+| os_family | NixOS |
+| os_version | 25.11 |
+| preempt_model | DYNAMIC |
+| rustflags | n/a |
+| scheduler | sched_ext |
+| smt_active | False |
+| swap_enabled | False |
+| thp | madvise |
+| versions | gcc=gcc (GCC) 14.3.0, clang=not installed, rustc=rustc 1.91.1 (ed61e7d7e 2025-11-07) (built from a source tarball), go=go version go1.25.9 linux/amd64, python=Python 3.13.12, ffmpeg=ffmpeg version 8.0 Copyright (c) 2000-2025 the FFmpeg developers, openssl=OpenSSL 3.6.2 7 Apr 2026 (Library: OpenSSL 3.6.2 7 Apr 2026), kernel=6.12.90, bash=GNU bash, version 5.3.3(1)-release (x86_64-pc-linux-gnu), 7z=, imagemagick=Version: ImageMagick 7.1.2-19 Q16-HDRI x86_64 77d89c30f:20260412 https://imagemagick.org, lld=not installed, sqlite3=3.50.4 2025-07-30 19:33:53 4d8adfb30e03f9cf27f800a2c1ba3c48fb4ca1b08b0f5ed59a4d5ecbf45e20a3 (64-bit), numpy=not installed, gimp=not installed, inkscape=not installed, perl=This is perl 5, version 40, subversion 0 (v5.40.0) built for x86_64-linux-thread-multi, ruby=not installed, node=not installed |
+| virt_type | kvm |

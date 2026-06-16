@@ -1,0 +1,98 @@
+---
+title: "Host details: solus-heidy"
+format: html
+---
+
+## Identity and platform
+
+| Field | Value |
+| --- | --- |
+| Hostname | solus-heidy |
+| Operating system | Solus |
+| OS version | 4.9 |
+| OS family | Solus |
+
+## Hardware and runtime
+
+| Field | Value |
+| --- | --- |
+| CPU model | 12th Gen Intel(R) Core(TM) i7-1260P |
+| -march=native | alderlake |
+
+## Build and tuning
+
+| Field | Value |
+| --- | --- |
+| Gentoo profile | n/a |
+| Common flags | -fstack-protector-strong -fPIE -fstack-protector-strong |
+| CFLAGS | -fstack-protector-strong -fPIE -fstack-protector-strong |
+| LDFLAGS | n/a |
+
+## Tool versions
+
+| Tool | Version |
+| --- | --- |
+| 7z | n/a |
+| bash | GNU bash, version 5.3.12(1)-release (x86_64-solus-linux-gnu) |
+| clang | clang version 21.1.8 (Solus 21.1.8-135) |
+| ffmpeg | ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers |
+| gcc | gcc (Solus) 15.2.1 20251111 |
+| gimp | GNU Image Manipulation Program version 3.2.4 |
+| go | go version go1.26.3 linux/amd64 |
+| imagemagick | Version: ImageMagick 7.1.2-25 Q16-HDRI x86_64 037e46295:20260604 https://imagemagick.org |
+| inkscape | not installed |
+| kernel | 7.0.7-339.current |
+| lld | not installed |
+| node | not installed |
+| numpy | 2.3.0 |
+| openssl | OpenSSL 3.6.2 7 Apr 2026 (Library: OpenSSL 3.6.2 7 Apr 2026) |
+| perl | This is perl 5, version 38, subversion 5 (v5.38.5) built for x86_64-linux-thread-multi |
+| python | Python 3.12.11 |
+| ruby | not installed |
+| rustc | rustc 1.95.0 (59807616e 2026-04-14) (Solus) |
+| sqlite3 | 3.53.0 2026-04-09 11:41:38 4525003a53a7fc63ca75c59b22c79608659ca12f0131f52c18637f829977alt1 (64-bit) |
+
+## Full metadata dump
+
+| Key | Value |
+| --- | --- |
+| calibration_mips | 5911 |
+| cflags | -fstack-protector-strong -fPIE -fstack-protector-strong |
+| common_flags | -fstack-protector-strong -fPIE -fstack-protector-strong |
+| cpu_cache_l3 | 128 MiB (8 instances) |
+| cpu_cores | 8 |
+| cpu_flags_x86 | n/a |
+| cpu_governor | unknown |
+| cpu_mhz | 2496 |
+| cpu_model | 12th Gen Intel(R) Core(TM) i7-1260P |
+| cxxflags | n/a |
+| distro_label | Solus |
+| features | n/a |
+| filesystem | tmpfs |
+| gcc_config | default-pie=yes, default-ssp=yes, lto-support=no, bootstrap-lto=yes |
+| gentoo_profile | n/a |
+| hostname | solus-heidy |
+| io_scheduler | unknown |
+| is_hypervisor | False |
+| ldflags | n/a |
+| libc_variant | glibc |
+| libc_version | 2.43 |
+| makeflags | n/a |
+| makeopts | n/a |
+| march_native | alderlake |
+| mem_speed | n/a |
+| mitigations | default |
+| normalization_mode | platform-default |
+| normalization_reduced | False |
+| numa_nodes | 1 |
+| os | Solus |
+| os_family | Solus |
+| os_version | 4.9 |
+| preempt_model | DYNAMIC |
+| rustflags | n/a |
+| scheduler | sched_ext |
+| smt_active | False |
+| swap_enabled | True |
+| thp | always |
+| versions | gcc=gcc (Solus) 15.2.1 20251111, clang=clang version 21.1.8 (Solus 21.1.8-135), rustc=rustc 1.95.0 (59807616e 2026-04-14) (Solus), go=go version go1.26.3 linux/amd64, python=Python 3.12.11, ffmpeg=ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers, openssl=OpenSSL 3.6.2 7 Apr 2026 (Library: OpenSSL 3.6.2 7 Apr 2026), kernel=7.0.7-339.current, bash=GNU bash, version 5.3.12(1)-release (x86_64-solus-linux-gnu), 7z=, imagemagick=Version: ImageMagick 7.1.2-25 Q16-HDRI x86_64 037e46295:20260604 https://imagemagick.org, lld=not installed, sqlite3=3.53.0 2026-04-09 11:41:38 4525003a53a7fc63ca75c59b22c79608659ca12f0131f52c18637f829977alt1 (64-bit), numpy=2.3.0, gimp=GNU Image Manipulation Program version 3.2.4, inkscape=not installed, perl=This is perl 5, version 38, subversion 5 (v5.38.5) built for x86_64-linux-thread-multi, ruby=not installed, node=not installed |
+| virt_type | kvm |

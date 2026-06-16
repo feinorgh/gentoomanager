@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from benchmarks_article_hosts import canonical_host_slug
+
 _GREEK_NAMES = [
     "Zeus",
     "Hera",
@@ -99,6 +101,18 @@ def _parse_versions(values: list[str]) -> dict[str, str]:
     return versions
 
 
+def _safe_host_slug(hostname: str) -> str:
+    return canonical_host_slug(hostname)
+
+
+def _resolve_host_name(metadata: dict[str, Any], host_dir: Path) -> str:
+    hostname = metadata.get("hostname", "")
+    if hostname is None:
+        return host_dir.name
+    cleaned = str(hostname).strip()
+    return cleaned or host_dir.name
+
+
 def extract_gentoo_tuning(metadata: dict[str, Any]) -> dict[str, bool]:
     """Extract booleans describing Gentoo tuning choices from metadata flags."""
     flag_text = " ".join(
@@ -162,14 +176,16 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
             metadata = json.loads(metadata_file.read_text())
         except json.JSONDecodeError:
             continue
+        resolved_host_name = _resolve_host_name(metadata, host_dir)
         hosts_with_metadata.append((host_dir, metadata))
-        hostnames.append(str(metadata.get("hostname", host_dir.name)))
+        hostnames.append(resolved_host_name)
 
     host_alias_map = _build_host_alias_map(hostnames, anonymize_hosts)
     for host_dir, metadata in hosts_with_metadata:
         versions = _parse_versions(list(metadata.get("versions", [])))
         tuning = extract_gentoo_tuning(metadata)
-        host_name = str(metadata.get("hostname", host_dir.name))
+        host_name = _resolve_host_name(metadata, host_dir)
+        host_slug = canonical_host_slug(host_name, fallback=host_dir.name)
         host_alias = host_alias_map.get(host_name, host_name)
         os_name = str(metadata.get("os", "unknown"))
         os_version = str(metadata.get("os_version", ""))
@@ -190,6 +206,7 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
                 rows.append(
                     {
                         "host": host_alias,
+                        "host_slug": host_slug,
                         "os": os_name,
                         "os_version": os_version,
                         "os_label": _build_os_label(os_name, os_version),

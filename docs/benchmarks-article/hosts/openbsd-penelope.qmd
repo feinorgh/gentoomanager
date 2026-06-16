@@ -1,0 +1,98 @@
+---
+title: "Host details: openbsd-penelope"
+format: html
+---
+
+## Identity and platform
+
+| Field | Value |
+| --- | --- |
+| Hostname | openbsd-penelope |
+| Operating system | OpenBSD |
+| OS version | 7.9 |
+| OS family | OpenBSD |
+
+## Hardware and runtime
+
+| Field | Value |
+| --- | --- |
+| CPU model | Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz |
+| -march=native | n/a |
+
+## Build and tuning
+
+| Field | Value |
+| --- | --- |
+| Gentoo profile | n/a |
+| Common flags | n/a |
+| CFLAGS | n/a |
+| LDFLAGS | n/a |
+
+## Tool versions
+
+| Tool | Version |
+| --- | --- |
+| 7z | n/a |
+| bash | GNU bash, version 5.3.9(1)-release (x86_64-unknown-openbsd7.9) |
+| clang | OpenBSD clang version 19.1.7 |
+| ffmpeg | ffmpeg version 8.0.1 Copyright (c) 2000-2025 the FFmpeg developers |
+| gcc | OpenBSD clang version 19.1.7 |
+| gimp | not installed |
+| go | go version go1.26.2 openbsd/amd64 |
+| imagemagick | Version: ImageMagick 6.9.13-43 Q16 x86_64 19215 https://legacy.imagemagick.org |
+| inkscape | not installed |
+| kernel | 7.9 |
+| lld | not installed |
+| node | not installed |
+| numpy | 2.4.4 |
+| openssl | LibreSSL 4.3.0 |
+| perl | This is perl 5, version 42, subversion 2 (v5.42.2) built for amd64-openbsd |
+| python | Python 3.13.13 |
+| ruby | not installed |
+| rustc | rustc 1.94.1 (e408947bf 2026-03-25) (built from a source tarball) |
+| sqlite3 | 3.51.3 2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6alt1 (64-bit) |
+
+## Full metadata dump
+
+| Key | Value |
+| --- | --- |
+| calibration_mips | 4155 |
+| cflags | n/a |
+| common_flags | n/a |
+| cpu_cache_l3 | n/a |
+| cpu_cores | 1 |
+| cpu_flags_x86 | n/a |
+| cpu_governor | unknown |
+| cpu_mhz | 0 |
+| cpu_model | Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz |
+| cxxflags | n/a |
+| distro_label | OpenBSD |
+| features | n/a |
+| filesystem | unknown |
+| gcc_config | default-pie=no, default-ssp=no, lto-support=no |
+| gentoo_profile | n/a |
+| hostname | openbsd-penelope |
+| io_scheduler | unknown |
+| is_hypervisor | False |
+| ldflags | n/a |
+| libc_variant | unknown |
+| libc_version | n/a |
+| makeflags | n/a |
+| makeopts | n/a |
+| march_native | n/a |
+| mem_speed | n/a |
+| mitigations | unknown |
+| normalization_mode | platform-default |
+| normalization_reduced | False |
+| numa_nodes | 1 |
+| os | OpenBSD |
+| os_family | OpenBSD |
+| os_version | 7.9 |
+| preempt_model | unknown |
+| rustflags | n/a |
+| scheduler | unknown |
+| smt_active | unknown |
+| swap_enabled | False |
+| thp | unknown |
+| versions | gcc=OpenBSD clang version 19.1.7, clang=OpenBSD clang version 19.1.7, rustc=rustc 1.94.1 (e408947bf 2026-03-25) (built from a source tarball), go=go version go1.26.2 openbsd/amd64, python=Python 3.13.13, ffmpeg=ffmpeg version 8.0.1 Copyright (c) 2000-2025 the FFmpeg developers, openssl=LibreSSL 4.3.0, kernel=7.9, bash=GNU bash, version 5.3.9(1)-release (x86_64-unknown-openbsd7.9), 7z=, imagemagick=Version: ImageMagick 6.9.13-43 Q16 x86_64 19215 https://legacy.imagemagick.org, lld=not installed, sqlite3=3.51.3 2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6alt1 (64-bit), numpy=2.4.4, gimp=not installed, inkscape=not installed, perl=This is perl 5, version 42, subversion 2 (v5.42.2) built for amd64-openbsd, ruby=not installed, node=not installed |
+| virt_type | unknown |

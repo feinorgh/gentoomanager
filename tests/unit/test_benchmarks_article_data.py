@@ -177,8 +177,10 @@ def test_load_benchmark_rows_anonymizes_hosts_by_default(tmp_path: Path) -> None
 
     rows = bad.load_benchmark_rows(tmp_path)
     hosts = sorted({row["host"] for row in rows})
+    host_slugs = sorted({row["host_slug"] for row in rows})
 
     assert hosts == ["Hera", "Zeus"]
+    assert host_slugs == ["host-alpha", "host-zeta"]
     assert "host-alpha" not in hosts
     assert "host-zeta" not in hosts
 
@@ -199,6 +201,65 @@ def test_load_benchmark_rows_preserves_hosts_when_anonymization_disabled(tmp_pat
 
     assert len(rows) == 1
     assert rows[0]["host"] == "gentoo-example"
+    assert rows[0]["host_slug"] == "gentoo-example"
+
+
+def test_load_benchmark_rows_uses_shared_slug_rules_for_separators(tmp_path: Path) -> None:
+    host_dir = tmp_path / "host-from-dir"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "hostname": "gentoo/edge\\01",
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "versions": [],
+            }
+        )
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo/edge\\01"
+    assert rows[0]["host_slug"] == "gentoo_edge_01"
+
+
+def test_load_benchmark_rows_falls_back_to_dir_name_for_blank_hostname(tmp_path: Path) -> None:
+    host_dir = tmp_path / "gentoo-from-dir"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps({"hostname": "  ", "os": "Gentoo", "os_family": "Gentoo", "versions": []})
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo-from-dir"
+    assert rows[0]["host_slug"] == "gentoo-from-dir"
+
+
+def test_load_benchmark_rows_falls_back_to_dir_name_for_none_hostname(tmp_path: Path) -> None:
+    host_dir = tmp_path / "gentoo-from-none"
+    host_dir.mkdir()
+    (host_dir / "metadata.json").write_text(
+        json.dumps({"hostname": None, "os": "Gentoo", "os_family": "Gentoo", "versions": []})
+    )
+    (host_dir / "compression.json").write_text(
+        json.dumps({"results": [{"command": "gzip -9", "mean": 1.0, "stddev": 0.1}]})
+    )
+
+    rows = bad.load_benchmark_rows(tmp_path, anonymize_hosts=False)
+
+    assert len(rows) == 1
+    assert rows[0]["host"] == "gentoo-from-none"
+    assert rows[0]["host_slug"] == "gentoo-from-none"
 
 
 def test_load_benchmark_rows_uses_raw_os_label_when_distro_label_missing(tmp_path: Path) -> None:
@@ -244,3 +305,16 @@ def test_article_marks_non_gentoo_tuning_as_unknown_in_dataset_summary() -> None
     qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
     assert "n/a (unknown)" in qmd
     assert 'summary["os_family"] == "Gentoo"' in qmd
+
+
+def test_article_dataset_summary_formats_host_as_markdown_link() -> None:
+    qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
+
+    if "## Dataset Summary" not in qmd:
+        raise AssertionError("Article must include a Dataset Summary section")
+    if 'summary["host"]' not in qmd:
+        raise AssertionError("Dataset Summary logic must reference the host column")
+    if 'summary["host_slug"]' not in qmd:
+        raise AssertionError("Dataset Summary logic must reference the canonical host_slug column")
+    if "hosts/{host_slug}.html" not in qmd:
+        raise AssertionError("Dataset Summary host-link logic must target hosts/{host_slug}.html")
