@@ -197,3 +197,10 @@ def test_benchmarks_article_data_has_no_shebang() -> None:
 def test_article_includes_cflags_deep_dive_heading() -> None:
     qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
     assert "## Gentoo CFLAGS Deep-Dive" in qmd
+
+
+def test_article_dataset_summary_formats_host_as_markdown_link() -> None:
+    qmd = Path(REPO_ROOT / "docs/benchmarks-article/index.qmd").read_text(encoding="utf-8")
+    expected = 'summary["host"] = summary["host"].map(lambda host: f"[{host}](hosts/{host}.html)")'
+    if expected not in qmd:
+        raise AssertionError("Dataset Summary must map host names to markdown host-detail links")
