@@ -34,16 +34,21 @@ from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Optional dependency check
+# Required: pandas (always needed for build_df)
+# Optional: dash, plotly (only for server mode)
 # ---------------------------------------------------------------------------
+import pandas as pd
 
-try:
-    import dash
-    import pandas as pd
-    import plotly.graph_objects as go
-    from dash import Input, Output, dash_table, dcc, html
-except ImportError as exc:
-    sys.exit(f"ERROR: {exc}\nInstall required packages with:\n    pip install dash pandas\n")
+
+# Lazy import of dash — only needed when running server
+def _check_dash_available() -> None:
+    """Ensure dash is available before starting server."""
+    try:
+        import dash  # noqa: F401
+        import plotly.graph_objects  # noqa: F401
+    except ImportError as exc:
+        sys.exit(f"ERROR: {exc}\nInstall required packages with:\n    pip install dash pandas\n")
+
 
 # ---------------------------------------------------------------------------
 # Import shared utilities from the sibling report generator
@@ -155,8 +160,15 @@ def build_df(
 # ---------------------------------------------------------------------------
 
 
-def make_app(df: pd.DataFrame, host_os: dict[str, str], hosts: dict | None = None) -> dash.Dash:
-    """Build and return the configured Dash app (no data stored globally)."""
+def make_app(df: pd.DataFrame, host_os: dict[str, str], hosts: dict | None = None):
+    """Build and return the configured Dash app (no data stored globally).
+
+    Returns a dash.Dash instance (type omitted to allow testing without dash).
+    """
+    import dash
+    import plotly.graph_objects as go
+    from dash import Input, Output, dash_table, dcc, html
+
     os_families = sorted(df["os_family"].unique().tolist()) if not df.empty else []
     all_hosts = sorted(df["host"].unique().tolist()) if not df.empty else []
     categories = sorted(df["category"].unique().tolist()) if not df.empty else []
@@ -682,6 +694,7 @@ def make_app(df: pd.DataFrame, host_os: dict[str, str], hosts: dict | None = Non
 
 
 def main() -> None:
+    _check_dash_available()
     parser = argparse.ArgumentParser(
         description="Interactive benchmark dashboard (Plotly Dash).",
         formatter_class=argparse.RawDescriptionHelpFormatter,

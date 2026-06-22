@@ -25,6 +25,7 @@ docs = [
   "pandas",
   "numpy",
   "plotly",
+  "tabulate",
 ]
 
 [dependency-groups]
@@ -45,6 +46,7 @@ docs = [
   "pandas",
   "numpy",
   "plotly",
+  "tabulate",
 ]
 
 [tool.black]

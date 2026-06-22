@@ -5,7 +5,8 @@ This directory contains a Quarto project for long-form benchmark analysis.
 ## Local preview
 
 ```bash
-pip install jupyter pandas numpy plotly
+uv sync --group docs
+source .venv/bin/activate
 quarto preview docs/benchmarks-article
 ```
 

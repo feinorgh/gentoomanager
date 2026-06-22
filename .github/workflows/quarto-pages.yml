@@ -36,7 +36,7 @@ jobs:
       - name: Install Python dependencies for article rendering
         run: >-
           python -m pip install --upgrade pip &&
-          pip install jupyter pandas numpy plotly
+          pip install jupyter pandas numpy plotly tabulate
 
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
