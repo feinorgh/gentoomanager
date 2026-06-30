@@ -1,0 +1,6 @@
+major_changes:
+  - "docs/benchmarks-article: host detail pages are now generated and anonymized using Greek mythology names to protect privacy. Real hostnames are no longer committed to the repository."
+
+minor_changes:
+  - "scripts/benchmarks_article_hosts.py: added ``--anonymize`` and ``--no-anonymize`` flags for controlling hostname anonymization. Anonymization is enabled by default."
+  - "scripts/publish_benchmark_article.sh: now generates anonymized host pages automatically before publishing."

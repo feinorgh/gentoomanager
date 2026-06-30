@@ -21,6 +21,60 @@ OPTIONAL_METADATA_FIELDS = (
     "ldflags",
 )
 
+# Greek mythology names for host anonymization (deterministic order)
+_GREEK_NAMES = [
+    "Zeus",
+    "Hera",
+    "Poseidon",
+    "Demeter",
+    "Athena",
+    "Apollo",
+    "Artemis",
+    "Ares",
+    "Aphrodite",
+    "Hephaestus",
+    "Hermes",
+    "Hestia",
+    "Dionysus",
+    "Persephone",
+    "Hades",
+    "Prometheus",
+    "Achilles",
+    "Odysseus",
+    "Heracles",
+    "Perseus",
+    "Theseus",
+    "Orpheus",
+    "Icarus",
+    "Minos",
+    "Medea",
+    "Cassandra",
+    "Electra",
+    "Antigone",
+    "Andromeda",
+    "Atalanta",
+    "Calypso",
+    "Circe",
+    "Daphne",
+    "Echo",
+    "Eurydice",
+    "Galatea",
+    "Hecate",
+    "Iris",
+    "Penelope",
+    "Selene",
+    "Pandora",
+    "Psyche",
+    "Ariadne",
+    "Phaedra",
+    "Niobe",
+    "Io",
+    "Thetis",
+    "Nemesis",
+    "Tyche",
+    "Nike",
+]
+
 
 def _stringify(value: Any) -> str:
     if value is None:
@@ -49,6 +103,11 @@ def _yaml_quoted(value: str) -> str:
 
 def _md_escape(value: str) -> str:
     return value.replace("|", r"\|")
+
+
+def _anonymize_hostname(hostname: str, index: int) -> str:
+    """Map hostname to a deterministic Greek mythology name."""
+    return _GREEK_NAMES[index % len(_GREEK_NAMES)]
 
 
 def host_link_markdown(hostname: str) -> str:
@@ -195,8 +254,16 @@ def render_host_qmd(hostname: str, metadata: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
-    """Generate host detail ``.qmd`` pages from ``metadata.json`` files."""
+def generate_host_pages(
+    results_dir: Path, output_dir: Path, anonymize_hosts: bool = True
+) -> list[Path]:
+    """Generate host detail ``.qmd`` pages from ``metadata.json`` files.
+    
+    Args:
+        results_dir: Path to benchmarks/results directory
+        output_dir: Path to docs/benchmarks-article/hosts output dir
+        anonymize_hosts: If True, replace hostnames with Greek mythology names
+    """
     results_root = Path(results_dir)
     output_root = Path(output_dir)
     if not results_root.exists():
@@ -209,8 +276,25 @@ def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
     generated_pages: list[Path] = []
     generated_names: set[str] = set()
     output_to_host_map: dict[str, str] = {}
+    
+    # Build anonymization mapping if requested
+    host_dirs = sorted(path for path in results_root.iterdir() if path.is_dir())
+    anon_mapping: dict[str, str] = {}
+    if anonymize_hosts:
+        for idx, host_dir in enumerate(host_dirs):
+            metadata_path = host_dir / "metadata.json"
+            if not metadata_path.exists():
+                continue
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if not isinstance(metadata, dict):
+                continue
+            host_name = _stringify(metadata.get("hostname", "")) or host_dir.name
+            anon_mapping[host_name] = _anonymize_hostname(host_name, idx)
 
-    for host_dir in sorted(path for path in results_root.iterdir() if path.is_dir()):
+    for idx, host_dir in enumerate(host_dirs):
         metadata_path = host_dir / "metadata.json"
         if not metadata_path.exists():
             continue
@@ -223,22 +307,29 @@ def generate_host_pages(results_dir: Path, output_dir: Path) -> list[Path]:
             continue
 
         host_name = _stringify(metadata.get("hostname", "")) or host_dir.name
-        normalized = normalize_metadata({**metadata, "hostname": host_name})
-        safe_name = canonical_host_slug(host_name, fallback=host_dir.name)
+        
+        # Apply anonymization if requested
+        display_name = host_name
+        if anonymize_hosts and host_name in anon_mapping:
+            display_name = anon_mapping[host_name]
+            metadata = {**metadata, "hostname": display_name}
+        
+        normalized = normalize_metadata({**metadata, "hostname": display_name})
+        safe_name = canonical_host_slug(display_name, fallback=host_dir.name)
         output_path = output_root / f"{safe_name}.qmd"
 
         previous_host = output_to_host_map.get(output_path.name)
-        if previous_host is not None and previous_host != host_name:
+        if previous_host is not None and previous_host != display_name:
             raise ValueError(
                 "Filename collision for host detail page "
-                f"'{output_path.name}' between '{previous_host}' and '{host_name}'"
+                f"'{output_path.name}' between '{previous_host}' and '{display_name}'"
             )
 
-        output_text = render_host_qmd(host_name, normalized)
+        output_text = render_host_qmd(display_name, normalized)
         output_path.write_text(output_text, encoding="utf-8")
         generated_pages.append(output_path)
         generated_names.add(output_path.name)
-        output_to_host_map[output_path.name] = host_name
+        output_to_host_map[output_path.name] = display_name
 
     for existing_page in sorted(output_root.glob("*.qmd")):
         if existing_page.name not in generated_names:
@@ -263,6 +354,18 @@ def main() -> int:
         type=Path,
         help="Path to docs/benchmarks-article/hosts output dir",
     )
+    parser.add_argument(
+        "--anonymize",
+        action="store_true",
+        default=True,
+        help="Replace hostnames with Greek mythology names (default: true)",
+    )
+    parser.add_argument(
+        "--no-anonymize",
+        dest="anonymize",
+        action="store_false",
+        help="Use real hostnames (development only)",
+    )
     parser.add_argument("results_dir", type=Path, nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("output_dir", type=Path, nargs="?", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -273,7 +376,7 @@ def main() -> int:
         parser.error("provide both --results and --output (or two positional paths)")
 
     try:
-        pages = generate_host_pages(results_dir, output_dir)
+        pages = generate_host_pages(results_dir, output_dir, anonymize_hosts=args.anonymize)
     except (FileNotFoundError, NotADirectoryError, PermissionError, OSError) as exc:
         print(
             "Error: Unable to read results directory "
@@ -283,7 +386,8 @@ def main() -> int:
         )
         return 1
 
-    print(f"Generated {len(pages)} host detail page(s) in {output_dir}")
+    anon_status = " (anonymized)" if args.anonymize else " (real hostnames)"
+    print(f"Generated {len(pages)} host detail page(s){anon_status} in {output_dir}")
     return 0
 
 

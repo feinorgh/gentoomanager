@@ -176,6 +176,7 @@ cython_debug/
 
 # Benchmarks (generated output)
 benchmarks/
+docs/benchmarks-article/hosts/*.qmd
 inventory_generator_rs/target/
 hypervisors.txt
 baremetal.txt

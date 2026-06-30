@@ -41,12 +41,13 @@ jobs:
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Generate host detail pages
+      - name: Generate host detail pages (anonymized)
         run: |
           if [ -d benchmarks/results ]; then
             python scripts/benchmarks_article_hosts.py \
               --results benchmarks/results \
-              --output docs/benchmarks-article/hosts
+              --output docs/benchmarks-article/hosts \
+              --anonymize
           else
             echo "benchmarks/results not found; skipping host-page generation and using committed host pages."
           fi
