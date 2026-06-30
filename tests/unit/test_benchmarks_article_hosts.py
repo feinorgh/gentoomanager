@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -120,7 +119,9 @@ def test_hosts_script_reports_unreadable_results_dir_without_traceback(tmp_path:
     unreadable_dir.mkdir()
     unreadable_dir.chmod(0)
     try:
-        completed = _run_hosts_script(["--results", str(unreadable_dir), "--output", str(output_dir)])
+        completed = _run_hosts_script(
+            ["--results", str(unreadable_dir), "--output", str(output_dir)]
+        )
     finally:
         unreadable_dir.chmod(0o755)
 

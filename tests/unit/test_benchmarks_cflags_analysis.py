@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pandas as pd
 import pytest
+
+pd = pytest.importorskip("pandas", reason="pandas required for cflags analysis tests")
 
 # Import the parser module from scripts directory
 REPO_ROOT = Path(__file__).parent.parent.parent
