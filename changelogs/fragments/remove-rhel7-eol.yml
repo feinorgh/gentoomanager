@@ -1,0 +1,3 @@
+minor_changes:
+  - "docs: remove unsupported legacy Red Hat bootstrap guidance and references; keep RHEL 8 Python bootstrap instructions."
+  - "roles/provision_benchmarks: drop legacy-version wording from Red Hat package-manager fallback comments."

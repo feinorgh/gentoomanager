@@ -123,7 +123,7 @@ even if benchmarks fail.
 
 - **Ansible** 2.17+ on the controller
 - **Python 3.10+** on the controller
-- **Python 3.8+** on managed nodes (see [RHEL 7/8 note](preparation.md#61-rhel-7--rhel-8--python-bootstrap))
+- **Python 3.8+** on managed nodes (see [RHEL 8 note](preparation.md#61-rhel-8--python-bootstrap))
 - **SSH key-based access** to all target hosts (see [docs/setup-access.md](setup-access.md))
 - **libvirt/virsh** on hypervisors (for RAM scaling; optional)
 - **Collections:** `ansible-galaxy collection install -r requirements.yml`
@@ -1631,7 +1631,7 @@ If you only need the standard fast codecs, the default run takes approximately
 
 ### RHEL / OL hosts fail with "SyntaxError: future feature annotations"
 
-Python 3.6 on RHEL 7/8 is too old for Ansible 2.17+.  See the
+Python 3.6 on RHEL 8 is too old for Ansible 2.17+. See the
 [prerequisites](#prerequisites) section for how to bootstrap Python 3.8
 and set `ansible_python_interpreter`.
 

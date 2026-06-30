@@ -25,15 +25,13 @@ An Ansible collection for **managing Gentoo Linux systems** and running a
 | Python (managed nodes) | 3.8 |
 | SSH (managed nodes) | key-based recommended |
 
-> **RHEL 7 / RHEL 8 note:** These ship Python 3.6, which is below the minimum.
+> **RHEL 8 note:** RHEL 8 ships Python 3.6 by default, which is below the minimum.
 > Bootstrap a compatible interpreter before provisioning:
-> - RHEL 7: `rh-python38` from Software Collections (`rhel-server-rhscl-7-rpms`)
 > - RHEL 8: `python38` from AppStream (`dnf install python38`)
 >
 > Configure the correct path in `host_vars/<host>/main.yml`:
 > ```yaml
-> ansible_python_interpreter: /opt/rh/rh-python38/root/usr/bin/python3.8  # RHEL 7
-> ansible_python_interpreter: /usr/bin/python3.8                           # RHEL 8
+> ansible_python_interpreter: /usr/bin/python3.8  # RHEL 8
 > ```
 
 ## Setup
@@ -104,8 +102,8 @@ Supported OS families:
 | NixOS | nix-env | — |
 | Solus | eopkg | — |
 
-If a package manager is unavailable for the configured Python interpreter
-(e.g. RHEL 7/8 with SCL Python), the role falls back to invoking `dnf`/`yum`
+If a package manager is unavailable for the configured Python interpreter,
+the role falls back to invoking `dnf`/`yum`
 as shell commands so no Python bindings are needed.
 
 Hyperfine is installed via the native package manager where possible; if
@@ -577,7 +575,7 @@ step-by-step guide covering every one-time setup task:
 - SSH key generation and distribution
 - Configuring passwordless `sudo` (all Linux distros)
 - Configuring passwordless `doas` (Gentoo, FreeBSD, OpenBSD)
-- RHEL 7 / RHEL 8 Python bootstrap
+- RHEL 8 Python bootstrap
 - Windows host connectivity setup (OpenSSH and WinRM)
 - Verification commands
 
