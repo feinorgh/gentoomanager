@@ -1,3 +1,0 @@
-minor_changes:
-  - "roles/provision_benchmarks: added OpenBSD support and package mappings."
-  - "playbooks/provision_benchmarks.yml: added dedicated OpenBSD provisioning play."

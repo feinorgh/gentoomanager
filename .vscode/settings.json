@@ -1,4 +1,0 @@
-{
-    "ansible.mcpServer.enabled": true,
-    "ansible.python.interpreterPath": "/bin/python3.14"
-}

@@ -1,8 +1,0 @@
----
-- name: Manage Gentoo Systems
-  hosts: all
-  tasks:
-    - name: Update @world set
-      community.general.portage:
-        state: present
-        update: true

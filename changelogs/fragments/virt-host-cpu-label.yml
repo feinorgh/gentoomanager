@@ -1,2 +1,0 @@
-minor_changes:
-  - "benchmarks article: show the actual virtualization host CPU for BSD hosts instead of '?'."

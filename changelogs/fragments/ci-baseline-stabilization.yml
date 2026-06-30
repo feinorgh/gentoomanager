@@ -1,2 +1,0 @@
-minor_changes:
-  - "ci/tests: stabilize baseline CI by aligning unit and sanity expectations (pandas-optional unit test import, sanity ignore updates for generated docs/no-smart-quotes and backfill script shebang)."

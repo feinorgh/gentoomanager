@@ -1,4 +1,0 @@
----
-minor_changes:
-  - "ci: make tox-ansible compatibility policy explicit in tox-ansible.ini and add a unit test that guards unsupported Python/Ansible combinations."
-  - "docs: document local tox-ansible matrix generation commands in docs/development.md."

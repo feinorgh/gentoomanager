@@ -1,3 +1,0 @@
-bugfixes:
-  - "roles/run_benchmarks: compiler_multifile now fails hard on missing prerequisites and on non-zero command exit codes, preventing invalid near-zero benchmark timings."
-  - "roles/provision_benchmarks: added make/gnumake provisioning for SUSE and NixOS to ensure multifile harness prerequisites are installed."
