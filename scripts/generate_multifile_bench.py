@@ -21,6 +21,7 @@ from pathlib import Path
 # Makefile template
 # ---------------------------------------------------------------------------
 
+
 def _render_makefile(module_count: int) -> str:
     srcs = [f"mod_{module_index:02d}.c" for module_index in range(module_count)] + ["main.c"]
     objs = [f"mod_{module_index:02d}.o" for module_index in range(module_count)] + ["main.o"]
@@ -45,6 +46,7 @@ $(BIN): $(OBJS)
 clean:
 \t@rm -f $(OBJS) $(BIN)
 """
+
 
 # ---------------------------------------------------------------------------
 # main.c template
