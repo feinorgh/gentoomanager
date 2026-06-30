@@ -2,7 +2,7 @@
 # Red Hat family – Fedora, RHEL, CentOS, Oracle Linux.
 #
 # Uses the detected package manager binary directly so older hosts
-# (RHEL 7/8 with SCL Python) don't require Python dnf/yum bindings.
+# don't require Python dnf/yum bindings.
 
 - name: Detect package manager (dnf preferred over yum)
   ansible.builtin.shell:

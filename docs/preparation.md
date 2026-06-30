@@ -23,7 +23,7 @@ controller host; re-running them is always safe.
   - [5.2 doas (Gentoo, FreeBSD, OpenBSD)](#52-doas-gentoo-freebsd-openbsd)
   - [5.3 Configure Ansible Become Variables](#53-configure-ansible-become-variables)
 - [6. Special Cases](#6-special-cases)
-  - [6.1 RHEL 7 / RHEL 8 — Python Bootstrap](#61-rhel-7--rhel-8--python-bootstrap)
+  - [6.1 RHEL 8 — Python Bootstrap](#61-rhel-8--python-bootstrap)
   - [6.2 Windows Hosts](#62-windows-hosts)
 - [7. Verify Everything Works](#7-verify-everything-works)
 
@@ -35,7 +35,7 @@ controller host; re-running them is always safe.
 |-----------|----------------|-------|
 | Ansible Core (controller) | 2.17 | |
 | Python (controller) | 3.10 | |
-| Python (managed nodes — Linux/Unix) | 3.8 | See [RHEL note](#61-rhel-7--rhel-8--python-bootstrap) |
+| Python (managed nodes — Linux/Unix) | 3.8 | See [RHEL note](#61-rhel-8--python-bootstrap) |
 | SSH (managed nodes) | key-based | See section 4 |
 | libvirt / virsh (hypervisors) | any | Required only for RAM scaling and VM power management |
 
@@ -242,18 +242,11 @@ ansible-playbook playbooks/provision_benchmarks.yml --ask-become-pass
 
 ## 6. Special Cases
 
-### 6.1 RHEL 7 / RHEL 8 — Python Bootstrap
+### 6.1 RHEL 8 — Python Bootstrap
 
-RHEL 7 and RHEL 8 ship Python 3.6 as the system Python, which is too old
-for Ansible 2.17+.  Bootstrap a compatible interpreter **on the managed
-node** before provisioning:
-
-**RHEL 7 — Software Collections:**
-
-```bash
-subscription-manager repos --enable rhel-server-rhscl-7-rpms
-yum install rh-python38
-```
+RHEL 8 ships Python 3.6 as the system Python, which is too old for
+Ansible 2.17+. Bootstrap a compatible interpreter **on the managed node**
+before provisioning:
 
 **RHEL 8 — AppStream:**
 
@@ -264,10 +257,6 @@ dnf install python38
 Then configure the interpreter path in `host_vars/<host>/main.yml`:
 
 ```yaml
-# RHEL 7
-ansible_python_interpreter: /opt/rh/rh-python38/root/usr/bin/python3.8
-
-# RHEL 8
 ansible_python_interpreter: /usr/bin/python3.8
 ```
 
