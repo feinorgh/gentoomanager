@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from generate_benchmark_report import (
+    CATEGORY_TITLES,
     _build_python_pivot,
     _compiler_display_version,
     _python_display_version,
@@ -1100,3 +1101,8 @@ class TestSortCcLabel:
 
     def test_unknown_label(self) -> None:
         assert _sort_cc_label("unknown") == ("unknown", (0,))
+
+
+def test_category_titles_include_new_rust_compiler_outputs() -> None:
+    assert CATEGORY_TITLES["compiler_rust_runtime"] == "Rust Runtime Performance"
+    assert CATEGORY_TITLES["compiler_rust_external"] == "Rust External Workload Performance"
