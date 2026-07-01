@@ -84,7 +84,7 @@ def test_generate_host_pages_raises_on_filename_collision(tmp_path: Path) -> Non
     (second_host / "metadata.json").write_text('{"hostname": "hera\\\\01"}')
 
     try:
-        bah.generate_host_pages(results_dir, output_dir)
+        bah.generate_host_pages(results_dir, output_dir, anonymize_hosts=False)
     except ValueError as exc:
         assert "Filename collision for host detail page" in str(exc)
         assert "hera_01.qmd" in str(exc)
