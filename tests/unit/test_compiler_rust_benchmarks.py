@@ -23,3 +23,9 @@ def test_compiler_task_has_warn_blocks_for_new_rust_benchmarks() -> None:
     text = _content()
     assert "Warn on compiler_rust_runtime benchmark failure" in text
     assert "Warn on compiler_rust_external benchmark failure" in text
+
+
+def test_compiler_task_labels_new_rust_commands() -> None:
+    text = _content()
+    assert '--command-name "{{ tc_label }}-runtime"' in text
+    assert '--command-name "{{ tc_label }}-external"' in text
