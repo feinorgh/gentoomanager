@@ -5,12 +5,7 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
   push:
     branches:
-      - main
-    paths:
-      - "docs/benchmarks-article/**"
-      - "scripts/benchmarks_article_data.py"
-      - "scripts/benchmarks_article_hosts.py"
-      - "benchmarks/results/**"
+      - gh-pages
 
 permissions:
   contents: read
