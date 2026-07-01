@@ -258,7 +258,7 @@ def generate_host_pages(
     results_dir: Path, output_dir: Path, anonymize_hosts: bool = True
 ) -> list[Path]:
     """Generate host detail ``.qmd`` pages from ``metadata.json`` files.
-    
+
     Args:
         results_dir: Path to benchmarks/results directory
         output_dir: Path to docs/benchmarks-article/hosts output dir
@@ -276,7 +276,7 @@ def generate_host_pages(
     generated_pages: list[Path] = []
     generated_names: set[str] = set()
     output_to_host_map: dict[str, str] = {}
-    
+
     # Build anonymization mapping if requested
     host_dirs = sorted(path for path in results_root.iterdir() if path.is_dir())
     anon_mapping: dict[str, str] = {}
@@ -307,13 +307,13 @@ def generate_host_pages(
             continue
 
         host_name = _stringify(metadata.get("hostname", "")) or host_dir.name
-        
+
         # Apply anonymization if requested
         display_name = host_name
         if anonymize_hosts and host_name in anon_mapping:
             display_name = anon_mapping[host_name]
             metadata = {**metadata, "hostname": display_name}
-        
+
         normalized = normalize_metadata({**metadata, "hostname": display_name})
         safe_name = canonical_host_slug(display_name, fallback=host_dir.name)
         output_path = output_root / f"{safe_name}.qmd"
