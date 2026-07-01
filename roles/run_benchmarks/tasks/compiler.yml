@@ -297,19 +297,35 @@
   ansible.builtin.shell:
     cmd: |
       set -e
-      if command -v rustc >/dev/null 2>&1 && [ ! -d {{ run_benchmarks_work_dir }}/rust_bench ]; then
-        mkdir -p {{ run_benchmarks_work_dir }}/rust_bench/src
+      if command -v rustc >/dev/null 2>&1; then
+        mkdir -p {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src {{ run_benchmarks_work_dir }}/rust_bench/src {{ run_benchmarks_work_dir }}/rust_bench/fixtures
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/Cargo.toml << 'TOML'
+      [package]
+      name = "bench"
+      version = "0.1.0"
+      edition = "2021"
+      TOML
         cat > {{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml << 'TOML'
       [package]
       name = "bench"
       version = "0.1.0"
       edition = "2021"
+      autobins = false
+
+      [dependencies]
+      regex = "=1.11.1"
+      serde_json = "=1.0.140"
 
       [[bin]]
-      name = "bench"
-      path = "src/main.rs"
+      name = "rust_runtime"
+      path = "src/runtime.rs"
+
+      [[bin]]
+      name = "rust_external"
+      path = "src/external.rs"
       TOML
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs << 'RUST'
+        rm -f {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs {{ run_benchmarks_work_dir }}/rust_bench/src/compile.rs
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src/main.rs << 'RUST'
       fn matmul(a: &[[f64; 128]; 128], b: &[[f64; 128]; 128]) -> [[f64; 128]; 128] {
           let mut c = [[0.0f64; 128]; 128];
           for i in 0..128 {
@@ -337,8 +353,42 @@
           println!("result: {}", c[64][64]);
       }
       RUST
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/src/runtime.rs << 'RUST'
+      fn main() {
+          let mut x: u64 = 42;
+          let mut acc: u64 = 0;
+          for _ in 0..5_000_000 {
+              x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
+              acc ^= x.rotate_left(13);
+          }
+          println!("{}", acc);
+      }
+      RUST
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/src/external.rs << 'RUST'
+      use regex::Regex;
+      use serde_json::Value;
+      use std::fs;
+
+      fn main() {
+          let data = fs::read_to_string("fixtures/external_input.json").expect("fixture");
+          let value: Value = serde_json::from_str(&data).expect("json");
+          let re = Regex::new(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}").expect("regex");
+          let mut count = 0usize;
+          if let Some(arr) = value.as_array() {
+              for entry in arr {
+                  if let Some(s) = entry.as_str() {
+                      count += re.find_iter(s).count();
+                  }
+              }
+          }
+          println!("{}", count);
+      }
+      RUST
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/fixtures/external_input.json << 'JSON'
+      ["alice@example.com","invalid","bob.smith@example.org","carol+ops@example.net"]
+      JSON
+        (cd {{ run_benchmarks_work_dir }}/rust_bench && cargo generate-lockfile >/dev/null 2>&1 || true)
       fi
-    creates: "{{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml"
   changed_when: false
   failed_when: false
 
@@ -436,7 +486,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      cd {{ run_benchmarks_work_dir }}/rust_bench
+      cd {{ run_benchmarks_work_dir }}/rust_bench/compile_bench
       CMDS=()
       {% for tc in run_benchmarks_rust_resolved.stdout_lines | default([]) %}
       {% set tc_parts = tc.split() %}
@@ -476,6 +526,124 @@
   when:
     - run_benchmarks_compiler_rust_result is not skipped
     - run_benchmarks_compiler_rust_result.rc | default(0) != 0
+
+- name: Run Rust runtime benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}/rust_bench
+      CMDS=()
+      FAILED_TOOLCHAINS=()
+      {% for tc in run_benchmarks_rust_resolved.stdout_lines | default([]) %}
+      {% set tc_parts = tc.split() %}
+      {% if tc_parts | length >= 2 %}
+      {% set tc_label = tc_parts[0] %}
+      {% set tc_cargo = tc_parts[1] %}
+      if [ -x "{{ tc_cargo }}" ]; then
+        runtime_bin="./target/release/rust_runtime_{{ tc_label }}"
+        rm -f "$runtime_bin"
+        if {{ tc_cargo }} build --release --bin rust_runtime >/dev/null 2>&1; then
+          cp ./target/release/rust_runtime "$runtime_bin"
+        else
+          FAILED_TOOLCHAINS+=("{{ tc_label }}")
+        fi
+        if [ -x "$runtime_bin" ]; then
+          CMDS+=(--command-name "{{ tc_label }}-runtime" "$runtime_bin")
+        fi
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then
+        printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      [ -z "${CMDS[*]}" ] && exit 0
+      if {{ run_benchmarks_hyperfine_bin }} --runs {{ run_benchmarks_runs }} --warmup {{ run_benchmarks_warmup }} --ignore-failure --export-json {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json "${CMDS[@]}"; then
+        hyperfine_rc=0
+      else
+        hyperfine_rc=$?
+      fi
+      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ]; then
+        printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      exit "$hyperfine_rc"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  args:
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+  register: run_benchmarks_compiler_rust_runtime_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_rust_runtime benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_rust_runtime benchmark exited
+      rc={{ run_benchmarks_compiler_rust_runtime_result.rc }}.
+      {{ run_benchmarks_compiler_rust_runtime_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_rust_runtime_result is not skipped
+    - run_benchmarks_compiler_rust_runtime_result.rc | default(0) != 0
+
+- name: Run Rust external workload benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}/rust_bench
+      CMDS=()
+      FAILED_TOOLCHAINS=()
+      {% for tc in run_benchmarks_rust_resolved.stdout_lines | default([]) %}
+      {% set tc_parts = tc.split() %}
+      {% if tc_parts | length >= 2 %}
+      {% set tc_label = tc_parts[0] %}
+      {% set tc_cargo = tc_parts[1] %}
+      if [ -x "{{ tc_cargo }}" ]; then
+        external_bin="./target/release/rust_external_{{ tc_label }}"
+        rm -f "$external_bin"
+        if {{ tc_cargo }} build --release --bin rust_external >/dev/null 2>&1; then
+          cp ./target/release/rust_external "$external_bin"
+        else
+          FAILED_TOOLCHAINS+=("{{ tc_label }}")
+        fi
+        if [ -x "$external_bin" ]; then
+          CMDS+=(--command-name "{{ tc_label }}-external" "$external_bin")
+        fi
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then
+        printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      [ -z "${CMDS[*]}" ] && exit 0
+      if {{ run_benchmarks_hyperfine_bin }} --runs {{ run_benchmarks_runs }} --warmup {{ run_benchmarks_warmup }} --ignore-failure --export-json {{ run_benchmarks_work_dir }}/compiler_rust_external.json "${CMDS[@]}"; then
+        hyperfine_rc=0
+      else
+        hyperfine_rc=$?
+      fi
+      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ]; then
+        printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      exit "$hyperfine_rc"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  args:
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+  register: run_benchmarks_compiler_rust_external_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_rust_external benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_rust_external benchmark exited
+      rc={{ run_benchmarks_compiler_rust_external_result.rc }}.
+      {{ run_benchmarks_compiler_rust_external_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_rust_external_result is not skipped
+    - run_benchmarks_compiler_rust_external_result.rc | default(0) != 0
 
 - name: Create Go benchmark project
   ansible.builtin.shell:
