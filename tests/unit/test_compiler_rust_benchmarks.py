@@ -90,6 +90,11 @@ def test_compiler_task_reports_failed_runtime_and_external_toolchain_builds() ->
     )
 
 
+def test_compiler_task_only_removes_rust_json_on_total_build_failure() -> None:
+    text = _content()
+    assert 'if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then\n        if [ -z "${CMDS[*]}" ]; then' in text
+
+
 def test_skip_completion_maps_require_rust_runtime_and_external_outputs() -> None:
     playbook = _playbook_content()
     main_tasks = _main_content()
@@ -97,3 +102,7 @@ def test_skip_completion_maps_require_rust_runtime_and_external_outputs() -> Non
     assert "compiler_rust_external.json" in playbook
     assert "compiler_rust_runtime.json" in main_tasks
     assert "compiler_rust_external.json" in main_tasks
+    assert "run_benchmarks_preflight_has_rustc" in playbook
+    assert "run_benchmarks_preflight_has_go" in playbook
+    assert "run_benchmarks_skip_existing_has_rustc" in main_tasks
+    assert "run_benchmarks_skip_existing_has_go" in main_tasks

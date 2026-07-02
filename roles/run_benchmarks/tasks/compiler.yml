@@ -578,7 +578,9 @@
         hyperfine_rc=$?
       fi
       if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then
-        rm -f {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json
+        if [ -z "${CMDS[*]}" ]; then
+          rm -f {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json
+        fi
         printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
       fi
@@ -639,7 +641,9 @@
         hyperfine_rc=$?
       fi
       if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then
-        rm -f {{ run_benchmarks_work_dir }}/compiler_rust_external.json
+        if [ -z "${CMDS[*]}" ]; then
+          rm -f {{ run_benchmarks_work_dir }}/compiler_rust_external.json
+        fi
         printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
       fi

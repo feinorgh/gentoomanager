@@ -64,6 +64,42 @@
   register: run_benchmarks_skip_existing_found
   when: run_benchmarks_skip_existing | default(false) | bool
 
+- name: Set default compiler toolchain availability for skip-existing check
+  ansible.builtin.set_fact:
+    run_benchmarks_skip_existing_has_rustc: false
+    run_benchmarks_skip_existing_has_go: false
+  when: run_benchmarks_skip_existing | default(false) | bool
+
+- name: Detect rustc availability for skip-existing check
+  ansible.builtin.shell:
+    cmd: command -v rustc >/dev/null 2>&1
+  register: run_benchmarks_skip_existing_rustc
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_skip_existing | default(false) | bool
+    - not run_benchmarks_is_windows
+
+- name: Detect go availability for skip-existing check
+  ansible.builtin.shell:
+    cmd: command -v go >/dev/null 2>&1
+  register: run_benchmarks_skip_existing_go
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_skip_existing | default(false) | bool
+    - not run_benchmarks_is_windows
+
+- name: Set compiler toolchain availability for skip-existing check
+  ansible.builtin.set_fact:
+    run_benchmarks_skip_existing_has_rustc: >-
+      {{ run_benchmarks_skip_existing_rustc.rc | default(1) == 0 }}
+    run_benchmarks_skip_existing_has_go: >-
+      {{ run_benchmarks_skip_existing_go.rc | default(1) == 0 }}
+  when:
+    - run_benchmarks_skip_existing | default(false) | bool
+    - not run_benchmarks_is_windows
+
 - name: Filter already-complete categories from active list
   ansible.builtin.set_fact:
     run_benchmarks_active_categories: >-
@@ -73,10 +109,6 @@
             'compiler':           [
               'compiler_c_compile.json',
               'compiler_c_runtime.json',
-              'compiler_rust.json',
-              'compiler_rust_runtime.json',
-              'compiler_rust_external.json',
-              'compiler_go.json',
               'compiler_sqlite.json',
               'compiler_multifile.json'
             ],
@@ -103,6 +135,16 @@
             'gentoo_build_times': 'gentoo_build_times.json',
             'octave':             'octave.json'
           } -%}
+      {%- set compiler_optional = (
+            (['compiler_rust.json', 'compiler_rust_runtime.json', 'compiler_rust_external.json']
+             if run_benchmarks_skip_existing_has_rustc | default(false) else [])
+            +
+            (['compiler_go.json']
+             if run_benchmarks_skip_existing_has_go | default(false) else [])
+          ) -%}
+      {%- set _ = primary.update({
+            'compiler': (primary['compiler'] + compiler_optional)
+          }) -%}
       {%- set unsupported_on_openbsd = [] -%}
       {%- set existing = run_benchmarks_skip_existing_found.files
                          | default([])
