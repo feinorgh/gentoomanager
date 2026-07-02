@@ -629,6 +629,92 @@
   failed_when: false
   when: ansible_system | default('') == 'Linux'
 
+- name: Collect Linux perf-context sysctl snapshot
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      for key in \
+        vm.swappiness vm.overcommit_memory vm.overcommit_ratio \
+        vm.dirty_background_ratio vm.dirty_ratio \
+        vm.dirty_writeback_centisecs vm.dirty_expire_centisecs \
+        vm.zone_reclaim_mode vm.watermark_scale_factor \
+        kernel.numa_balancing kernel.sched_autogroup_enabled; do
+        value=$(sysctl -n "$key" 2>/dev/null || echo "unknown")
+        printf '%s=%s\n' "$key" "${value:-unknown}"
+      done
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_linux_perf_sysctl_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Collect Linux perf-context sysfs snapshot
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+
+      thp_defrag=$(awk '
+        {
+          for (idx = 1; idx <= NF; idx++) {
+            if ($idx ~ /^\[/) {
+              gsub(/\[|\]/, "", $idx)
+              print $idx
+              exit
+            }
+          }
+        }' /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || echo "unknown")
+
+      zswap_raw=$(cat /sys/module/zswap/parameters/enabled 2>/dev/null || echo "unknown")
+      case "$zswap_raw" in
+        1|[yY]|[yY][eE][sS]|[tT][rR][uU][eE]|[oO][nN]|[eE][nN][aA][bB][lL][eE][dD])
+          zswap_enabled=enabled
+          ;;
+        0|[nN]|[nN][oO]|[fF][aA][lL][sS][eE]|[oO][fF][fF]|[dD][iI][sS][aA][bB][lL][eE][dD])
+          zswap_enabled=disabled
+          ;;
+        *)
+          zswap_enabled=unknown
+          ;;
+      esac
+
+      if [ -d /sys/block ] && ls /sys/block >/dev/null 2>&1; then
+        if ls /sys/block/zram* >/dev/null 2>&1; then
+          zram_enabled=1
+        else
+          zram_enabled=0
+        fi
+      else
+        zram_enabled=unknown
+      fi
+
+      cpu_idle_governor=$(cat /sys/devices/system/cpu/cpuidle/current_governor_ro 2>/dev/null \
+        || cat /sys/devices/system/cpu/cpuidle/current_governor 2>/dev/null \
+        || echo "unknown")
+
+      if [ -r /sys/devices/system/cpu/cpufreq/boost ]; then
+        cpu_boost_enabled=$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null || echo "unknown")
+      elif [ -r /sys/devices/system/cpu/intel_pstate/no_turbo ]; then
+        no_turbo=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null || echo "unknown")
+        case "$no_turbo" in
+          0) cpu_boost_enabled=1 ;;
+          1) cpu_boost_enabled=0 ;;
+          *) cpu_boost_enabled=unknown ;;
+        esac
+      else
+        cpu_boost_enabled=unknown
+      fi
+
+      printf 'thp_defrag=%s\n' "$thp_defrag"
+      printf 'zswap_enabled=%s\n' "$zswap_enabled"
+      printf 'zram_enabled=%s\n' "$zram_enabled"
+      printf 'cpu_idle_governor=%s\n' "$cpu_idle_governor"
+      printf 'cpu_boost_enabled=%s\n' "$cpu_boost_enabled"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_linux_perf_sysfs_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
 - name: Detect Gentoo profile
   ansible.builtin.shell:
     cmd: |
@@ -669,6 +755,22 @@
       {%- if run_benchmarks_cpu_affinity | length > 0 -%}
       taskset -c {{ run_benchmarks_cpu_affinity }} hyperfine{%- else -%}
       hyperfine{%- endif -%}
+
+- name: Build Linux perf-context lookup map
+  ansible.builtin.set_fact:
+    run_benchmarks_linux_perf_context_map: >-
+      {{
+        dict(
+          (
+            (run_benchmarks_linux_perf_sysctl_raw.stdout_lines | default([]))
+            + (run_benchmarks_linux_perf_sysfs_raw.stdout_lines | default([]))
+          )
+          | select('search', '=')
+          | map('split', '=', 1)
+          | list
+        )
+      }}
+  when: ansible_system | default('') == 'Linux'
 
 - name: Parse host metadata
   ansible.builtin.set_fact:
@@ -786,6 +888,30 @@
           run_benchmarks_thp_raw.stdout | default('unknown') | trim
           if (ansible_system | default('') == 'Linux')
           else 'unknown'
+        }}
+      linux_perf_context: >-
+        {%- set linux_perf_ctx = run_benchmarks_linux_perf_context_map | default({}) -%}
+        {{
+          {
+            'vm_swappiness': linux_perf_ctx.get('vm.swappiness', 'unknown'),
+            'vm_overcommit_memory': linux_perf_ctx.get('vm.overcommit_memory', 'unknown'),
+            'vm_overcommit_ratio': linux_perf_ctx.get('vm.overcommit_ratio', 'unknown'),
+            'vm_dirty_background_ratio': linux_perf_ctx.get('vm.dirty_background_ratio', 'unknown'),
+            'vm_dirty_ratio': linux_perf_ctx.get('vm.dirty_ratio', 'unknown'),
+            'vm_dirty_writeback_centisecs': linux_perf_ctx.get('vm.dirty_writeback_centisecs', 'unknown'),
+            'vm_dirty_expire_centisecs': linux_perf_ctx.get('vm.dirty_expire_centisecs', 'unknown'),
+            'vm_zone_reclaim_mode': linux_perf_ctx.get('vm.zone_reclaim_mode', 'unknown'),
+            'vm_watermark_scale_factor': linux_perf_ctx.get('vm.watermark_scale_factor', 'unknown'),
+            'kernel_numa_balancing': linux_perf_ctx.get('kernel.numa_balancing', 'unknown'),
+            'kernel_sched_autogroup_enabled': linux_perf_ctx.get('kernel.sched_autogroup_enabled', 'unknown'),
+            'thp_defrag': linux_perf_ctx.get('thp_defrag', 'unknown'),
+            'zswap_enabled': linux_perf_ctx.get('zswap_enabled', 'unknown'),
+            'zram_enabled': linux_perf_ctx.get('zram_enabled', 'unknown'),
+            'cpu_idle_governor': linux_perf_ctx.get('cpu_idle_governor', 'unknown'),
+            'cpu_boost_enabled': linux_perf_ctx.get('cpu_boost_enabled', 'unknown')
+          }
+          if (ansible_system | default('') == 'Linux')
+          else {}
         }}
       cpu_cache_l3: >-
         {{

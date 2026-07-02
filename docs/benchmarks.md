@@ -44,6 +44,7 @@ reports with charts.
 - [Reports](#reports)
   - [Markdown Report](#markdown-report)
   - [HTML Report](#html-report)
+  - [Linux performance-context metadata](#linux-performance-context-metadata)
   - [Regenerating Reports](#regenerating-reports)
   - [Dashboard](#dashboard)
 - [Benchmark Fixture Files](#benchmark-fixture-files)
@@ -1197,6 +1198,21 @@ Contents:
 - Gentoo build time tables
 
 No server required — all assets load from CDN.
+
+### Linux performance-context metadata
+
+For Linux hosts, `metadata.json` includes a `linux_perf_context` object with:
+`vm_swappiness`, `vm_overcommit_memory`, `vm_overcommit_ratio`,
+`vm_dirty_background_ratio`, `vm_dirty_ratio`, `vm_dirty_writeback_centisecs`,
+`vm_dirty_expire_centisecs`, `vm_zone_reclaim_mode`,
+`vm_watermark_scale_factor`, `kernel_numa_balancing`,
+`kernel_sched_autogroup_enabled`, `thp_defrag`, `zswap_enabled`,
+`zram_enabled`, `cpu_idle_governor`, and `cpu_boost_enabled`.
+
+These are context metadata (not timing results). Reports use them for
+host-vs-OS-default comparisons, per-OS default tables, and salient
+cross-host-difference summaries. Missing/unreadable values are recorded as
+`unknown`.
 
 ### Regenerating Reports
 

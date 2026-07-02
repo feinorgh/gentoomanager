@@ -18,7 +18,7 @@ import csv
 import json
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -182,6 +182,78 @@ _BENCH_TOOL_MAP: list[tuple[str, str]] = [
     ("ffmpeg", "ffmpeg"),
     ("magick", "imagemagick"),
 ]
+
+# Linux perf-context field catalog used for shared derivation/reporting.
+_LINUX_PERF_FIELDS: dict[str, dict[str, str]] = {
+    "vm_swappiness": {"type": "int"},
+    "vm_overcommit_memory": {"type": "int"},
+    "vm_overcommit_ratio": {"type": "int"},
+    "vm_dirty_background_ratio": {"type": "int"},
+    "vm_dirty_ratio": {"type": "int"},
+    "vm_dirty_writeback_centisecs": {"type": "int"},
+    "vm_dirty_expire_centisecs": {"type": "int"},
+    "vm_zone_reclaim_mode": {"type": "int"},
+    "vm_watermark_scale_factor": {"type": "int"},
+    "kernel_numa_balancing": {"type": "boolish"},
+    "kernel_sched_autogroup_enabled": {"type": "boolish"},
+    "thp_defrag": {"type": "str"},
+    "zswap_enabled": {"type": "boolish"},
+    "zram_enabled": {"type": "boolish"},
+    "cpu_idle_governor": {"type": "str"},
+    "cpu_boost_enabled": {"type": "boolish"},
+}
+
+_NON_LINUX_OS_INDICATORS = {
+    "windows",
+    "openbsd",
+    "freebsd",
+    "darwin",
+    "macos",
+    "osx",
+    "mac os",
+}
+_KNOWN_LINUX_OS_FAMILIES = {
+    "almalinux",
+    "alpine",
+    "amazonlinux",
+    "arch",
+    "archlinux",
+    "centos",
+    "debian",
+    "fedora",
+    "gentoo",
+    "linux",
+    "mint",
+    "nixos",
+    "opensuse",
+    "popos",
+    "rhel",
+    "redhat",
+    "rocky",
+    "solus",
+    "suse",
+    "ubuntu",
+    "void",
+}
+_LINUX_OS_INDICATORS = {
+    "linux",
+    "gentoo",
+    "red hat",
+    "rhel",
+    "debian",
+    "ubuntu",
+    "fedora",
+    "centos",
+    "rocky",
+    "alma",
+    "arch",
+    "suse",
+    "solus",
+    "void",
+    "nixos",
+    "alpine",
+    "amazon linux",
+}
 
 # Greek mythology names for host anonymization (deterministic order)
 _GREEK_NAMES = [
@@ -1434,6 +1506,362 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     return features
 
 
+def _normalize_linux_perf_value(value: Any, field_type: str) -> str:
+    """Normalize a Linux perf-context value to a canonical display/compare string."""
+    if value in ("", None):
+        return "unknown"
+    raw = str(value).strip()
+    if not raw or raw.lower() == "unknown":
+        return "unknown"
+
+    if field_type == "int":
+        try:
+            return str(int(raw))
+        except (ValueError, OverflowError):
+            try:
+                return str(int(float(raw)))
+            except (ValueError, OverflowError):
+                return "unknown"
+
+    if field_type == "boolish":
+        lowered = raw.lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return "1"
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return "0"
+        return "unknown"
+
+    return raw
+
+
+def _is_field_salient(values: list[Any], field_type: str) -> bool:
+    """Return whether a perf-context field shows meaningful cross-host variation."""
+    known = [v for v in values if v not in ("unknown", "", None)]
+    if len(known) < 3:
+        return False
+
+    if field_type in {"str", "boolish"}:
+        normalized = [str(v) for v in known]
+        return len(set(normalized)) >= 2
+
+    nums: list[float] = []
+    for value in known:
+        try:
+            nums.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if len(nums) < 3:
+        return False
+    return (max(nums) - min(nums)) >= 5.0
+
+
+def _metadata_indicates_linux(metadata: dict[str, Any]) -> bool:
+    """Classify Linux-relevant hosts using OS metadata, then perf-context fallback."""
+    os_family = str(metadata.get("os_family", "") or "").strip().lower()
+    os_name = str(metadata.get("os", "") or "").strip().lower()
+    labels = [label for label in (os_family, os_name) if label]
+    normalized_family = re.sub(r"[^a-z0-9]+", "", os_family)
+
+    if any(any(marker in label for marker in _NON_LINUX_OS_INDICATORS) for label in labels):
+        return False
+    if normalized_family in _KNOWN_LINUX_OS_FAMILIES:
+        return True
+    if any(any(marker in label for marker in _LINUX_OS_INDICATORS) for label in labels):
+        return True
+
+    raw_perf_context = metadata.get("linux_perf_context")
+    return isinstance(raw_perf_context, dict) and bool(raw_perf_context)
+
+
+def _derive_linux_perf_context(
+    hosts: dict[str, dict[str, Any]], hostnames: list[str]
+) -> dict[str, Any]:
+    """Derive a shared Linux perf-context model for Markdown and HTML rendering."""
+    normalized_by_host: dict[str, dict[str, Any]] = {}
+    linux_hostnames: list[str] = []
+    for hostname in hostnames:
+        metadata = hosts.get(hostname, {}).get("metadata", {}) or {}
+        if not _metadata_indicates_linux(metadata):
+            continue
+        linux_hostnames.append(hostname)
+        os_family = str(metadata.get("os_family", "unknown") or "unknown")
+        raw_perf = metadata.get("linux_perf_context", {}) or {}
+        raw_perf_dict = raw_perf if isinstance(raw_perf, dict) else {}
+        normalized_values: dict[str, str] = {}
+        for field, config in _LINUX_PERF_FIELDS.items():
+            normalized_values[field] = _normalize_linux_perf_value(
+                raw_perf_dict.get(field), config["type"]
+            )
+        normalized_by_host[hostname] = {"os_family": os_family, "values": normalized_values}
+
+    os_defaults: dict[str, dict[str, str]] = {}
+    coverage: dict[str, dict[str, int]] = {}
+    values_by_field: dict[str, list[str]] = {}
+    host_rows: list[dict[str, str]] = []
+
+    for field in _LINUX_PERF_FIELDS:
+        by_os: dict[str, list[str]] = defaultdict(list)
+        values_by_field[field] = []
+        known_count = 0
+
+        for hostname in linux_hostnames:
+            host_data = normalized_by_host.get(hostname, {})
+            os_family = str(host_data.get("os_family", "unknown"))
+            value = str(host_data.get("values", {}).get(field, "unknown"))
+            values_by_field[field].append(value)
+
+            if value != "unknown":
+                known_count += 1
+                by_os[os_family].append(value)
+
+        coverage[field] = {"known": known_count, "total": len(linux_hostnames)}
+
+        for os_family, values in by_os.items():
+            counts = Counter(values)
+            default_value = sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))[0][0]
+            os_defaults.setdefault(os_family, {})[field] = default_value
+
+        for hostname in linux_hostnames:
+            host_data = normalized_by_host.get(hostname, {})
+            os_family = str(host_data.get("os_family", "unknown"))
+            value = str(host_data.get("values", {}).get(field, "unknown"))
+            os_default = os_defaults.get(os_family, {}).get(field, "unknown")
+            host_rows.append(
+                {
+                    "host": hostname,
+                    "os_family": os_family,
+                    "field": field,
+                    "value": value,
+                    "os_default": os_default,
+                    "delta": "same" if value == os_default else "different",
+                }
+            )
+
+    salient_fields = [
+        field
+        for field, config in _LINUX_PERF_FIELDS.items()
+        if _is_field_salient(values_by_field.get(field, []), config["type"])
+    ]
+
+    return {
+        "host_rows": host_rows,
+        "os_defaults": os_defaults,
+        "salient_fields": salient_fields,
+        "coverage": coverage,
+    }
+
+
+def _build_linux_perf_context_render_data(
+    perf_model: dict[str, Any],
+) -> dict[str, list[dict[str, str]]]:
+    """Build Markdown/HTML rendering rows from the shared perf-context model."""
+    host_rows_raw = perf_model.get("host_rows", [])
+    host_rows = sorted(
+        [row for row in host_rows_raw if isinstance(row, dict)],
+        key=lambda row: (str(row.get("field", "")), str(row.get("host", ""))),
+    )
+
+    host_vs_default_rows = [
+        {
+            "host": str(row.get("host", "unknown")),
+            "os_family": str(row.get("os_family", "unknown")),
+            "field": str(row.get("field", "unknown")),
+            "value": str(row.get("value", "unknown")),
+            "os_default": str(row.get("os_default", "unknown")),
+            "delta": str(row.get("delta", "different")),
+        }
+        for row in host_rows
+    ]
+
+    coverage = perf_model.get("coverage", {})
+    os_defaults = perf_model.get("os_defaults", {})
+    os_field_coverage: dict[tuple[str, str], dict[str, int]] = defaultdict(
+        lambda: {"known": 0, "total": 0}
+    )
+    for row in host_rows:
+        os_family = str(row.get("os_family", "unknown"))
+        field = str(row.get("field", "unknown"))
+        value = str(row.get("value", "unknown"))
+        key = (os_family, field)
+        os_field_coverage[key]["total"] += 1
+        if value != "unknown":
+            os_field_coverage[key]["known"] += 1
+
+    os_default_rows: list[dict[str, str]] = []
+    for os_family in sorted(os_defaults):
+        defaults = os_defaults.get(os_family, {})
+        if not isinstance(defaults, dict):
+            continue
+        for field in sorted(defaults):
+            cov = os_field_coverage.get((str(os_family), str(field)), {})
+            known = int(cov.get("known", 0))
+            total = int(cov.get("total", 0))
+            os_default_rows.append(
+                {
+                    "os_family": str(os_family),
+                    "field": str(field),
+                    "default": str(defaults.get(field, "unknown")),
+                    "coverage": f"{known}/{total}",
+                }
+            )
+
+    salient_rows: list[dict[str, str]] = []
+    for field in perf_model.get("salient_fields", []):
+        values = sorted(
+            {
+                str(row.get("value", "unknown"))
+                for row in host_rows
+                if row.get("field") == field and row.get("value", "unknown") != "unknown"
+            }
+        )
+        cov = coverage.get(field, {})
+        known = int(cov.get("known", 0)) if isinstance(cov, dict) else 0
+        total = int(cov.get("total", 0)) if isinstance(cov, dict) else 0
+        salient_rows.append(
+            {
+                "field": str(field),
+                "distinct_values": ", ".join(values) if values else "unknown",
+                "distinct_count": str(len(values)),
+                "coverage": f"{known}/{total}",
+            }
+        )
+
+    return {
+        "host_vs_default": host_vs_default_rows,
+        "os_defaults": os_default_rows,
+        "salient": salient_rows,
+    }
+
+
+def _build_linux_perf_context_html_section(
+    hosts: dict[str, dict[str, Any]],
+    hostnames: list[str],
+) -> tuple[str, str]:
+    """Build shared Linux perf-context HTML section and optional chart JS."""
+    perf_model = _derive_linux_perf_context(hosts, hostnames)
+    perf_render = _build_linux_perf_context_render_data(perf_model)
+
+    host_vs_default_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{row['host']}</td>"
+            f"<td>{row['os_family']}</td>"
+            f"<td><code>{row['field']}</code></td>"
+            f"<td><code>{row['value']}</code></td>"
+            f"<td><code>{row['os_default']}</code></td>"
+            f"<td>{row['delta']}</td>"
+            "</tr>"
+        )
+        for row in perf_render["host_vs_default"]
+    )
+    host_vs_default_table_html = f"""
+      <table>
+        <thead>
+          <tr>
+            <th>Host</th><th>OS</th><th>Field</th><th>Value</th><th>OS Default</th><th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {host_vs_default_rows_html}
+        </tbody>
+      </table>"""
+
+    os_defaults_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{row['os_family']}</td>"
+            f"<td><code>{row['field']}</code></td>"
+            f"<td><code>{row['default']}</code></td>"
+            f"<td>{row['coverage']}</td>"
+            "</tr>"
+        )
+        for row in perf_render["os_defaults"]
+    )
+    os_defaults_table_html = f"""
+      <table>
+        <thead>
+          <tr><th>OS</th><th>Field</th><th>Default</th><th>Coverage</th></tr>
+        </thead>
+        <tbody>
+          {os_defaults_rows_html}
+        </tbody>
+      </table>"""
+
+    salient_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td><code>{row['field']}</code></td>"
+            f"<td>{row['distinct_values']}</td>"
+            f"<td>{row['coverage']}</td>"
+            "</tr>"
+        )
+        for row in perf_render["salient"]
+    )
+    salient_table_html = f"""
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Distinct values</th><th>Coverage</th></tr>
+        </thead>
+        <tbody>
+          {salient_rows_html}
+        </tbody>
+      </table>"""
+
+    chart_js = ""
+    salient_chart_container_html = ""
+    salient_content_html = salient_table_html
+    if perf_render["salient"]:
+        salient_chart_container_html = """
+      <div class="chart-container">
+        <canvas id="linux-perf-context-chart"></canvas>
+      </div>"""
+        salient_chart_data = {
+            "labels": [row["field"] for row in perf_render["salient"]],
+            "datasets": [
+                {
+                    "label": "Distinct host values",
+                    "data": [int(row["distinct_count"]) for row in perf_render["salient"]],
+                    "backgroundColor": "#4dc9f6cc",
+                    "borderColor": "#4dc9f6",
+                    "borderWidth": 1,
+                }
+            ],
+        }
+        chart_js = f"""
+    new Chart(document.getElementById('linux-perf-context-chart'), {{
+      type: 'bar',
+      data: {json.dumps(salient_chart_data, indent=2)},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: false }},
+          title: {{ display: true, text: 'Linux perf-context salience by field' }}
+        }},
+        scales: {{
+          y: {{
+            beginAtZero: true,
+            ticks: {{ precision: 0 }},
+            title: {{ display: true, text: 'Distinct values' }}
+          }}
+        }}
+      }}
+    }});"""
+    else:
+        salient_content_html = "<p>No strong cross-host signal detected.</p>"
+
+    section_html = f"""
+  <section id="cat-linux-perf-context">
+    <h2>Linux Performance Context — Host vs OS Defaults</h2>
+    {host_vs_default_table_html}
+    <h3>Linux Performance Context — OS Defaults</h3>
+    {os_defaults_table_html}
+    <h3>Linux Performance Context — Salient Differences</h3>
+    {salient_content_html}
+    {salient_chart_container_html}
+  </section>"""
+    return section_html, chart_js
+
+
 # ---------------------------------------------------------------------------
 # Markdown report
 # ---------------------------------------------------------------------------
@@ -2534,6 +2962,58 @@ def generate_markdown(
     lines.append(_md_table(env_headers, env_rows))
     lines.append("")
 
+    perf_model = _derive_linux_perf_context(hosts, hostnames)
+    perf_render = _build_linux_perf_context_render_data(perf_model)
+
+    lines.append("## Linux Performance Context — Host vs OS Defaults")
+    lines.append("")
+    lines.append(
+        _md_table(
+            ["Host", "OS", "Field", "Value", "OS Default", "Delta"],
+            [
+                [
+                    row["host"],
+                    row["os_family"],
+                    row["field"],
+                    row["value"],
+                    row["os_default"],
+                    row["delta"],
+                ]
+                for row in perf_render["host_vs_default"]
+            ],
+        )
+    )
+    lines.append("")
+
+    lines.append("## Linux Performance Context — OS Defaults")
+    lines.append("")
+    lines.append(
+        _md_table(
+            ["OS", "Field", "Default", "Coverage"],
+            [
+                [row["os_family"], row["field"], row["default"], row["coverage"]]
+                for row in perf_render["os_defaults"]
+            ],
+        )
+    )
+    lines.append("")
+
+    lines.append("## Linux Performance Context — Salient Differences")
+    lines.append("")
+    if perf_render["salient"]:
+        lines.append(
+            _md_table(
+                ["Field", "Distinct values", "Coverage"],
+                [
+                    [row["field"], row["distinct_values"], row["coverage"]]
+                    for row in perf_render["salient"]
+                ],
+            )
+        )
+    else:
+        lines.append("No strong cross-host signal detected.")
+    lines.append("")
+
     # --- FFmpeg codec availability ---
     codec_avail = _collect_codec_availability(hosts)
     if codec_avail:
@@ -3006,6 +3486,11 @@ def generate_html(
 
     # --- Host summary ---
     summary_html = _html_host_summary(hosts, hostnames, scores)
+    linux_perf_context_html, linux_perf_context_chart_js = _build_linux_perf_context_html_section(
+        hosts, hostnames
+    )
+    if linux_perf_context_chart_js:
+        chart_blocks.append(linux_perf_context_chart_js)
 
     # Pre-compute host features once for version row annotation across all categories
     all_host_features_html = {h: extract_features(hosts[h].get("metadata", {})) for h in hostnames}
@@ -3277,7 +3762,7 @@ def generate_html(
     CHART_CATS['{canvas_id}'] = '{category}';""")
 
     # --- Navigation ---
-    nav_items = []
+    nav_items = ['<a href="#cat-linux-perf-context">Linux Perf Context</a>']
     for category in sorted(table.keys()):
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
         nav_items.append(f'<a href="#cat-{category}">{title}</a>')
@@ -3684,6 +4169,8 @@ def generate_html(
       {summary_html}
     </div>
   </section>
+
+  {linux_perf_context_html}
 
   {"".join(html_sections)}
 
@@ -4154,6 +4641,10 @@ def _build_pages_sidebar(
     idx_cls = " active" if current_page == "index" else ""
     lines.append(f'    <a href="index.html" class="nav-page-link{idx_cls}">Overview</a>')
     lines.append('    <a href="index.html#host-summary" class="nav-cat-link">Host Summary</a>')
+    lines.append(
+        '    <a href="index.html#cat-linux-perf-context" class="nav-cat-link">'
+        "Linux Perf Context</a>"
+    )
     lines.append('    <a href="index.html#scores" class="nav-cat-link">Scores</a>')
     if has_codec:
         lines.append(
@@ -4219,6 +4710,9 @@ def generate_html_pages(
     # ── index.html ────────────────────────────────────────────────────────────
     sidebar_index = _build_pages_sidebar("index", table, has_build_times, has_boot_times, has_codec)
     summary_html = _html_host_summary(hosts, hostnames, scores)
+    linux_perf_context_html, index_chart_js = _build_linux_perf_context_html_section(
+        hosts, hostnames
+    )
 
     scores_html = ""
     if scores:
@@ -4403,6 +4897,7 @@ def generate_html_pages(
         {summary_html}
       </div>
     </section>
+    {linux_perf_context_html}
     {scores_html}
     {codec_avail_html}
     {build_times_html}
@@ -4411,7 +4906,7 @@ def generate_html_pages(
     index_html = _html_page_wrapper(
         "Gentoo VM Benchmark Report — Overview",
         index_content,
-        "",
+        index_chart_js,
         sidebar_index,
         timestamp,
     )

@@ -1,0 +1,2 @@
+minor_changes:
+  - "run_benchmarks: collect Linux perf-context settings in metadata and document their use for host-vs-default and salient-difference reporting."

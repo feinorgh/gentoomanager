@@ -13,14 +13,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from generate_benchmark_report import (
     CATEGORY_TITLES,
+    _build_linux_perf_context_render_data,
     _build_python_pivot,
     _compiler_display_version,
+    _derive_linux_perf_context,
+    _is_field_salient,
+    _normalize_linux_perf_value,
     _python_display_version,
     _sort_cc_label,
     anonymize_hosts,
     build_comparison_table,
     extract_features,
     generate_html,
+    generate_html_pages,
     generate_markdown,
     load_results,
 )
@@ -70,6 +75,14 @@ def _make_metadata(
         "cflags": cflags,
         "ldflags": ldflags,
     }
+
+
+def _make_metadata_with_perf(hostname: str, perf: dict[str, object]) -> dict:
+    md = _make_metadata(hostname)
+    md["os"] = "Gentoo"
+    md["os_family"] = "Gentoo"
+    md["linux_perf_context"] = perf
+    return md
 
 
 @pytest.fixture()
@@ -177,6 +190,57 @@ def sample_results(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture()
+def mixed_os_perf_hosts() -> tuple[dict[str, dict[str, dict[str, object]]], list[str]]:
+    hosts = {
+        "linux-a": {
+            "metadata": {
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "10"},
+            }
+        },
+        "linux-redhat": {
+            "metadata": {
+                "os": "Red Hat Enterprise Linux 9.4",
+                "os_family": "RedHat",
+                "linux_perf_context": {"vm_swappiness": "20"},
+            }
+        },
+        "win-c": {
+            "metadata": {
+                "os": "Windows 11",
+                "os_family": "Windows",
+            }
+        },
+        "win-with-perf": {
+            "metadata": {
+                "os": "Windows 11",
+                "os_family": "Windows",
+                "linux_perf_context": {"vm_swappiness": "99"},
+            }
+        },
+        "mac-d": {"metadata": {"os": "macOS 14", "os_family": "Darwin"}},
+        "bsd-e": {"metadata": {"os": "OpenBSD 7.7", "os_family": "OpenBSD"}},
+        "linux-empty": {
+            "metadata": {
+                "os": "Ubuntu 24.04",
+                "os_family": "Ubuntu",
+                "linux_perf_context": {},
+            }
+        },
+        "linux-nondict": {
+            "metadata": {
+                "os": "Solus 4.6",
+                "os_family": "Solus",
+                "linux_perf_context": "invalid",
+            }
+        },
+        "linux-missing": {"metadata": {"os": "Debian 12", "os_family": "Debian"}},
+    }
+    return hosts, list(hosts)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -225,6 +289,324 @@ class TestBuildComparisonTable:
         alice = table["compression"]["gzip-compress"]["gentoo-alice"]["mean"]
         bob = table["compression"]["gzip-compress"]["gentoo-bob"]["mean"]
         assert bob < alice
+
+
+def test_markdown_includes_linux_perf_context_defaults_and_deltas(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(
+            _make_metadata_with_perf(
+                "h1",
+                {
+                    "vm_swappiness": 10,
+                    "kernel_sched_autogroup_enabled": 1,
+                    "thp_defrag": "madvise",
+                },
+            )
+        )
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(
+            _make_metadata_with_perf(
+                "h2",
+                {
+                    "vm_swappiness": 60,
+                    "kernel_sched_autogroup_enabled": 1,
+                    "thp_defrag": "always",
+                },
+            )
+        )
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    md = generate_markdown(hosts, table)
+
+    assert "Linux Performance Context — Host vs OS Defaults" in md
+    assert "Linux Performance Context — OS Defaults" in md
+    assert "Linux Performance Context — Salient Differences" in md
+    assert "vm_swappiness" in md
+    assert "thp_defrag" in md
+
+
+def test_html_includes_linux_perf_context_salient_differences(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    c = results / "h3"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    c.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h1", {"vm_swappiness": 10, "thp_defrag": "madvise"}))
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h2", {"vm_swappiness": 80, "thp_defrag": "always"}))
+    )
+    (c / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h3", {"vm_swappiness": 20, "thp_defrag": "never"}))
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+    (c / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.95, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    html = generate_html(hosts, table)
+
+    assert "Linux Performance Context — Salient Differences" in html
+    assert "linux-perf-context-chart" in html
+    assert "No strong cross-host signal detected." not in html
+
+
+def test_perf_context_no_signal_fallback_in_both_outputs(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    perf = {"vm_swappiness": 60, "thp_defrag": "madvise", "kernel_sched_autogroup_enabled": 1}
+    (a / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h1", perf)))
+    (b / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h2", perf)))
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    md = generate_markdown(hosts, table)
+    html = generate_html(hosts, table)
+
+    assert "No strong cross-host signal detected." in md
+    assert "No strong cross-host signal detected." in html
+    assert "linux-perf-context-chart" not in html
+
+
+def test_perf_context_section_parity_between_markdown_and_html(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    c = results / "h3"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    c.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h1", {"vm_swappiness": 10}))
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h2", {"vm_swappiness": 70}))
+    )
+    (c / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h3", {"vm_swappiness": 30}))
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+    (c / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.95, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    md = generate_markdown(hosts, table)
+    html = generate_html(hosts, table)
+
+    for section in [
+        "Linux Performance Context — Host vs OS Defaults",
+        "Linux Performance Context — OS Defaults",
+        "Linux Performance Context — Salient Differences",
+    ]:
+        assert section in md
+        assert section in html
+
+
+def test_generate_html_pages_includes_linux_perf_context_with_fallback(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    perf = {"vm_swappiness": 60, "thp_defrag": "madvise", "kernel_sched_autogroup_enabled": 1}
+    (a / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h1", perf)))
+    (b / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h2", perf)))
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    generate_html_pages(hosts, table, None, tmp_path)
+
+    index_html = (tmp_path / "pages" / "index.html").read_text()
+    assert "Linux Performance Context — Host vs OS Defaults" in index_html
+    assert "Linux Performance Context — OS Defaults" in index_html
+    assert "Linux Performance Context — Salient Differences" in index_html
+    assert "No strong cross-host signal detected." in index_html
+
+
+def test_generate_html_pages_includes_linux_perf_context_salient_chart(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    c = results / "h3"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    c.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h1", {"vm_swappiness": 10, "thp_defrag": "madvise"}))
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h2", {"vm_swappiness": 80, "thp_defrag": "always"}))
+    )
+    (c / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h3", {"vm_swappiness": 20, "thp_defrag": "never"}))
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+    (c / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.95, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    generate_html_pages(hosts, table, None, tmp_path)
+
+    index_html = (tmp_path / "pages" / "index.html").read_text()
+    assert "Linux Performance Context — Host vs OS Defaults" in index_html
+    assert "Linux Performance Context — Salient Differences" in index_html
+    assert "linux-perf-context-chart" in index_html
+    assert "No strong cross-host signal detected." not in index_html
+
+
+def test_perf_context_salience_numeric_behavior() -> None:
+    assert _is_field_salient(["10", "20", "30"], "int") is True
+    assert _is_field_salient(["10", "11", "12"], "int") is False
+    assert _is_field_salient(["10", "unknown", "12"], "int") is False
+
+
+def test_perf_context_salience_categorical_behavior() -> None:
+    assert _is_field_salient(["madvise", "always", "always"], "str") is True
+    assert _is_field_salient(["1", "0", "1"], "boolish") is True
+    assert _is_field_salient(["madvise", "madvise", "madvise"], "str") is False
+
+
+def test_normalize_linux_perf_value_handles_boolish_int_str_and_overflow() -> None:
+    assert _normalize_linux_perf_value("enabled", "boolish") == "1"
+    assert _normalize_linux_perf_value("off", "boolish") == "0"
+    assert _normalize_linux_perf_value("42", "int") == "42"
+    assert _normalize_linux_perf_value("3.9", "int") == "3"
+    assert _normalize_linux_perf_value("  madvise  ", "str") == "madvise"
+    assert _normalize_linux_perf_value("1e309", "int") == "unknown"
+
+
+def test_derive_linux_perf_context_model_contains_defaults_coverage_and_deltas() -> None:
+    hosts = {
+        "h1": {
+            "metadata": {
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "10", "thp_defrag": "madvise"},
+            }
+        },
+        "h2": {
+            "metadata": {
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "60", "thp_defrag": "always"},
+            }
+        },
+        "h3": {
+            "metadata": {
+                "os_family": "Ubuntu",
+                "linux_perf_context": {"vm_swappiness": "20"},
+            }
+        },
+    }
+    model = _derive_linux_perf_context(hosts, ["h1", "h2", "h3"])
+
+    assert set(model.keys()) == {"host_rows", "os_defaults", "salient_fields", "coverage"}
+    assert model["os_defaults"]["Gentoo"]["vm_swappiness"] == "10"
+    assert model["coverage"]["thp_defrag"] == {"known": 2, "total": 3}
+
+    row = next(
+        item
+        for item in model["host_rows"]
+        if item["host"] == "h2" and item["field"] == "vm_swappiness"
+    )
+    assert row["os_default"] == "10"
+    assert row["delta"] == "different"
+
+
+def test_derive_linux_perf_context_excludes_non_linux_hosts_from_rows_and_coverage(
+    mixed_os_perf_hosts: tuple[dict[str, dict[str, dict[str, object]]], list[str]],
+) -> None:
+    hosts, hostnames = mixed_os_perf_hosts
+    model = _derive_linux_perf_context(hosts, hostnames)
+
+    assert {"linux-a", "linux-redhat", "linux-empty", "linux-nondict", "linux-missing"} == {
+        row["host"] for row in model["host_rows"]
+    }
+    assert model["coverage"]["vm_swappiness"] == {"known": 2, "total": 5}
+
+
+def test_derive_linux_perf_context_excludes_non_linux_host_with_perf_context() -> None:
+    hosts = {
+        "linux-a": {
+            "metadata": {
+                "os": "Debian 12",
+                "os_family": "Debian",
+                "linux_perf_context": {"vm_swappiness": "30"},
+            }
+        },
+        "windows-with-perf": {
+            "metadata": {
+                "os": "Windows 11",
+                "os_family": "Windows",
+                "linux_perf_context": {"vm_swappiness": "80"},
+            }
+        },
+    }
+
+    model = _derive_linux_perf_context(hosts, ["linux-a", "windows-with-perf"])
+    host_rows = {row["host"] for row in model["host_rows"]}
+    assert host_rows == {"linux-a"}
+    assert model["coverage"]["vm_swappiness"] == {"known": 1, "total": 1}
+
+
+def test_linux_perf_os_defaults_use_per_os_field_coverage() -> None:
+    hosts = {
+        "gentoo-a": {
+            "metadata": {
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "10"},
+            }
+        },
+        "gentoo-b": {
+            "metadata": {
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "linux_perf_context": {},
+            }
+        },
+        "ubuntu-a": {
+            "metadata": {
+                "os": "Ubuntu 24.04",
+                "os_family": "Ubuntu",
+                "linux_perf_context": {"vm_swappiness": "20"},
+            }
+        },
+    }
+
+    model = _derive_linux_perf_context(hosts, ["gentoo-a", "gentoo-b", "ubuntu-a"])
+    render_data = _build_linux_perf_context_render_data(model)
+
+    rows = {(row["os_family"], row["field"]): row["coverage"] for row in render_data["os_defaults"]}
+    assert rows[("Gentoo", "vm_swappiness")] == "1/2"
+    assert rows[("Ubuntu", "vm_swappiness")] == "1/1"
 
 
 class TestExtractFeatures:
