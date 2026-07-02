@@ -664,12 +664,27 @@
           }
         }' /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || echo "unknown")
 
-      zswap_enabled=$(cat /sys/module/zswap/parameters/enabled 2>/dev/null || echo "unknown")
+      zswap_raw=$(cat /sys/module/zswap/parameters/enabled 2>/dev/null || echo "unknown")
+      case "$zswap_raw" in
+        1|[yY]|[yY][eE][sS]|[tT][rR][uU][eE]|[oO][nN]|[eE][nN][aA][bB][lL][eE][dD])
+          zswap_enabled=enabled
+          ;;
+        0|[nN]|[nN][oO]|[fF][aA][lL][sS][eE]|[oO][fF][fF]|[dD][iI][sS][aA][bB][lL][eE][dD])
+          zswap_enabled=disabled
+          ;;
+        *)
+          zswap_enabled=unknown
+          ;;
+      esac
 
-      if ls /sys/block/zram* >/dev/null 2>&1; then
-        zram_enabled=1
+      if [ -d /sys/block ] && ls /sys/block >/dev/null 2>&1; then
+        if ls /sys/block/zram* >/dev/null 2>&1; then
+          zram_enabled=1
+        else
+          zram_enabled=0
+        fi
       else
-        zram_enabled=0
+        zram_enabled=unknown
       fi
 
       cpu_idle_governor=$(cat /sys/devices/system/cpu/cpuidle/current_governor_ro 2>/dev/null \
