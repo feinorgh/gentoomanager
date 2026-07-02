@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from generate_benchmark_report import (
     CATEGORY_TITLES,
+    _build_linux_perf_context_render_data,
     _build_python_pivot,
     _compiler_display_version,
     _derive_linux_perf_context,
@@ -187,6 +188,34 @@ def sample_results(tmp_path: Path) -> Path:
         )
 
     return tmp_path
+
+
+@pytest.fixture()
+def mixed_os_perf_hosts() -> tuple[dict[str, dict[str, dict[str, object]]], list[str]]:
+    hosts = {
+        "linux-a": {
+            "metadata": {
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "10"},
+            }
+        },
+        "linux-b": {
+            "metadata": {
+                "os": "Ubuntu 24.04",
+                "os_family": "Ubuntu",
+                "linux_perf_context": {"vm_swappiness": "20"},
+            }
+        },
+        "win-c": {
+            "metadata": {
+                "os": "Windows 11",
+                "os_family": "Windows",
+                "linux_perf_context": {"vm_swappiness": "90"},
+            }
+        },
+    }
+    return hosts, ["linux-a", "linux-b", "win-c"]
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +515,49 @@ def test_derive_linux_perf_context_model_contains_defaults_coverage_and_deltas()
     )
     assert row["os_default"] == "10"
     assert row["delta"] == "different"
+
+
+def test_derive_linux_perf_context_excludes_non_linux_hosts_from_rows_and_coverage(
+    mixed_os_perf_hosts: tuple[dict[str, dict[str, dict[str, object]]], list[str]],
+) -> None:
+    hosts, hostnames = mixed_os_perf_hosts
+    model = _derive_linux_perf_context(hosts, hostnames)
+
+    assert {"linux-a", "linux-b"} == {row["host"] for row in model["host_rows"]}
+    assert model["coverage"]["vm_swappiness"] == {"known": 2, "total": 2}
+
+
+def test_linux_perf_os_defaults_use_per_os_field_coverage() -> None:
+    hosts = {
+        "gentoo-a": {
+            "metadata": {
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "10"},
+            }
+        },
+        "gentoo-b": {
+            "metadata": {
+                "os": "Gentoo",
+                "os_family": "Gentoo",
+                "linux_perf_context": {},
+            }
+        },
+        "ubuntu-a": {
+            "metadata": {
+                "os": "Ubuntu 24.04",
+                "os_family": "Ubuntu",
+                "linux_perf_context": {"vm_swappiness": "20"},
+            }
+        },
+    }
+
+    model = _derive_linux_perf_context(hosts, ["gentoo-a", "gentoo-b", "ubuntu-a"])
+    render_data = _build_linux_perf_context_render_data(model)
+
+    rows = {(row["os_family"], row["field"]): row["coverage"] for row in render_data["os_defaults"]}
+    assert rows[("Gentoo", "vm_swappiness")] == "1/2"
+    assert rows[("Ubuntu", "vm_swappiness")] == "1/1"
 
 
 class TestExtractFeatures:

@@ -203,6 +203,41 @@ _LINUX_PERF_FIELDS: dict[str, dict[str, str]] = {
     "cpu_boost_enabled": {"type": "boolish"},
 }
 
+_LINUX_OS_HINTS = {
+    "linux",
+    "gentoo",
+    "ubuntu",
+    "debian",
+    "fedora",
+    "rhel",
+    "red hat",
+    "centos",
+    "rocky",
+    "alma",
+    "archlinux",
+    "opensuse",
+    "suse",
+    "alpine",
+    "amazon linux",
+    "nixos",
+    "void",
+}
+_NON_LINUX_OS_HINTS = {
+    "windows",
+    "win32",
+    "darwin",
+    "macos",
+    "osx",
+    "freebsd",
+    "openbsd",
+    "netbsd",
+    "dragonfly",
+    "solaris",
+    "illumos",
+    "aix",
+    "hp-ux",
+}
+
 # Greek mythology names for host anonymization (deterministic order)
 _GREEK_NAMES = [
     "Zeus",
@@ -1503,13 +1538,30 @@ def _is_field_salient(values: list[Any], field_type: str) -> bool:
     return (max(nums) - min(nums)) >= 5.0
 
 
+def _metadata_indicates_linux(metadata: dict[str, Any]) -> bool:
+    """Return whether metadata indicates this host is Linux-family."""
+    os_family = str(metadata.get("os_family", "") or "").strip().lower()
+    os_name = str(metadata.get("os", "") or "").strip().lower()
+    labels = [label for label in (os_family, os_name) if label]
+
+    if any(
+        any(non_linux_hint in label for non_linux_hint in _NON_LINUX_OS_HINTS) for label in labels
+    ):
+        return False
+    return any(any(linux_hint in label for linux_hint in _LINUX_OS_HINTS) for label in labels)
+
+
 def _derive_linux_perf_context(
     hosts: dict[str, dict[str, Any]], hostnames: list[str]
 ) -> dict[str, Any]:
     """Derive a shared Linux perf-context model for Markdown and HTML rendering."""
     normalized_by_host: dict[str, dict[str, Any]] = {}
+    linux_hostnames: list[str] = []
     for hostname in hostnames:
         metadata = hosts.get(hostname, {}).get("metadata", {}) or {}
+        if not _metadata_indicates_linux(metadata):
+            continue
+        linux_hostnames.append(hostname)
         os_family = str(metadata.get("os_family", "unknown") or "unknown")
         raw_perf = metadata.get("linux_perf_context", {}) or {}
         raw_perf_dict = raw_perf if isinstance(raw_perf, dict) else {}
@@ -1530,7 +1582,7 @@ def _derive_linux_perf_context(
         values_by_field[field] = []
         known_count = 0
 
-        for hostname in hostnames:
+        for hostname in linux_hostnames:
             host_data = normalized_by_host.get(hostname, {})
             os_family = str(host_data.get("os_family", "unknown"))
             value = str(host_data.get("values", {}).get(field, "unknown"))
@@ -1540,14 +1592,14 @@ def _derive_linux_perf_context(
                 known_count += 1
                 by_os[os_family].append(value)
 
-        coverage[field] = {"known": known_count, "total": len(hostnames)}
+        coverage[field] = {"known": known_count, "total": len(linux_hostnames)}
 
         for os_family, values in by_os.items():
             counts = Counter(values)
             default_value = sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))[0][0]
             os_defaults.setdefault(os_family, {})[field] = default_value
 
-        for hostname in hostnames:
+        for hostname in linux_hostnames:
             host_data = normalized_by_host.get(hostname, {})
             os_family = str(host_data.get("os_family", "unknown"))
             value = str(host_data.get("values", {}).get(field, "unknown"))
@@ -1601,15 +1653,27 @@ def _build_linux_perf_context_render_data(
 
     coverage = perf_model.get("coverage", {})
     os_defaults = perf_model.get("os_defaults", {})
+    os_field_coverage: dict[tuple[str, str], dict[str, int]] = defaultdict(
+        lambda: {"known": 0, "total": 0}
+    )
+    for row in host_rows:
+        os_family = str(row.get("os_family", "unknown"))
+        field = str(row.get("field", "unknown"))
+        value = str(row.get("value", "unknown"))
+        key = (os_family, field)
+        os_field_coverage[key]["total"] += 1
+        if value != "unknown":
+            os_field_coverage[key]["known"] += 1
+
     os_default_rows: list[dict[str, str]] = []
     for os_family in sorted(os_defaults):
         defaults = os_defaults.get(os_family, {})
         if not isinstance(defaults, dict):
             continue
         for field in sorted(defaults):
-            cov = coverage.get(field, {})
-            known = int(cov.get("known", 0)) if isinstance(cov, dict) else 0
-            total = int(cov.get("total", 0)) if isinstance(cov, dict) else 0
+            cov = os_field_coverage.get((str(os_family), str(field)), {})
+            known = int(cov.get("known", 0))
+            total = int(cov.get("total", 0))
             os_default_rows.append(
                 {
                     "os_family": str(os_family),
