@@ -1465,10 +1465,10 @@ def _normalize_linux_perf_value(value: Any, field_type: str) -> str:
     if field_type == "int":
         try:
             return str(int(raw))
-        except ValueError:
+        except (ValueError, OverflowError):
             try:
                 return str(int(float(raw)))
-            except ValueError:
+            except (ValueError, OverflowError):
                 return "unknown"
 
     if field_type == "boolish":

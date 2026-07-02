@@ -15,7 +15,9 @@ from generate_benchmark_report import (
     CATEGORY_TITLES,
     _build_python_pivot,
     _compiler_display_version,
+    _derive_linux_perf_context,
     _is_field_salient,
+    _normalize_linux_perf_value,
     _python_display_version,
     _sort_cc_label,
     anonymize_hosts,
@@ -335,6 +337,51 @@ def test_perf_context_salience_categorical_behavior() -> None:
     assert _is_field_salient(["madvise", "always", "always"], "str") is True
     assert _is_field_salient(["1", "0", "1"], "boolish") is True
     assert _is_field_salient(["madvise", "madvise", "madvise"], "str") is False
+
+
+def test_normalize_linux_perf_value_handles_boolish_int_str_and_overflow() -> None:
+    assert _normalize_linux_perf_value("enabled", "boolish") == "1"
+    assert _normalize_linux_perf_value("off", "boolish") == "0"
+    assert _normalize_linux_perf_value("42", "int") == "42"
+    assert _normalize_linux_perf_value("3.9", "int") == "3"
+    assert _normalize_linux_perf_value("  madvise  ", "str") == "madvise"
+    assert _normalize_linux_perf_value("1e309", "int") == "unknown"
+
+
+def test_derive_linux_perf_context_model_contains_defaults_coverage_and_deltas() -> None:
+    hosts = {
+        "h1": {
+            "metadata": {
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "10", "thp_defrag": "madvise"},
+            }
+        },
+        "h2": {
+            "metadata": {
+                "os_family": "Gentoo",
+                "linux_perf_context": {"vm_swappiness": "60", "thp_defrag": "always"},
+            }
+        },
+        "h3": {
+            "metadata": {
+                "os_family": "Ubuntu",
+                "linux_perf_context": {"vm_swappiness": "20"},
+            }
+        },
+    }
+    model = _derive_linux_perf_context(hosts, ["h1", "h2", "h3"])
+
+    assert set(model.keys()) == {"host_rows", "os_defaults", "salient_fields", "coverage"}
+    assert model["os_defaults"]["Gentoo"]["vm_swappiness"] == "10"
+    assert model["coverage"]["thp_defrag"] == {"known": 2, "total": 3}
+
+    row = next(
+        item
+        for item in model["host_rows"]
+        if item["host"] == "h2" and item["field"] == "vm_swappiness"
+    )
+    assert row["os_default"] == "10"
+    assert row["delta"] == "different"
 
 
 class TestExtractFeatures:
