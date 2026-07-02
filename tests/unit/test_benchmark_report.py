@@ -398,6 +398,39 @@ def test_generate_html_pages_includes_linux_perf_context_with_fallback(tmp_path:
     assert "No strong cross-host signal detected." in index_html
 
 
+def test_generate_html_pages_includes_linux_perf_context_salient_chart(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    c = results / "h3"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    c.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h1", {"vm_swappiness": 10, "thp_defrag": "madvise"}))
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h2", {"vm_swappiness": 80, "thp_defrag": "always"}))
+    )
+    (c / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h3", {"vm_swappiness": 20, "thp_defrag": "never"}))
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+    (c / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.95, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    generate_html_pages(hosts, table, None, tmp_path)
+
+    index_html = (tmp_path / "pages" / "index.html").read_text()
+    assert "Linux Performance Context — Host vs OS Defaults" in index_html
+    assert "Linux Performance Context — Salient Differences" in index_html
+    assert "linux-perf-context-chart" in index_html
+    assert "No strong cross-host signal detected." not in index_html
+
+
 def test_perf_context_salience_numeric_behavior() -> None:
     assert _is_field_salient(["10", "20", "30"], "int") is True
     assert _is_field_salient(["10", "11", "12"], "int") is False

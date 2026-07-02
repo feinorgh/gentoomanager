@@ -1647,6 +1647,135 @@ def _build_linux_perf_context_render_data(
     }
 
 
+def _build_linux_perf_context_html_section(
+    hosts: dict[str, dict[str, Any]],
+    hostnames: list[str],
+) -> tuple[str, str]:
+    """Build shared Linux perf-context HTML section and optional chart JS."""
+    perf_model = _derive_linux_perf_context(hosts, hostnames)
+    perf_render = _build_linux_perf_context_render_data(perf_model)
+
+    host_vs_default_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{row['host']}</td>"
+            f"<td>{row['os_family']}</td>"
+            f"<td><code>{row['field']}</code></td>"
+            f"<td><code>{row['value']}</code></td>"
+            f"<td><code>{row['os_default']}</code></td>"
+            f"<td>{row['delta']}</td>"
+            "</tr>"
+        )
+        for row in perf_render["host_vs_default"]
+    )
+    host_vs_default_table_html = f"""
+      <table>
+        <thead>
+          <tr>
+            <th>Host</th><th>OS</th><th>Field</th><th>Value</th><th>OS Default</th><th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {host_vs_default_rows_html}
+        </tbody>
+      </table>"""
+
+    os_defaults_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{row['os_family']}</td>"
+            f"<td><code>{row['field']}</code></td>"
+            f"<td><code>{row['default']}</code></td>"
+            f"<td>{row['coverage']}</td>"
+            "</tr>"
+        )
+        for row in perf_render["os_defaults"]
+    )
+    os_defaults_table_html = f"""
+      <table>
+        <thead>
+          <tr><th>OS</th><th>Field</th><th>Default</th><th>Coverage</th></tr>
+        </thead>
+        <tbody>
+          {os_defaults_rows_html}
+        </tbody>
+      </table>"""
+
+    salient_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td><code>{row['field']}</code></td>"
+            f"<td>{row['distinct_values']}</td>"
+            f"<td>{row['coverage']}</td>"
+            "</tr>"
+        )
+        for row in perf_render["salient"]
+    )
+    salient_table_html = f"""
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Distinct values</th><th>Coverage</th></tr>
+        </thead>
+        <tbody>
+          {salient_rows_html}
+        </tbody>
+      </table>"""
+
+    chart_js = ""
+    salient_chart_container_html = ""
+    salient_content_html = salient_table_html
+    if perf_render["salient"]:
+        salient_chart_container_html = """
+      <div class="chart-container">
+        <canvas id="linux-perf-context-chart"></canvas>
+      </div>"""
+        salient_chart_data = {
+            "labels": [row["field"] for row in perf_render["salient"]],
+            "datasets": [
+                {
+                    "label": "Distinct host values",
+                    "data": [int(row["distinct_count"]) for row in perf_render["salient"]],
+                    "backgroundColor": "#4dc9f6cc",
+                    "borderColor": "#4dc9f6",
+                    "borderWidth": 1,
+                }
+            ],
+        }
+        chart_js = f"""
+    new Chart(document.getElementById('linux-perf-context-chart'), {{
+      type: 'bar',
+      data: {json.dumps(salient_chart_data, indent=2)},
+      options: {{
+        responsive: true,
+        plugins: {{
+          legend: {{ display: false }},
+          title: {{ display: true, text: 'Linux perf-context salience by field' }}
+        }},
+        scales: {{
+          y: {{
+            beginAtZero: true,
+            ticks: {{ precision: 0 }},
+            title: {{ display: true, text: 'Distinct values' }}
+          }}
+        }}
+      }}
+    }});"""
+    else:
+        salient_content_html = "<p>No strong cross-host signal detected.</p>"
+
+    section_html = f"""
+  <section id="cat-linux-perf-context">
+    <h2>Linux Performance Context — Host vs OS Defaults</h2>
+    {host_vs_default_table_html}
+    <h3>Linux Performance Context — OS Defaults</h3>
+    {os_defaults_table_html}
+    <h3>Linux Performance Context — Salient Differences</h3>
+    {salient_content_html}
+    {salient_chart_container_html}
+  </section>"""
+    return section_html, chart_js
+
+
 # ---------------------------------------------------------------------------
 # Markdown report
 # ---------------------------------------------------------------------------
@@ -3271,125 +3400,11 @@ def generate_html(
 
     # --- Host summary ---
     summary_html = _html_host_summary(hosts, hostnames, scores)
-    perf_model = _derive_linux_perf_context(hosts, hostnames)
-    perf_render = _build_linux_perf_context_render_data(perf_model)
-
-    host_vs_default_rows_html = "".join(
-        (
-            "<tr>"
-            f"<td>{row['host']}</td>"
-            f"<td>{row['os_family']}</td>"
-            f"<td><code>{row['field']}</code></td>"
-            f"<td><code>{row['value']}</code></td>"
-            f"<td><code>{row['os_default']}</code></td>"
-            f"<td>{row['delta']}</td>"
-            "</tr>"
-        )
-        for row in perf_render["host_vs_default"]
+    linux_perf_context_html, linux_perf_context_chart_js = _build_linux_perf_context_html_section(
+        hosts, hostnames
     )
-    host_vs_default_table_html = f"""
-      <table>
-        <thead>
-          <tr>
-            <th>Host</th><th>OS</th><th>Field</th><th>Value</th><th>OS Default</th><th>Delta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {host_vs_default_rows_html}
-        </tbody>
-      </table>"""
-
-    os_defaults_rows_html = "".join(
-        (
-            "<tr>"
-            f"<td>{row['os_family']}</td>"
-            f"<td><code>{row['field']}</code></td>"
-            f"<td><code>{row['default']}</code></td>"
-            f"<td>{row['coverage']}</td>"
-            "</tr>"
-        )
-        for row in perf_render["os_defaults"]
-    )
-    os_defaults_table_html = f"""
-      <table>
-        <thead>
-          <tr><th>OS</th><th>Field</th><th>Default</th><th>Coverage</th></tr>
-        </thead>
-        <tbody>
-          {os_defaults_rows_html}
-        </tbody>
-      </table>"""
-
-    salient_rows_html = "".join(
-        (
-            "<tr>"
-            f"<td><code>{row['field']}</code></td>"
-            f"<td>{row['distinct_values']}</td>"
-            f"<td>{row['coverage']}</td>"
-            "</tr>"
-        )
-        for row in perf_render["salient"]
-    )
-    salient_table_html = f"""
-      <table>
-        <thead>
-          <tr><th>Field</th><th>Distinct values</th><th>Coverage</th></tr>
-        </thead>
-        <tbody>
-          {salient_rows_html}
-        </tbody>
-      </table>"""
-    salient_chart_container_html = ""
-    salient_content_html = salient_table_html
-    if perf_render["salient"]:
-        salient_chart_container_html = """
-      <div class="chart-container">
-        <canvas id="linux-perf-context-chart"></canvas>
-      </div>"""
-        salient_chart_data = {
-            "labels": [row["field"] for row in perf_render["salient"]],
-            "datasets": [
-                {
-                    "label": "Distinct host values",
-                    "data": [int(row["distinct_count"]) for row in perf_render["salient"]],
-                    "backgroundColor": "#4dc9f6cc",
-                    "borderColor": "#4dc9f6",
-                    "borderWidth": 1,
-                }
-            ],
-        }
-        chart_blocks.append(f"""
-    new Chart(document.getElementById('linux-perf-context-chart'), {{
-      type: 'bar',
-      data: {json.dumps(salient_chart_data, indent=2)},
-      options: {{
-        responsive: true,
-        plugins: {{
-          legend: {{ display: false }},
-          title: {{ display: true, text: 'Linux perf-context salience by field' }}
-        }},
-        scales: {{
-          y: {{
-            beginAtZero: true,
-            ticks: {{ precision: 0 }},
-            title: {{ display: true, text: 'Distinct values' }}
-          }}
-        }}
-      }}
-    }});""")
-    else:
-        salient_content_html = "<p>No strong cross-host signal detected.</p>"
-
-    linux_perf_context_html = f"""
-  <section id="cat-linux-perf-context">
-    <h2>Linux Performance Context — Host vs OS Defaults</h2>
-    {host_vs_default_table_html}
-    <h3>Linux Performance Context — OS Defaults</h3>
-    {os_defaults_table_html}
-    <h3>Linux Performance Context — Salient Differences</h3>
-    {salient_content_html}
-    {salient_chart_container_html}
-  </section>"""
+    if linux_perf_context_chart_js:
+        chart_blocks.append(linux_perf_context_chart_js)
 
     # Pre-compute host features once for version row annotation across all categories
     all_host_features_html = {h: extract_features(hosts[h].get("metadata", {})) for h in hostnames}
@@ -4609,127 +4624,9 @@ def generate_html_pages(
     # ── index.html ────────────────────────────────────────────────────────────
     sidebar_index = _build_pages_sidebar("index", table, has_build_times, has_boot_times, has_codec)
     summary_html = _html_host_summary(hosts, hostnames, scores)
-    perf_model = _derive_linux_perf_context(hosts, hostnames)
-    perf_render = _build_linux_perf_context_render_data(perf_model)
-
-    host_vs_default_rows_html = "".join(
-        (
-            "<tr>"
-            f"<td>{row['host']}</td>"
-            f"<td>{row['os_family']}</td>"
-            f"<td><code>{row['field']}</code></td>"
-            f"<td><code>{row['value']}</code></td>"
-            f"<td><code>{row['os_default']}</code></td>"
-            f"<td>{row['delta']}</td>"
-            "</tr>"
-        )
-        for row in perf_render["host_vs_default"]
+    linux_perf_context_html, index_chart_js = _build_linux_perf_context_html_section(
+        hosts, hostnames
     )
-    host_vs_default_table_html = f"""
-      <table>
-        <thead>
-          <tr>
-            <th>Host</th><th>OS</th><th>Field</th><th>Value</th><th>OS Default</th><th>Delta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {host_vs_default_rows_html}
-        </tbody>
-      </table>"""
-
-    os_defaults_rows_html = "".join(
-        (
-            "<tr>"
-            f"<td>{row['os_family']}</td>"
-            f"<td><code>{row['field']}</code></td>"
-            f"<td><code>{row['default']}</code></td>"
-            f"<td>{row['coverage']}</td>"
-            "</tr>"
-        )
-        for row in perf_render["os_defaults"]
-    )
-    os_defaults_table_html = f"""
-      <table>
-        <thead>
-          <tr><th>OS</th><th>Field</th><th>Default</th><th>Coverage</th></tr>
-        </thead>
-        <tbody>
-          {os_defaults_rows_html}
-        </tbody>
-      </table>"""
-
-    salient_rows_html = "".join(
-        (
-            "<tr>"
-            f"<td><code>{row['field']}</code></td>"
-            f"<td>{row['distinct_values']}</td>"
-            f"<td>{row['coverage']}</td>"
-            "</tr>"
-        )
-        for row in perf_render["salient"]
-    )
-    salient_table_html = f"""
-      <table>
-        <thead>
-          <tr><th>Field</th><th>Distinct values</th><th>Coverage</th></tr>
-        </thead>
-        <tbody>
-          {salient_rows_html}
-        </tbody>
-      </table>"""
-
-    salient_chart_container_html = ""
-    salient_content_html = salient_table_html
-    index_chart_js = ""
-    if perf_render["salient"]:
-        salient_chart_container_html = """
-      <div class="chart-container">
-        <canvas id="linux-perf-context-chart"></canvas>
-      </div>"""
-        salient_chart_data = {
-            "labels": [row["field"] for row in perf_render["salient"]],
-            "datasets": [
-                {
-                    "label": "Distinct host values",
-                    "data": [int(row["distinct_count"]) for row in perf_render["salient"]],
-                    "backgroundColor": "#4dc9f6cc",
-                    "borderColor": "#4dc9f6",
-                    "borderWidth": 1,
-                }
-            ],
-        }
-        index_chart_js = f"""
-    new Chart(document.getElementById('linux-perf-context-chart'), {{
-      type: 'bar',
-      data: {json.dumps(salient_chart_data, indent=2)},
-      options: {{
-        responsive: true,
-        plugins: {{
-          legend: {{ display: false }},
-          title: {{ display: true, text: 'Linux perf-context salience by field' }}
-        }},
-        scales: {{
-          y: {{
-            beginAtZero: true,
-            ticks: {{ precision: 0 }},
-            title: {{ display: true, text: 'Distinct values' }}
-          }}
-        }}
-      }}
-    }});"""
-    else:
-        salient_content_html = "<p>No strong cross-host signal detected.</p>"
-
-    linux_perf_context_html = f"""
-    <section id="cat-linux-perf-context">
-      <h2>Linux Performance Context — Host vs OS Defaults</h2>
-      {host_vs_default_table_html}
-      <h3>Linux Performance Context — OS Defaults</h3>
-      {os_defaults_table_html}
-      <h3>Linux Performance Context — Salient Differences</h3>
-      {salient_content_html}
-      {salient_chart_container_html}
-    </section>"""
 
     scores_html = ""
     if scores:
