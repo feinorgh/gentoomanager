@@ -18,6 +18,7 @@
       Void: void
       NixOS: nixos
       Solus: solus
+      Solaris: openindiana
     _provision_os_key: >-
       {{ _os_family_map[ansible_os_family] | default(ansible_distribution | lower) }}
   when: ansible_os_family is defined

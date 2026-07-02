@@ -387,7 +387,20 @@
         name: provision_benchmarks
         tasks_from: os/solus.yml
 
-# ── Play 12: Provision Windows hosts ────────────────────────────────────
+# ── Play 12: OpenIndiana ────────────────────────────────────────────────
+- name: Provision OpenIndiana hosts
+  hosts: provision_os_openindiana
+  serial: "{{ provision_serial | default(1) }}"
+  gather_facts: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  tasks:
+    - name: Provision benchmark dependencies
+      ansible.builtin.include_role:
+        name: provision_benchmarks
+        tasks_from: os/openindiana.yml
+
+# ── Play 13: Provision Windows hosts ────────────────────────────────────
 - name: Provision Windows hosts
   hosts: mswindows
   serial: "{{ provision_serial | default(1) }}"
@@ -400,7 +413,7 @@
         name: provision_benchmarks
         tasks_from: os/windows.yml
 
-# ── Play 13: Shut down VMs that were booted by this run (--manage-power) ─
+# ── Play 14: Shut down VMs that were booted by this run (--manage-power) ─
 - name: Shut down VMs booted by this provisioning run
   hosts: "{{ 'all' if (provision_include_windows | default(false) | bool) else 'all:!mswindows:!win:!win11:!win10' }}"
   serial: "100%"
