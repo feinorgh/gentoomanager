@@ -200,10 +200,10 @@ def mixed_os_perf_hosts() -> tuple[dict[str, dict[str, dict[str, object]]], list
                 "linux_perf_context": {"vm_swappiness": "10"},
             }
         },
-        "linux-b": {
+        "linux-redhat": {
             "metadata": {
-                "os": "Ubuntu 24.04",
-                "os_family": "Ubuntu",
+                "os": "Red Hat Enterprise Linux 9.4",
+                "os_family": "RedHat",
                 "linux_perf_context": {"vm_swappiness": "20"},
             }
         },
@@ -211,11 +211,27 @@ def mixed_os_perf_hosts() -> tuple[dict[str, dict[str, dict[str, object]]], list
             "metadata": {
                 "os": "Windows 11",
                 "os_family": "Windows",
-                "linux_perf_context": {"vm_swappiness": "90"},
             }
         },
+        "mac-d": {"metadata": {"os": "macOS 14", "os_family": "Darwin"}},
+        "bsd-e": {"metadata": {"os": "OpenBSD 7.7", "os_family": "OpenBSD"}},
+        "linux-empty": {
+            "metadata": {
+                "os": "Ubuntu 24.04",
+                "os_family": "Ubuntu",
+                "linux_perf_context": {},
+            }
+        },
+        "linux-nondict": {
+            "metadata": {
+                "os": "Solus 4.6",
+                "os_family": "Solus",
+                "linux_perf_context": "invalid",
+            }
+        },
+        "linux-missing": {"metadata": {"os": "Debian 12", "os_family": "Debian"}},
     }
-    return hosts, ["linux-a", "linux-b", "win-c"]
+    return hosts, list(hosts)
 
 
 # ---------------------------------------------------------------------------
@@ -523,7 +539,7 @@ def test_derive_linux_perf_context_excludes_non_linux_hosts_from_rows_and_covera
     hosts, hostnames = mixed_os_perf_hosts
     model = _derive_linux_perf_context(hosts, hostnames)
 
-    assert {"linux-a", "linux-b"} == {row["host"] for row in model["host_rows"]}
+    assert {"linux-a", "linux-redhat"} == {row["host"] for row in model["host_rows"]}
     assert model["coverage"]["vm_swappiness"] == {"known": 2, "total": 2}
 
 
