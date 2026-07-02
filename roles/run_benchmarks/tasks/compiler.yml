@@ -298,33 +298,46 @@
     cmd: |
       set -e
       if command -v rustc >/dev/null 2>&1; then
-        mkdir -p {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src {{ run_benchmarks_work_dir }}/rust_bench/src {{ run_benchmarks_work_dir }}/rust_bench/fixtures
+        mkdir -p \
+          {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src \
+          {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src \
+          {{ run_benchmarks_work_dir }}/rust_bench/external_bench/src \
+          {{ run_benchmarks_work_dir }}/rust_bench/external_bench/fixtures
         cat > {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/Cargo.toml << 'TOML'
       [package]
       name = "bench"
       version = "0.1.0"
       edition = "2021"
       TOML
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml << 'TOML'
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/Cargo.toml << 'TOML'
       [package]
       name = "bench"
       version = "0.1.0"
       edition = "2021"
-      autobins = false
+
+      [[bin]]
+      name = "rust_runtime"
+      path = "src/main.rs"
+      TOML
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/external_bench/Cargo.toml << 'TOML'
+      [package]
+      name = "bench"
+      version = "0.1.0"
+      edition = "2021"
 
       [dependencies]
       regex = "=1.11.1"
       serde_json = "=1.0.140"
 
       [[bin]]
-      name = "rust_runtime"
-      path = "src/runtime.rs"
-
-      [[bin]]
       name = "rust_external"
-      path = "src/external.rs"
+      path = "src/main.rs"
       TOML
-        rm -f {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs {{ run_benchmarks_work_dir }}/rust_bench/src/compile.rs
+        rm -f \
+          {{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml \
+          {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs \
+          {{ run_benchmarks_work_dir }}/rust_bench/src/runtime.rs \
+          {{ run_benchmarks_work_dir }}/rust_bench/src/external.rs
         cat > {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src/main.rs << 'RUST'
       fn matmul(a: &[[f64; 128]; 128], b: &[[f64; 128]; 128]) -> [[f64; 128]; 128] {
           let mut c = [[0.0f64; 128]; 128];
@@ -353,7 +366,7 @@
           println!("result: {}", c[64][64]);
       }
       RUST
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/src/runtime.rs << 'RUST'
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src/main.rs << 'RUST'
       fn main() {
           let mut x: u64 = 42;
           let mut acc: u64 = 0;
@@ -364,7 +377,7 @@
           println!("{}", acc);
       }
       RUST
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/src/external.rs << 'RUST'
+        cat > {{ run_benchmarks_work_dir }}/rust_bench/external_bench/src/main.rs << 'RUST'
       use regex::Regex;
       use serde_json::Value;
       use std::fs;
@@ -384,10 +397,10 @@
           println!("{}", count);
       }
       RUST
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/fixtures/external_input.json << 'JSON'
+      cat > {{ run_benchmarks_work_dir }}/rust_bench/external_bench/fixtures/external_input.json << 'JSON'
       ["alice@example.com","invalid","bob.smith@example.org","carol+ops@example.net"]
       JSON
-        (cd {{ run_benchmarks_work_dir }}/rust_bench && cargo generate-lockfile >/dev/null 2>&1 || true)
+      (cd {{ run_benchmarks_work_dir }}/rust_bench/external_bench && cargo generate-lockfile >/dev/null 2>&1 || true)
       fi
   changed_when: false
   failed_when: false
@@ -531,7 +544,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      cd {{ run_benchmarks_work_dir }}/rust_bench
+      cd {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench
       CMDS=()
       FAILED_TOOLCHAINS=()
       {% for tc in run_benchmarks_rust_resolved.stdout_lines | default([]) %}
@@ -554,6 +567,7 @@
       {% endif %}
       {% endfor %}
       if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then
+        rm -f {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json
         printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
       fi
@@ -564,6 +578,7 @@
         hyperfine_rc=$?
       fi
       if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ]; then
+        rm -f {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json
         printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
       fi
@@ -590,7 +605,7 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
-      cd {{ run_benchmarks_work_dir }}/rust_bench
+      cd {{ run_benchmarks_work_dir }}/rust_bench/external_bench
       CMDS=()
       FAILED_TOOLCHAINS=()
       {% for tc in run_benchmarks_rust_resolved.stdout_lines | default([]) %}
@@ -613,6 +628,7 @@
       {% endif %}
       {% endfor %}
       if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then
+        rm -f {{ run_benchmarks_work_dir }}/compiler_rust_external.json
         printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
       fi
@@ -623,6 +639,7 @@
         hyperfine_rc=$?
       fi
       if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ]; then
+        rm -f {{ run_benchmarks_work_dir }}/compiler_rust_external.json
         printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
       fi

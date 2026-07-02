@@ -5,10 +5,22 @@ from pathlib import Path
 COMPILER_TASK = (
     Path(__file__).resolve().parents[2] / "roles" / "run_benchmarks" / "tasks" / "compiler.yml"
 )
+RUN_BENCHMARKS_PLAYBOOK = Path(__file__).resolve().parents[2] / "playbooks" / "run_benchmarks.yml"
+RUN_BENCHMARKS_MAIN = (
+    Path(__file__).resolve().parents[2] / "roles" / "run_benchmarks" / "tasks" / "main.yml"
+)
 
 
 def _content() -> str:
     return COMPILER_TASK.read_text(encoding="utf-8")
+
+
+def _playbook_content() -> str:
+    return RUN_BENCHMARKS_PLAYBOOK.read_text(encoding="utf-8")
+
+
+def _main_content() -> str:
+    return RUN_BENCHMARKS_MAIN.read_text(encoding="utf-8")
 
 
 def test_compiler_task_exports_rust_runtime_json() -> None:
@@ -45,8 +57,12 @@ def test_compiler_task_refreshes_rust_benchmark_project_files() -> None:
 
 def test_compiler_task_disables_rust_cargo_autobins_and_cleans_legacy_main() -> None:
     text = _content()
-    assert "autobins = false" in text
-    assert "rm -f {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs" in text
+    assert "{{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/Cargo.toml" in text
+    assert "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/Cargo.toml" in text
+    assert "{{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src/main.rs" in text
+    assert "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/src/main.rs" in text
+    assert "regex = \"=1.11.1\"" in text
+    assert "serde_json = \"=1.0.140\"" in text
 
 
 def test_compiler_task_keeps_compile_benchmark_in_separate_compile_project() -> None:
@@ -72,3 +88,12 @@ def test_compiler_task_reports_failed_runtime_and_external_toolchain_builds() ->
     assert text.index('if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then') < text.index(
         '[ -z "${CMDS[*]}" ] && exit 0'
     )
+
+
+def test_skip_completion_maps_require_rust_runtime_and_external_outputs() -> None:
+    playbook = _playbook_content()
+    main_tasks = _main_content()
+    assert "compiler_rust_runtime.json" in playbook
+    assert "compiler_rust_external.json" in playbook
+    assert "compiler_rust_runtime.json" in main_tasks
+    assert "compiler_rust_external.json" in main_tasks

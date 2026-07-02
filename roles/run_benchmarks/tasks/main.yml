@@ -70,7 +70,16 @@
       {%- set primary = {
             'compression':        'compression.json',
             'crypto':             'crypto_symmetric.json',
-            'compiler':           'compiler_c_compile.json',
+            'compiler':           [
+              'compiler_c_compile.json',
+              'compiler_c_runtime.json',
+              'compiler_rust.json',
+              'compiler_rust_runtime.json',
+              'compiler_rust_external.json',
+              'compiler_go.json',
+              'compiler_sqlite.json',
+              'compiler_multifile.json'
+            ],
             'python':             'python.json',
             'numeric':            'numeric_compiled.json',
             'sqlite':             'sqlite_write.json',
@@ -105,8 +114,14 @@
         {%- if cat in unsupported_on_openbsd -%}
         {%- else -%}
           {%- set f = primary.get(cat, '') -%}
-          {%- if not f or f not in existing -%}
-            {%- set _ = filtered.append(cat) -%}
+          {%- if f is string -%}
+            {%- if not f or f not in existing -%}
+              {%- set _ = filtered.append(cat) -%}
+            {%- endif -%}
+          {%- else -%}
+            {%- if f | reject('in', existing) | list | length > 0 -%}
+              {%- set _ = filtered.append(cat) -%}
+            {%- endif -%}
           {%- endif -%}
         {%- endif -%}
       {%- endfor -%}

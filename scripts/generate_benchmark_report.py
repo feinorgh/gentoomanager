@@ -85,8 +85,6 @@ CATEGORY_TITLES = {
     "compiler_c_compile": "C Compilation Speed",
     "compiler_c_runtime": "C Runtime Performance",
     "compiler_rust": "Rust Compilation Speed",
-    "compiler_rust_runtime": "Rust Runtime Performance",
-    "compiler_rust_external": "Rust External Workload Performance",
     "compiler_go": "Go Compilation Speed",
     "python": "Python Performance",
     "ffmpeg_video_encode": "FFmpeg Video Encoding",
