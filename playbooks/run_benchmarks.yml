@@ -228,6 +228,40 @@
         - run_benchmarks_skip_complete | default(false) | bool
         - inventory_hostname not in (groups['mswindows'] | default([]))
 
+    - name: Set default preflight compiler toolchain availability
+      ansible.builtin.set_fact:
+        run_benchmarks_preflight_has_rustc: false
+        run_benchmarks_preflight_has_go: false
+      when: run_benchmarks_skip_complete | default(false) | bool
+
+    - name: Detect rustc availability for completion gating
+      ansible.builtin.raw: command -v rustc >/dev/null 2>&1
+      register: run_benchmarks_preflight_rustc_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['mswindows'] | default([]))
+
+    - name: Detect go availability for completion gating
+      ansible.builtin.raw: command -v go >/dev/null 2>&1
+      register: run_benchmarks_preflight_go_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['mswindows'] | default([]))
+
+    - name: Set preflight compiler toolchain availability
+      ansible.builtin.set_fact:
+        run_benchmarks_preflight_has_rustc: >-
+          {{ run_benchmarks_preflight_rustc_raw.rc | default(1) == 0 }}
+        run_benchmarks_preflight_has_go: >-
+          {{ run_benchmarks_preflight_go_raw.rc | default(1) == 0 }}
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['mswindows'] | default([]))
+
     - name: Check existing result files for this host on controller
       ansible.builtin.find:
         paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
@@ -270,7 +304,12 @@
           {%- set primary = {
             'compression':        'compression.json',
             'crypto':             'crypto_symmetric.json',
-            'compiler':           'compiler_c_compile.json',
+            'compiler':           [
+              'compiler_c_compile.json',
+              'compiler_c_runtime.json',
+              'compiler_sqlite.json',
+              'compiler_multifile.json'
+            ],
             'python':             'python.json',
             'numeric':            'numeric_compiled.json',
             'sqlite':             'sqlite_write.json',
@@ -294,14 +333,30 @@
              'octave':             'octave.json',
              'gentoo_build_times': 'gentoo_build_times.json'
            } -%}
+          {%- set compiler_optional = (
+               (['compiler_rust.json', 'compiler_rust_runtime.json', 'compiler_rust_external.json']
+                if run_benchmarks_preflight_has_rustc | default(false) else [])
+               +
+               (['compiler_go.json']
+                if run_benchmarks_preflight_has_go | default(false) else [])
+             ) -%}
+          {%- set _ = primary.update({
+               'compiler': (primary['compiler'] + compiler_optional)
+             }) -%}
           {%- set unsupported_on_openbsd = [] -%}
           {%- set missing = [] -%}
           {%- for cat in _skip_check_categories -%}
             {%- if cat in unsupported_on_openbsd -%}
             {%- else -%}
               {%- set f = primary.get(cat, '') -%}
-              {%- if f and f not in existing -%}
-                {%- set _ = missing.append(cat) -%}
+              {%- if f is string -%}
+                {%- if f and f not in existing -%}
+                  {%- set _ = missing.append(cat) -%}
+                {%- endif -%}
+              {%- else -%}
+                {%- if f | reject('in', existing) | list | length > 0 -%}
+                  {%- set _ = missing.append(cat) -%}
+                {%- endif -%}
               {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
