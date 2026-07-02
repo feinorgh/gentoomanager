@@ -213,6 +213,13 @@ def mixed_os_perf_hosts() -> tuple[dict[str, dict[str, dict[str, object]]], list
                 "os_family": "Windows",
             }
         },
+        "win-with-perf": {
+            "metadata": {
+                "os": "Windows 11",
+                "os_family": "Windows",
+                "linux_perf_context": {"vm_swappiness": "99"},
+            }
+        },
         "mac-d": {"metadata": {"os": "macOS 14", "os_family": "Darwin"}},
         "bsd-e": {"metadata": {"os": "OpenBSD 7.7", "os_family": "OpenBSD"}},
         "linux-empty": {
@@ -539,8 +546,34 @@ def test_derive_linux_perf_context_excludes_non_linux_hosts_from_rows_and_covera
     hosts, hostnames = mixed_os_perf_hosts
     model = _derive_linux_perf_context(hosts, hostnames)
 
-    assert {"linux-a", "linux-redhat"} == {row["host"] for row in model["host_rows"]}
-    assert model["coverage"]["vm_swappiness"] == {"known": 2, "total": 2}
+    assert {"linux-a", "linux-redhat", "linux-empty", "linux-nondict", "linux-missing"} == {
+        row["host"] for row in model["host_rows"]
+    }
+    assert model["coverage"]["vm_swappiness"] == {"known": 2, "total": 5}
+
+
+def test_derive_linux_perf_context_excludes_non_linux_host_with_perf_context() -> None:
+    hosts = {
+        "linux-a": {
+            "metadata": {
+                "os": "Debian 12",
+                "os_family": "Debian",
+                "linux_perf_context": {"vm_swappiness": "30"},
+            }
+        },
+        "windows-with-perf": {
+            "metadata": {
+                "os": "Windows 11",
+                "os_family": "Windows",
+                "linux_perf_context": {"vm_swappiness": "80"},
+            }
+        },
+    }
+
+    model = _derive_linux_perf_context(hosts, ["linux-a", "windows-with-perf"])
+    host_rows = {row["host"] for row in model["host_rows"]}
+    assert host_rows == {"linux-a"}
+    assert model["coverage"]["vm_swappiness"] == {"known": 1, "total": 1}
 
 
 def test_linux_perf_os_defaults_use_per_os_field_coverage() -> None:

@@ -203,6 +203,58 @@ _LINUX_PERF_FIELDS: dict[str, dict[str, str]] = {
     "cpu_boost_enabled": {"type": "boolish"},
 }
 
+_NON_LINUX_OS_INDICATORS = {
+    "windows",
+    "openbsd",
+    "freebsd",
+    "darwin",
+    "macos",
+    "osx",
+    "mac os",
+}
+_KNOWN_LINUX_OS_FAMILIES = {
+    "almalinux",
+    "alpine",
+    "amazonlinux",
+    "arch",
+    "archlinux",
+    "centos",
+    "debian",
+    "fedora",
+    "gentoo",
+    "linux",
+    "mint",
+    "nixos",
+    "opensuse",
+    "popos",
+    "rhel",
+    "redhat",
+    "rocky",
+    "solus",
+    "suse",
+    "ubuntu",
+    "void",
+}
+_LINUX_OS_INDICATORS = {
+    "linux",
+    "gentoo",
+    "red hat",
+    "rhel",
+    "debian",
+    "ubuntu",
+    "fedora",
+    "centos",
+    "rocky",
+    "alma",
+    "arch",
+    "suse",
+    "solus",
+    "void",
+    "nixos",
+    "alpine",
+    "amazon linux",
+}
+
 # Greek mythology names for host anonymization (deterministic order)
 _GREEK_NAMES = [
     "Zeus",
@@ -1504,7 +1556,19 @@ def _is_field_salient(values: list[Any], field_type: str) -> bool:
 
 
 def _metadata_indicates_linux(metadata: dict[str, Any]) -> bool:
-    """Return whether metadata carries Linux perf-context data to analyze."""
+    """Classify Linux-relevant hosts using OS metadata, then perf-context fallback."""
+    os_family = str(metadata.get("os_family", "") or "").strip().lower()
+    os_name = str(metadata.get("os", "") or "").strip().lower()
+    labels = [label for label in (os_family, os_name) if label]
+    normalized_family = re.sub(r"[^a-z0-9]+", "", os_family)
+
+    if any(any(marker in label for marker in _NON_LINUX_OS_INDICATORS) for label in labels):
+        return False
+    if normalized_family in _KNOWN_LINUX_OS_FAMILIES:
+        return True
+    if any(any(marker in label for marker in _LINUX_OS_INDICATORS) for label in labels):
+        return True
+
     raw_perf_context = metadata.get("linux_perf_context")
     return isinstance(raw_perf_context, dict) and bool(raw_perf_context)
 
