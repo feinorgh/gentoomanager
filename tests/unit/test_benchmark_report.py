@@ -24,6 +24,7 @@ from generate_benchmark_report import (
     build_comparison_table,
     extract_features,
     generate_html,
+    generate_html_pages,
     generate_markdown,
     load_results,
 )
@@ -371,6 +372,30 @@ def test_perf_context_section_parity_between_markdown_and_html(tmp_path: Path) -
     ]:
         assert section in md
         assert section in html
+
+
+def test_generate_html_pages_includes_linux_perf_context_with_fallback(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    perf = {"vm_swappiness": 60, "thp_defrag": "madvise", "kernel_sched_autogroup_enabled": 1}
+    (a / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h1", perf)))
+    (b / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h2", perf)))
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    generate_html_pages(hosts, table, None, tmp_path)
+
+    index_html = (tmp_path / "pages" / "index.html").read_text()
+    assert "Linux Performance Context — Host vs OS Defaults" in index_html
+    assert "Linux Performance Context — OS Defaults" in index_html
+    assert "Linux Performance Context — Salient Differences" in index_html
+    assert "No strong cross-host signal detected." in index_html
 
 
 def test_perf_context_salience_numeric_behavior() -> None:
