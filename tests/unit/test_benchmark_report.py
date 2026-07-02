@@ -72,6 +72,14 @@ def _make_metadata(
     }
 
 
+def _make_metadata_with_perf(hostname: str, perf: dict[str, object]) -> dict:
+    md = _make_metadata(hostname)
+    md["os"] = "Gentoo"
+    md["os_family"] = "Gentoo"
+    md["linux_perf_context"] = perf
+    return md
+
+
 @pytest.fixture()
 def sample_results(tmp_path: Path) -> Path:
     """Create a sample benchmark results directory."""
@@ -225,6 +233,95 @@ class TestBuildComparisonTable:
         alice = table["compression"]["gzip-compress"]["gentoo-alice"]["mean"]
         bob = table["compression"]["gzip-compress"]["gentoo-bob"]["mean"]
         assert bob < alice
+
+
+def test_markdown_includes_linux_perf_context_defaults_and_deltas(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(
+            _make_metadata_with_perf(
+                "h1",
+                {
+                    "vm_swappiness": 10,
+                    "kernel_sched_autogroup_enabled": 1,
+                    "thp_defrag": "madvise",
+                },
+            )
+        )
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(
+            _make_metadata_with_perf(
+                "h2",
+                {
+                    "vm_swappiness": 60,
+                    "kernel_sched_autogroup_enabled": 1,
+                    "thp_defrag": "always",
+                },
+            )
+        )
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    md = generate_markdown(hosts, table)
+
+    assert "Linux Performance Context — Host vs OS Defaults" in md
+    assert "vm_swappiness" in md
+    assert "thp_defrag" in md
+
+
+def test_html_includes_linux_perf_context_salient_differences(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    (a / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h1", {"vm_swappiness": 10, "thp_defrag": "madvise"}))
+    )
+    (b / "metadata.json").write_text(
+        json.dumps(_make_metadata_with_perf("h2", {"vm_swappiness": 80, "thp_defrag": "always"}))
+    )
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    html = generate_html(hosts, table)
+
+    assert "Linux Performance Context — Salient Differences" in html
+    assert "linux-perf-context-chart" in html
+
+
+def test_perf_context_no_signal_fallback_in_both_outputs(tmp_path: Path) -> None:
+    results = tmp_path / "results"
+    a = results / "h1"
+    b = results / "h2"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+
+    perf = {"vm_swappiness": 60, "thp_defrag": "madvise", "kernel_sched_autogroup_enabled": 1}
+    (a / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h1", perf)))
+    (b / "metadata.json").write_text(json.dumps(_make_metadata_with_perf("h2", perf)))
+    (a / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 1.0, 0.01))))
+    (b / "compression.json").write_text(json.dumps(_make_hyperfine_json(("gzip", 0.9, 0.01))))
+
+    hosts = load_results(tmp_path)
+    table = build_comparison_table(hosts)
+    md = generate_markdown(hosts, table)
+    html = generate_html(hosts, table)
+
+    assert "No strong cross-host signal detected" in md
+    assert "No strong cross-host signal detected" in html
 
 
 class TestExtractFeatures:
