@@ -636,6 +636,48 @@ class TestNewCategoriesInReport:
         assert "opencv_kodak" in html.lower() or "kodak" in html.lower()
 
 
+@pytest.fixture()
+def rust_results(tmp_path: Path) -> Path:
+    """Rust compiler runtime/external fixture data for report rendering tests."""
+    results = tmp_path / "results"
+    host_dir = results / "gentoo-rust"
+    host_dir.mkdir(parents=True)
+    (host_dir / "metadata.json").write_text(json.dumps(_make_metadata("gentoo-rust")))
+    (host_dir / "compiler_rust_runtime.json").write_text(
+        json.dumps(
+            _make_hyperfine_json(
+                ("rustc-1.86.0-runtime", 0.42, 0.02),
+                ("rustc-1.86.0-runtime-alt", 0.39, 0.01),
+            )
+        )
+    )
+    (host_dir / "compiler_rust_external.json").write_text(
+        json.dumps(
+            _make_hyperfine_json(
+                ("rustc-1.86.0-external", 0.71, 0.03),
+                ("rustc-1.86.0-external-alt", 0.66, 0.02),
+            )
+        )
+    )
+    return tmp_path
+
+
+class TestRustCompilerTitlesInReport:
+    def test_markdown_includes_rust_titles(self, rust_results: Path) -> None:
+        hosts = load_results(rust_results)
+        table = build_comparison_table(hosts)
+        md = generate_markdown(hosts, table)
+        assert "Rust Runtime Performance" in md
+        assert "Rust External Workload Performance" in md
+
+    def test_html_includes_rust_titles(self, rust_results: Path) -> None:
+        hosts = load_results(rust_results)
+        table = build_comparison_table(hosts)
+        html = generate_html(hosts, table)
+        assert "Rust Runtime Performance" in html
+        assert "Rust External Workload Performance" in html
+
+
 class TestMissingCategoryGraceful:
     """Report must not crash when a category is missing for one host."""
 
