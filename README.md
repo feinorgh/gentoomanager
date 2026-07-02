@@ -98,6 +98,7 @@ Supported OS families:
 | SUSE (openSUSE) | zypper | — |
 | FreeBSD | ports (`make BATCH=yes`) | — |
 | OpenBSD | pkg_add | — |
+| OpenIndiana | pkg (IPS) | — |
 | Void Linux | xbps-install | — |
 | NixOS | nix-env | — |
 | Solus | eopkg | — |
@@ -106,8 +107,8 @@ If a package manager is unavailable for the configured Python interpreter,
 the role falls back to invoking `dnf`/`yum`
 as shell commands so no Python bindings are needed.
 
-Hyperfine is installed via the native package manager where possible; if
-unavailable, a pre-built binary is downloaded from the GitHub release.
+Hyperfine is installed via the native package manager where possible; on
+Linux-family targets it may fall back to a pre-built GitHub release binary.
 
 ### `run_benchmarks`
 

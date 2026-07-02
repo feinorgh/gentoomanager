@@ -119,7 +119,7 @@
             'imagemagick':        'imagemagick_resize.json',
             'coreutils':          'coreutils.json',
             'memory':             ('memory_latency.json'
-                                   if ansible_system == 'OpenBSD'
+                                   if ansible_system in ['OpenBSD', 'SunOS']
                                    else 'memory_bandwidth.json'),
             'process':            'process.json',
             'disk':               ('disk_skip.json'
@@ -146,6 +146,7 @@
             'compiler': (primary['compiler'] + compiler_optional)
           }) -%}
       {%- set unsupported_on_openbsd = [] -%}
+      {%- set unsupported_on_openindiana = ['disk', 'boot_time'] -%}
       {%- set existing = run_benchmarks_skip_existing_found.files
                          | default([])
                          | map(attribute='path')
@@ -153,7 +154,7 @@
                          | list -%}
       {%- set filtered = [] -%}
       {%- for cat in run_benchmarks_active_categories -%}
-        {%- if cat in unsupported_on_openbsd -%}
+        {%- if cat in unsupported_on_openbsd or cat in unsupported_on_openindiana -%}
         {%- else -%}
           {%- set f = primary.get(cat, '') -%}
           {%- if f is string -%}

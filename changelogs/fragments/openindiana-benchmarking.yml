@@ -1,0 +1,2 @@
+minor_changes:
+  - "benchmark suite: added OpenIndiana provisioning support (IPS/pkg, official repositories only) and safe-subset runtime handling with explicit unsupported markers for disk and boot_time categories."

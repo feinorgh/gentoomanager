@@ -5,14 +5,14 @@
 # Results are intentionally NOT comparable across runs if the work directory
 # changes filesystems.
 
-# ── OpenBSD gate (Tier 3: requires explicit review) ──────────────────────
+# ── OpenBSD/OpenIndiana gate (Tier 3: requires explicit review) ──────────
 # Skip reason is set earlier in sanity_check.yml (before benchmark_notes.json
 # write). This gate still sets the skip flag so disk benchmark tasks don't run.
 
-- name: Skip disk benchmark on OpenBSD (unsupported tier 3)
+- name: Skip disk benchmark on OpenBSD/OpenIndiana (unsupported tier 3)
   ansible.builtin.set_fact:
     run_benchmarks_disk_skip: true
-  when: ansible_system | default('Linux') == 'OpenBSD'
+  when: ansible_system | default('Linux') in ['OpenBSD', 'SunOS']
 
 # ── Detect work directory filesystem ─────────────────────────────────────
 

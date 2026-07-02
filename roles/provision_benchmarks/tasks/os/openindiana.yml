@@ -1,0 +1,93 @@
+---
+# OpenIndiana – install via IPS (pkg).
+
+- name: Refresh package metadata (OpenIndiana)
+  ansible.builtin.command:
+    cmd: pkg refresh --full
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Install benchmark dependencies (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_packages['OpenIndiana'] }}"
+    state: present
+  become: true
+  failed_when: false
+  register: provision_benchmarks_pkg_result
+
+- name: Install packages individually on partial failure (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ provision_benchmarks_packages['OpenIndiana'] }}"
+  when: provision_benchmarks_pkg_result is failed
+  failed_when: false
+
+- name: Install ffmpeg (OpenIndiana)
+  ansible.builtin.package:
+    name: ffmpeg
+    state: present
+  become: true
+  when: provision_benchmarks_install_ffmpeg | bool
+  failed_when: false
+
+- name: Install numpy (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_numpy_packages['OpenIndiana'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_numpy | bool
+  failed_when: false
+
+- name: Install GIMP (OpenIndiana)
+  ansible.builtin.package:
+    name: gimp
+    state: present
+  become: true
+  when: provision_benchmarks_install_gimp | bool
+  failed_when: false
+
+- name: Install Inkscape (OpenIndiana)
+  ansible.builtin.package:
+    name: inkscape
+    state: present
+  become: true
+  when: provision_benchmarks_install_inkscape | bool
+  failed_when: false
+
+- name: Install OpenCV Python bindings (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_opencv_packages['OpenIndiana'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_opencv | bool
+  failed_when: false
+
+- name: Install Botan CLI (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_botan_packages['OpenIndiana'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_botan | bool
+  failed_when: false
+
+- name: Install mold linker (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_mold_packages['OpenIndiana'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_mold | bool
+  failed_when: false
+
+- name: Install Octave (OpenIndiana)
+  ansible.builtin.package:
+    name: "{{ provision_benchmarks_octave_packages['OpenIndiana'] }}"
+    state: present
+  become: true
+  when: provision_benchmarks_install_octave | bool
+  failed_when: false
+
+- name: Verify installed tools
+  ansible.builtin.include_tasks: verify.yml

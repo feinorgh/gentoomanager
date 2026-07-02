@@ -51,6 +51,7 @@ reports with charts.
   - [Fallback Behaviour](#fallback-behaviour)
 - [RAM Management](#ram-management)
 - [OpenBSD Support](#openbsd-support)
+- [OpenIndiana Support](#openindiana-support)
 - [Windows Support](#windows-support)
 - [Configuration Reference](#configuration-reference)
   - [run\_benchmarks Role](#run_benchmarks-role)
@@ -178,12 +179,14 @@ manager differences across OS families:
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — | |
 | SUSE (openSUSE, SLES) | zypper | — | |
 | FreeBSD | ports (`make BATCH=yes`) | — | All packages (including optional ones: GIMP, Inkscape, OpenCV, Botan, mold, Octave) are built from the ports tree to avoid mixing pkg and ports. |
+| OpenIndiana | pkg (IPS) | — | Official OpenIndiana repositories only (no third-party repos in default flow). |
 | Void Linux | xbps-install | — | |
 | NixOS | nix-env | — | |
 | Solus | eopkg | — | |
 
-If `hyperfine` is not available in the package manager, a pre-built binary
-is downloaded from the [GitHub release](https://github.com/sharkdp/hyperfine/releases).
+If `hyperfine` is not available in the package manager on Linux-family targets,
+a pre-built binary is downloaded from the
+[GitHub release](https://github.com/sharkdp/hyperfine/releases).
 
 > **Note:** `ffmpeg` on RHEL 9/10 currently fails to install from RPM Fusion
 > due to a packaging issue in the RPM Fusion repo itself.  All other packages
@@ -1458,6 +1461,17 @@ following packages are included in the default OpenBSD provisioning list:
   - Inkscape: Not installed by default (`provision_benchmarks_install_inkscape: false`)
 
 All of these packages are available in OpenBSD's standard package repositories.
+
+## OpenIndiana Support
+
+OpenIndiana is supported as a provisioning target and as a benchmark runtime
+target with a safe-subset policy.
+
+- **Provisioning:** uses IPS (`pkg`) with official OpenIndiana repositories.
+- **Runtime safe subset:** categories are run with conservative platform guards.
+- **Tier 3 unsupported categories:** `disk` and `boot_time` are explicitly
+  treated as unsupported on OpenIndiana and emit transparent skip/unsupported
+  artifacts instead of hard-failing benchmark runs.
 
 ## Windows Support
 

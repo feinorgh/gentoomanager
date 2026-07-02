@@ -135,6 +135,25 @@ provision_benchmarks_packages:
     - p7zip
     - ImageMagick
     - sqlite3
+  OpenIndiana:
+    - hyperfine
+    - gcc
+    - clang
+    - openssl
+    - python3
+    - rust
+    - go
+    - git
+    - gzip
+    - bzip2
+    - xz
+    - zstd
+    - lz4
+    - gnupg
+    - diffutils
+    - p7zip
+    - imagemagick
+    - sqlite
 
 # Packages available only via EPEL on RHEL/CentOS
 provision_benchmarks_epel_packages:
@@ -210,6 +229,8 @@ provision_benchmarks_numpy_packages:
     - math/py-numpy
   OpenBSD:
     - py3-numpy
+  OpenIndiana:
+    - python-numpy
 
 # opencv package name per OS family (used when provision_benchmarks_install_opencv is true)
 provision_benchmarks_opencv_packages:
@@ -227,6 +248,8 @@ provision_benchmarks_opencv_packages:
     - graphics/py-opencv
   OpenBSD:
     - py3-opencv
+  OpenIndiana:
+    - python-opencv
 provision_benchmarks_install_botan: true
 
 # botan package name per OS family (provides the botan CLI used by the benchmark)
@@ -245,6 +268,8 @@ provision_benchmarks_botan_packages:
     - security/botan3
   OpenBSD:
     - botan3
+  OpenIndiana:
+    - botan
 
 provision_benchmarks_install_mold: true
 
@@ -264,6 +289,8 @@ provision_benchmarks_mold_packages:
     - devel/mold
   OpenBSD:
     - mold
+  OpenIndiana:
+    - mold
 
 provision_benchmarks_install_octave: true
 
@@ -282,4 +309,6 @@ provision_benchmarks_octave_packages:
   FreeBSD:
     - math/octave
   OpenBSD:
+    - octave
+  OpenIndiana:
     - octave
