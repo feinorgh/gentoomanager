@@ -104,7 +104,7 @@ Graph only when signal is meaningful across relevant hosts:
 - **Numeric fields:** spread exceeds threshold (robust spread rule such as IQR/min-max threshold).
 - **Coverage guard:** require minimum known-value coverage (for example, at least 3 hosts or a configurable ratio).
 
-If no field meets salience criteria, render an explicit “no strong cross-host signal detected” message instead of empty charts.
+If no field meets salience criteria, render an explicit "no strong cross-host signal detected" message instead of empty charts.
 
 ## Presentation requirements (Markdown + HTML parity)
 

@@ -19,7 +19,7 @@
 - **Modify:** `tests/unit/test_benchmark_report.py`
   - Add focused tests for normalization, OS-default derivation, salience gating, Markdown/HTML parity, and no-signal fallback.
 - **Modify:** `docs/benchmarks.md`
-  - Document `linux_perf_context` fields and explain “context metadata” semantics.
+  - Document `linux_perf_context` fields and explain "context metadata" semantics.
 
 ### Task 1: Add failing report tests for perf-context derivation and parity
 
