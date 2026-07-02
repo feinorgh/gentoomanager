@@ -566,7 +566,7 @@
       fi
       {% endif %}
       {% endfor %}
-      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then
         rm -f {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json
         printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
@@ -577,7 +577,7 @@
       else
         hyperfine_rc=$?
       fi
-      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ]; then
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then
         rm -f {{ run_benchmarks_work_dir }}/compiler_rust_runtime.json
         printf 'failed Rust runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
@@ -627,7 +627,7 @@
       fi
       {% endif %}
       {% endfor %}
-      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then
         rm -f {{ run_benchmarks_work_dir }}/compiler_rust_external.json
         printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1
@@ -638,7 +638,7 @@
       else
         hyperfine_rc=$?
       fi
-      if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ]; then
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then
         rm -f {{ run_benchmarks_work_dir }}/compiler_rust_external.json
         printf 'failed Rust external builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
         exit 1

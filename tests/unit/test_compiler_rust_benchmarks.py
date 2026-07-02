@@ -85,7 +85,7 @@ def test_compiler_task_reports_failed_runtime_and_external_toolchain_builds() ->
     assert 'FAILED_TOOLCHAINS=()' in text
     assert 'failed Rust runtime builds for:' in text
     assert 'failed Rust external builds for:' in text
-    assert text.index('if [ "${#FAILED_TOOLCHAINS[@]}" -gt 0 ] && [ -z "${CMDS[*]}" ]; then') < text.index(
+    assert text.index('if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then') < text.index(
         '[ -z "${CMDS[*]}" ] && exit 0'
     )
 
