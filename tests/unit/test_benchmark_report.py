@@ -15,6 +15,7 @@ from generate_benchmark_report import (
     CATEGORY_TITLES,
     _build_python_pivot,
     _compiler_display_version,
+    _is_field_salient,
     _python_display_version,
     _sort_cc_label,
     anonymize_hosts,
@@ -322,6 +323,18 @@ def test_perf_context_no_signal_fallback_in_both_outputs(tmp_path: Path) -> None
 
     assert "No strong cross-host signal detected" in md
     assert "No strong cross-host signal detected" in html
+
+
+def test_perf_context_salience_numeric_behavior() -> None:
+    assert _is_field_salient(["10", "20", "30"], "int") is True
+    assert _is_field_salient(["10", "11", "12"], "int") is False
+    assert _is_field_salient(["10", "unknown", "12"], "int") is False
+
+
+def test_perf_context_salience_categorical_behavior() -> None:
+    assert _is_field_salient(["madvise", "always", "always"], "str") is True
+    assert _is_field_salient(["1", "0", "1"], "boolish") is True
+    assert _is_field_salient(["madvise", "madvise", "madvise"], "str") is False
 
 
 class TestExtractFeatures:

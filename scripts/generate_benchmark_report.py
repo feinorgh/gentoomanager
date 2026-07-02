@@ -18,7 +18,7 @@ import csv
 import json
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -182,6 +182,26 @@ _BENCH_TOOL_MAP: list[tuple[str, str]] = [
     ("ffmpeg", "ffmpeg"),
     ("magick", "imagemagick"),
 ]
+
+# Linux perf-context field catalog used for shared derivation/reporting.
+_LINUX_PERF_FIELDS: dict[str, dict[str, str]] = {
+    "vm_swappiness": {"type": "int"},
+    "vm_overcommit_memory": {"type": "int"},
+    "vm_overcommit_ratio": {"type": "int"},
+    "vm_dirty_background_ratio": {"type": "int"},
+    "vm_dirty_ratio": {"type": "int"},
+    "vm_dirty_writeback_centisecs": {"type": "int"},
+    "vm_dirty_expire_centisecs": {"type": "int"},
+    "vm_zone_reclaim_mode": {"type": "int"},
+    "vm_watermark_scale_factor": {"type": "int"},
+    "kernel_numa_balancing": {"type": "boolish"},
+    "kernel_sched_autogroup_enabled": {"type": "boolish"},
+    "thp_defrag": {"type": "str"},
+    "zswap_enabled": {"type": "boolish"},
+    "zram_enabled": {"type": "boolish"},
+    "cpu_idle_governor": {"type": "str"},
+    "cpu_boost_enabled": {"type": "boolish"},
+}
 
 # Greek mythology names for host anonymization (deterministic order)
 _GREEK_NAMES = [
@@ -1432,6 +1452,129 @@ def extract_features(metadata: dict[str, Any]) -> dict[str, str]:
     features["compiler_versions"] = metadata.get("compiler_versions", {})  # type: ignore[assignment]
 
     return features
+
+
+def _normalize_linux_perf_value(value: Any, field_type: str) -> str:
+    """Normalize a Linux perf-context value to a canonical display/compare string."""
+    if value in ("", None):
+        return "unknown"
+    raw = str(value).strip()
+    if not raw or raw.lower() == "unknown":
+        return "unknown"
+
+    if field_type == "int":
+        try:
+            return str(int(raw))
+        except ValueError:
+            try:
+                return str(int(float(raw)))
+            except ValueError:
+                return "unknown"
+
+    if field_type == "boolish":
+        lowered = raw.lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return "1"
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return "0"
+        return "unknown"
+
+    return raw
+
+
+def _is_field_salient(values: list[Any], field_type: str) -> bool:
+    """Return whether a perf-context field shows meaningful cross-host variation."""
+    known = [v for v in values if v not in ("unknown", "", None)]
+    if len(known) < 3:
+        return False
+
+    if field_type in {"str", "boolish"}:
+        normalized = [str(v) for v in known]
+        return len(set(normalized)) >= 2
+
+    nums: list[float] = []
+    for value in known:
+        try:
+            nums.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if len(nums) < 3:
+        return False
+    return (max(nums) - min(nums)) >= 5.0
+
+
+def _derive_linux_perf_context(
+    hosts: dict[str, dict[str, Any]], hostnames: list[str]
+) -> dict[str, Any]:
+    """Derive a shared Linux perf-context model for Markdown and HTML rendering."""
+    normalized_by_host: dict[str, dict[str, Any]] = {}
+    for hostname in hostnames:
+        metadata = hosts.get(hostname, {}).get("metadata", {}) or {}
+        os_family = str(metadata.get("os_family", "unknown") or "unknown")
+        raw_perf = metadata.get("linux_perf_context", {}) or {}
+        raw_perf_dict = raw_perf if isinstance(raw_perf, dict) else {}
+        normalized_values: dict[str, str] = {}
+        for field, config in _LINUX_PERF_FIELDS.items():
+            normalized_values[field] = _normalize_linux_perf_value(
+                raw_perf_dict.get(field), config["type"]
+            )
+        normalized_by_host[hostname] = {"os_family": os_family, "values": normalized_values}
+
+    os_defaults: dict[str, dict[str, str]] = {}
+    coverage: dict[str, dict[str, int]] = {}
+    values_by_field: dict[str, list[str]] = {}
+    host_rows: list[dict[str, str]] = []
+
+    for field in _LINUX_PERF_FIELDS:
+        by_os: dict[str, list[str]] = defaultdict(list)
+        values_by_field[field] = []
+        known_count = 0
+
+        for hostname in hostnames:
+            host_data = normalized_by_host.get(hostname, {})
+            os_family = str(host_data.get("os_family", "unknown"))
+            value = str(host_data.get("values", {}).get(field, "unknown"))
+            values_by_field[field].append(value)
+
+            if value != "unknown":
+                known_count += 1
+                by_os[os_family].append(value)
+
+        coverage[field] = {"known": known_count, "total": len(hostnames)}
+
+        for os_family, values in by_os.items():
+            counts = Counter(values)
+            default_value = sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))[0][0]
+            os_defaults.setdefault(os_family, {})[field] = default_value
+
+        for hostname in hostnames:
+            host_data = normalized_by_host.get(hostname, {})
+            os_family = str(host_data.get("os_family", "unknown"))
+            value = str(host_data.get("values", {}).get(field, "unknown"))
+            os_default = os_defaults.get(os_family, {}).get(field, "unknown")
+            host_rows.append(
+                {
+                    "host": hostname,
+                    "os_family": os_family,
+                    "field": field,
+                    "value": value,
+                    "os_default": os_default,
+                    "delta": "same" if value == os_default else "different",
+                }
+            )
+
+    salient_fields = [
+        field
+        for field, config in _LINUX_PERF_FIELDS.items()
+        if _is_field_salient(values_by_field.get(field, []), config["type"])
+    ]
+
+    return {
+        "host_rows": host_rows,
+        "os_defaults": os_defaults,
+        "salient_fields": salient_fields,
+        "coverage": coverage,
+    }
 
 
 # ---------------------------------------------------------------------------
