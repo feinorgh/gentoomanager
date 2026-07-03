@@ -269,6 +269,11 @@ def main():
                 with open(Path(__file__).parent / "hypervisors.txt") as f:
                     hosts_list = [line.strip() for line in f if line.strip()]
             except FileNotFoundError:
+                print(
+                    "WARNING: hypervisors.txt not found. Recover by: set HYPERVISOR_HOSTS "
+                    "or creating hypervisors.txt from hypervisors.txt.example.",
+                    file=sys.stderr,
+                )
                 hosts_list = []
 
         # Dictionary to hold the future to host mapping

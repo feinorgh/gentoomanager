@@ -449,7 +449,10 @@ def test_warns_when_hypervisors_file_missing(monkeypatch, capsys) -> None:
         pytest.fail(f"--list should not exit non-fatally when hypervisors.txt is missing: {exc}")
     captured = capsys.readouterr()
 
-    assert "hypervisors.txt not found" in captured.err.lower()
+    err_lower = captured.err.lower()
+    assert "hypervisors.txt not found" in err_lower
+    assert "set hypervisor_hosts" in err_lower
+    assert "hypervisors.txt.example" in err_lower
 
 
 def test_warns_when_hypervisors_file_missing_subprocess() -> None:
@@ -475,6 +478,9 @@ def test_warns_when_hypervisors_file_missing_subprocess() -> None:
         )
 
         assert result.returncode == 0
-        assert "hypervisors.txt not found" in result.stderr.lower()
+        err_lower = result.stderr.lower()
+        assert "hypervisors.txt not found" in err_lower
+        assert "set hypervisor_hosts" in err_lower
+        assert "hypervisors.txt.example" in err_lower
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
