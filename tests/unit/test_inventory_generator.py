@@ -11,6 +11,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 # Import the generator as a module
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -438,8 +440,10 @@ def test_warns_when_hypervisors_file_missing(monkeypatch, capsys) -> None:
     monkeypatch.setattr(builtins, "open", fake_open)
     monkeypatch.setattr(sys, "argv", ["inventory_generator.py", "--list"])
 
-    inv.main()
+    try:
+        inv.main()
+    except SystemExit as exc:
+        pytest.fail(f"--list should not exit non-fatally when hypervisors.txt is missing: {exc}")
     captured = capsys.readouterr()
 
-    assert "warning" in captured.err.lower()
-    assert "hypervisors.txt" in captured.err
+    assert "hypervisors.txt not found" in captured.err.lower()
