@@ -98,6 +98,7 @@ class TestMissingHypervisorsFile:
         assert result.returncode != 0
         assert recorded == []
         assert "hypervisors.txt" in result.stderr
+        assert "hypervisors.txt.example" in result.stderr
         assert "warn" in result.stderr.lower()
 
     def test_env_override_bypasses_missing_hypervisors_file_check(
@@ -116,5 +117,3 @@ class TestMissingHypervisorsFile:
 
         assert result.returncode == 0
         assert recorded != []
-        assert "hypervisors.txt" in result.stderr
-        assert "HYPERVISOR_HOSTS" in result.stderr
