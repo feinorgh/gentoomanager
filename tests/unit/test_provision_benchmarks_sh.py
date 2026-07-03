@@ -117,3 +117,20 @@ class TestMissingHypervisorsFile:
 
         assert result.returncode == 0
         assert recorded != []
+
+    def test_empty_env_override_does_not_bypass_missing_hypervisors_file_check(
+        self,
+        wrapper_repo_copy: Path,
+        mock_bin: tuple[Path, Path],
+    ) -> None:
+        mock_bin_dir, args_file = mock_bin
+
+        result, recorded = _run_wrapper(
+            wrapper_repo_copy,
+            mock_bin_dir,
+            args_file,
+            extra_env={"HYPERVISOR_HOSTS": ""},
+        )
+
+        assert result.returncode != 0
+        assert recorded == []

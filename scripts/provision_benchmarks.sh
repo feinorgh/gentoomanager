@@ -103,7 +103,7 @@ require_cmd() {
 preflight_check_hypervisors_file() {
     local hypervisors_file="${REPO_ROOT}/hypervisors.txt"
 
-    if [[ "${HYPERVISOR_HOSTS+x}" == "x" ]]; then
+    if [[ -n "${HYPERVISOR_HOSTS:-}" ]]; then
         return 0
     fi
 
