@@ -111,10 +111,10 @@ class TestMissingHypervisorsFile:
             wrapper_repo_copy,
             mock_bin_dir,
             args_file,
-            extra_env={"LGM_ALLOW_MISSING_HYPERVISORS": "1"},
+            extra_env={"HYPERVISOR_HOSTS": "hv-a,hv-b"},
         )
 
         assert result.returncode == 0
         assert recorded != []
         assert "hypervisors.txt" in result.stderr
-        assert "LGM_ALLOW_MISSING_HYPERVISORS" in result.stderr
+        assert "HYPERVISOR_HOSTS" in result.stderr
