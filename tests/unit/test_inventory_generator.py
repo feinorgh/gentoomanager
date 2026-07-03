@@ -421,3 +421,25 @@ class TestBuildInventoryEdgeCases:
             or any("hv_alpha" in k or "hv-alpha" in k for k in inv_data)
         )
         assert any("hv_beta" in k or "hv-beta" in k for k in inv_data)
+
+
+def test_warns_when_hypervisors_file_missing(monkeypatch, capsys) -> None:
+    """Emit a warning when hypervisors.txt is missing and no env override is set."""
+    import builtins
+
+    real_open = builtins.open
+
+    def fake_open(file, *args, **kwargs):
+        if str(file).endswith("hypervisors.txt"):
+            raise FileNotFoundError
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.delenv("HYPERVISOR_HOSTS", raising=False)
+    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(sys, "argv", ["inventory_generator.py", "--list"])
+
+    inv.main()
+    captured = capsys.readouterr()
+
+    assert "warning" in captured.err.lower()
+    assert "hypervisors.txt" in captured.err
