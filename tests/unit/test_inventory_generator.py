@@ -7,7 +7,10 @@ building — all without SSH.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -447,3 +450,31 @@ def test_warns_when_hypervisors_file_missing(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
 
     assert "hypervisors.txt not found" in captured.err.lower()
+
+
+def test_warns_when_hypervisors_file_missing_subprocess() -> None:
+    """CLI subprocess should succeed and emit missing-hypervisors warning."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw")
+    sandbox = REPO_ROOT / ".pytest_sandbox" / f"inventory_missing_hypervisors_{worker}"
+    shutil.rmtree(sandbox, ignore_errors=True)
+    sandbox.mkdir(parents=True, exist_ok=True)
+    try:
+        script_copy = sandbox / "inventory_generator.py"
+        source_script = REPO_ROOT / "inventory_generator.py"
+        script_copy.write_text(source_script.read_text(encoding="utf-8"), encoding="utf-8")
+
+        env = dict(os.environ)
+        env.pop("HYPERVISOR_HOSTS", None)
+        result = subprocess.run(
+            [sys.executable, str(script_copy), "--list"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=sandbox,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        assert "hypervisors.txt not found" in result.stderr.lower()
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
