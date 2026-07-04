@@ -46,6 +46,38 @@ def resolve_name_collision(vm_name: str, os_group: str, base_os: str | None) -> 
     return vm_name
 
 
+# ── load_hosts_from_file ───────────────────────────────────────────────
+
+
+class TestLoadHostsFromFile:
+    def test_ignores_comment_and_blank_lines(self, tmp_path: Path) -> None:
+        hosts_file = tmp_path / "hypervisors.txt"
+        hosts_file.write_text(
+            "# leading comment\n"
+            "\n"
+            "  hv-alpha.example.local  \n"
+            "   # indented comment\n"
+            "hv-beta.example.local\n",
+            encoding="utf-8",
+        )
+
+        hosts = inv.load_hosts_from_file(hosts_file)
+
+        assert hosts == ["hv-alpha.example.local", "hv-beta.example.local"]
+
+    def test_strips_inline_comments(self, tmp_path: Path) -> None:
+        hosts_file = tmp_path / "hypervisors.txt"
+        hosts_file.write_text(
+            "hv-alpha.example.local # primary\n"
+            "hv-beta.example.local#secondary\n",
+            encoding="utf-8",
+        )
+
+        hosts = inv.load_hosts_from_file(hosts_file)
+
+        assert hosts == ["hv-alpha.example.local", "hv-beta.example.local"]
+
+
 # ── sanitize_group_name ─────────────────────────────────────────────────
 
 

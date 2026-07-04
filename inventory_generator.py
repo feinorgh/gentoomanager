@@ -52,6 +52,17 @@ SSH_OPTIONS = [
 ]
 
 
+def load_hosts_from_file(file_path: Path) -> list[str]:
+    """Read hostnames from a text file, ignoring comments and blank lines."""
+    hosts: list[str] = []
+    with file_path.open(encoding="utf-8") as file_handle:
+        for raw_line in file_handle:
+            line = raw_line.split("#", 1)[0].strip()
+            if line:
+                hosts.append(line)
+    return hosts
+
+
 def is_local_host(hostname: str) -> bool:
     """Return True if *hostname* refers to the machine running this script.
 
@@ -266,8 +277,7 @@ def main():
             hosts_list = args.hosts
         else:
             try:
-                with open(Path(__file__).parent / "hypervisors.txt") as f:
-                    hosts_list = [line.strip() for line in f if line.strip()]
+                hosts_list = load_hosts_from_file(Path(__file__).parent / "hypervisors.txt")
             except FileNotFoundError:
                 hosts_list = []
 
@@ -368,10 +378,7 @@ def main():
         # Add bare-metal machines from baremetal.txt (direct SSH, no ProxyCommand)
         baremetal_file = Path(__file__).parent / "baremetal.txt"
         try:
-            with open(baremetal_file) as f:
-                baremetal_hosts = [
-                    line.strip() for line in f if line.strip() and not line.strip().startswith("#")
-                ]
+            baremetal_hosts = load_hosts_from_file(baremetal_file)
         except FileNotFoundError:
             baremetal_hosts = []
 
