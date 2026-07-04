@@ -188,7 +188,9 @@ class TestSshFailureOutputHinting:
             mock_bin_dir,
             (
                 "#!/usr/bin/env bash\n"
-                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => {\"msg\": \"Failed to connect to the host via ssh: Permission denied (publickey).\"}' >&2\n"
+                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => "
+                "{\"msg\": \"Failed to connect to the host via ssh: "
+                "Permission denied (publickey).\"}' >&2\n"
                 "exit 4\n"
             ),
         )
@@ -214,7 +216,8 @@ class TestSshFailureOutputHinting:
             mock_bin_dir,
             (
                 "#!/usr/bin/env bash\n"
-                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => {\"msg\": \"Connection closed by remote host\"}' >&2\n"
+                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => "
+                "{\"msg\": \"Connection closed by remote host\"}' >&2\n"
                 "exit 4\n"
             ),
         )
@@ -249,7 +252,9 @@ class TestSshFailureOutputHinting:
             mock_bin_dir,
             (
                 "#!/usr/bin/env bash\n"
-                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => {\"msg\": \"Failed to connect to the host via ssh: Connection closed by remote host\"}' >&2\n"
+                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => "
+                "{\"msg\": \"Failed to connect to the host via ssh: "
+                "Connection closed by remote host\"}' >&2\n"
                 "exit 4\n"
             ),
         )
@@ -276,7 +281,8 @@ class TestSshFailureOutputHinting:
             mock_bin_dir,
             (
                 "#!/usr/bin/env bash\n"
-                "echo 'fatal: [openindiana-indiana]: FAILED! => {\"msg\": \"package install failed\"}'\n"
+                "echo 'fatal: [openindiana-indiana]: FAILED! => "
+                "{\"msg\": \"package install failed\"}'\n"
                 "exit 2\n"
             ),
         )
