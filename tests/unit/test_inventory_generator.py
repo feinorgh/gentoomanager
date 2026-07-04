@@ -198,6 +198,25 @@ class TestBuildSshFailureHints:
         ) == []
 
 
+def test_get_vms_from_host_keeps_error_line_and_appends_hints(monkeypatch, capsys) -> None:
+    def fake_run(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=255,
+            cmd=["ssh", "openindiana-indiana"],
+            stderr="Permission denied (publickey).",
+        )
+
+    monkeypatch.setattr(inv.subprocess, "run", fake_run)
+
+    result = inv.get_vms_from_host("openindiana-indiana")
+    assert result == []
+
+    err_lines = capsys.readouterr().err.strip().splitlines()
+    assert err_lines[0] == "Error querying host openindiana-indiana: Permission denied (publickey)."
+    assert any("SSH public key" in line for line in err_lines[1:])
+    assert any("~/.ssh/config" in line for line in err_lines[1:])
+
+
 # ── build_inventory (end-to-end, no SSH) ────────────────────────────────
 
 SAMPLE_VMS: dict[str, list[dict]] = {

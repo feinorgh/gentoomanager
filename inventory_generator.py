@@ -106,6 +106,33 @@ def is_local_host(hostname: str) -> bool:
     return False
 
 
+def build_ssh_failure_hints(host: str, stderr: str) -> list[str]:
+    """Return additional SSH troubleshooting hints for known stderr patterns."""
+    text = (stderr or "").lower()
+    hints: list[str] = []
+
+    if (
+        "permission denied (publickey)" in text
+        or "connection closed" in text
+        or "failed to connect to the host via ssh" in text
+    ):
+        hints.append(
+            f"WARNING: SSH authentication/connectivity failed for {host}. "
+            "Check that your SSH public key is installed on the target host."
+        )
+        hints.append(
+            "WARNING: Also verify the host is defined in ~/.ssh/config "
+            "(or equivalent SSH config)."
+        )
+    elif "host key verification failed" in text:
+        hints.append(
+            f"WARNING: Host key verification failed for {host}. "
+            "Check known_hosts trust and ensure host mapping in ~/.ssh/config is correct."
+        )
+
+    return hints
+
+
 def get_vms_from_host(host):
     """Connect via SSH and list libvirt VMs, reading their OS type if available."""
     try:
@@ -201,8 +228,11 @@ def get_vms_from_host(host):
 
             inventory_items.append({"name": vm, "os": os_name, "hostname": actual_hostname})
         return inventory_items
-    except subprocess.CalledProcessError as e:
-        print(f"Error querying host {host}: {e.stderr}", file=sys.stderr)
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr or ""
+        print(f"Error querying host {host}: {stderr}", file=sys.stderr)
+        for hint in build_ssh_failure_hints(host, stderr):
+            print(hint, file=sys.stderr)
         return []
 
 
