@@ -1,0 +1,2 @@
+minor_changes:
+  - "provision_benchmarks and inventory_generator now warn clearly when hypervisors.txt is missing; provisioning exits non-zero while inventory generation remains non-fatal."
