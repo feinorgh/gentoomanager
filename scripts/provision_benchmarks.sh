@@ -100,6 +100,54 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+_is_unreachable_ssh_failure_line() {
+    local line="$1"
+    local lowered_line="${line,,}"
+
+    [[ "${lowered_line}" == *"unreachable!"* ]] || return 1
+    [[ "${lowered_line}" == *"via ssh"* \
+        || "${lowered_line}" == *"permission denied (publickey)"* \
+        || "${lowered_line}" == *"connection closed"* \
+        || "${lowered_line}" == *"connection refused"* \
+        || "${lowered_line}" == *"connection timed out"* \
+        || "${lowered_line}" == *"no route to host"* \
+        || "${lowered_line}" == *"could not resolve hostname"* ]]
+}
+
+_emit_ssh_troubleshooting_warning() {
+    echo "WARNING: SSH connectivity issue detected while contacting target host(s)." >&2
+    echo "WARNING: Check that your SSH public key is installed on the target host." >&2
+    echo "WARNING: Check that the host is defined in ~/.ssh/config (or equivalent)." >&2
+}
+
+_filter_output_stream_and_warn() {
+    local stream="$1"
+    local warned=0
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        if [[ "${stream}" == "stderr" ]]; then
+            printf "%s\n" "${line}" >&2
+        else
+            printf "%s\n" "${line}"
+        fi
+
+        if [[ "${warned}" -eq 0 ]] && _is_unreachable_ssh_failure_line "${line}"; then
+            _emit_ssh_troubleshooting_warning
+            warned=1
+        fi
+    done
+}
+
+run_ansible_with_output_filter() {
+    set +e
+    "$@" \
+        > >(_filter_output_stream_and_warn stdout) \
+        2> >(_filter_output_stream_and_warn stderr)
+    local cmd_status=$?
+    set -e
+    return "${cmd_status}"
+}
+
 preflight_check_hypervisors_file() {
     local hypervisors_file="${REPO_ROOT}/hypervisors.txt"
 
@@ -245,7 +293,7 @@ for h in sorted(d.get('_meta', {}).get('hostvars', {}).keys()):
         echo "▶ Running: ${CMD[*]} --limit ${batch_limit}" >&2
         echo "" >&2
 
-        "${CMD[@]}" --limit "${batch_limit}"
+        run_ansible_with_output_filter "${CMD[@]}" --limit "${batch_limit}"
         batch_start=$(( batch_start + SERIAL_N ))
     done
     exit 0
@@ -257,4 +305,4 @@ fi
 echo "▶ Running: ${CMD[*]}" >&2
 echo "" >&2
 
-exec "${CMD[@]}"
+run_ansible_with_output_filter "${CMD[@]}"
