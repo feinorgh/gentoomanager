@@ -113,6 +113,10 @@ cp -r group_vars.example/* group_vars/
 cp -r host_vars.example/* host_vars/
 ```
 
+`host_vars/` and `group_vars/` are intentionally gitignored for this repository.
+Keep machine-specific host data local, and only commit sanitized templates under
+`host_vars.example/` and `group_vars.example/`.
+
 Each VM's `host_vars/<hostname>/main.yml` should at minimum define:
 
 ```yaml

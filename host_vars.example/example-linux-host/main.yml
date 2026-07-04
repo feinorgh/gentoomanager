@@ -1,0 +1,4 @@
+---
+# Copy this directory to host_vars/<real-hostname>/ and adjust values locally.
+hypervisor_host: "example-hypervisor"
+ansible_host: "192.0.2.10"

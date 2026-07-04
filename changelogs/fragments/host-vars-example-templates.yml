@@ -1,0 +1,3 @@
+---
+minor_changes:
+  - "Repository hygiene: moved tracked host-specific vars out of host_vars/ and added sanitized templates under host_vars.example/."
