@@ -189,6 +189,7 @@ class TestBuildSshFailureHints:
         joined = "\n".join(hints)
         assert "host key verification" in joined.lower()
         assert "~/.ssh/config" in joined
+        assert "SSH public key" not in joined
 
     def test_unrelated_stderr_produces_no_hints(self) -> None:
         assert inv.build_ssh_failure_hints(  # type: ignore[attr-defined]
