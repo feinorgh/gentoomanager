@@ -100,6 +100,20 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+preflight_check_hypervisors_file() {
+    local hypervisors_file="${REPO_ROOT}/hypervisors.txt"
+
+    if [[ -n "${HYPERVISOR_HOSTS:-}" ]]; then
+        return 0
+    fi
+
+    if [[ ! -f "${hypervisors_file}" ]]; then
+        echo "WARNING: Missing ${hypervisors_file}" >&2
+        echo "ERROR: Copy ${REPO_ROOT}/hypervisors.txt.example to ${hypervisors_file} and set hostnames, or set HYPERVISOR_HOSTS." >&2
+        exit 1
+    fi
+}
+
 # ── Argument parsing ─────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -160,6 +174,7 @@ require_cmd python3
 [[ -f "${PLAYBOOK}" ]]   || die "Playbook not found: ${PLAYBOOK}"
 [[ -f "${INVENTORY}" ]]  || die "Inventory not found: ${INVENTORY}"
 [[ -x "${INVENTORY}" ]]  || die "Inventory script not executable: ${INVENTORY}"
+preflight_check_hypervisors_file
 
 cd "${REPO_ROOT}"
 

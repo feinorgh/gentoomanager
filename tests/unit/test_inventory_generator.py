@@ -7,9 +7,14 @@ building — all without SSH.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 # Import the generator as a module
 REPO_ROOT = Path(__file__).parent.parent.parent
@@ -453,3 +458,61 @@ class TestBuildInventoryEdgeCases:
             or any("hv_alpha" in k or "hv-alpha" in k for k in inv_data)
         )
         assert any("hv_beta" in k or "hv-beta" in k for k in inv_data)
+
+
+def test_warns_when_hypervisors_file_missing(monkeypatch, capsys) -> None:
+    """Emit a warning when hypervisors.txt is missing and no env override is set."""
+    import builtins
+
+    real_open = builtins.open
+
+    def fake_open(file, *args, **kwargs):
+        if str(file).endswith("hypervisors.txt"):
+            raise FileNotFoundError
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.delenv("HYPERVISOR_HOSTS", raising=False)
+    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(sys, "argv", ["inventory_generator.py", "--list"])
+
+    try:
+        inv.main()
+    except SystemExit as exc:
+        pytest.fail(f"--list should not exit non-fatally when hypervisors.txt is missing: {exc}")
+    captured = capsys.readouterr()
+
+    err_lower = captured.err.lower()
+    assert "hypervisors.txt not found" in err_lower
+    assert "set hypervisor_hosts" in err_lower
+    assert "hypervisors.txt.example" in err_lower
+
+
+def test_warns_when_hypervisors_file_missing_subprocess() -> None:
+    """CLI subprocess should succeed and emit missing-hypervisors warning."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw")
+    sandbox = REPO_ROOT / ".pytest_sandbox" / f"inventory_missing_hypervisors_{worker}"
+    shutil.rmtree(sandbox, ignore_errors=True)
+    sandbox.mkdir(parents=True, exist_ok=True)
+    try:
+        script_copy = sandbox / "inventory_generator.py"
+        source_script = REPO_ROOT / "inventory_generator.py"
+        script_copy.write_text(source_script.read_text(encoding="utf-8"), encoding="utf-8")
+
+        env = dict(os.environ)
+        env.pop("HYPERVISOR_HOSTS", None)
+        result = subprocess.run(
+            [sys.executable, str(script_copy), "--list"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=sandbox,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        err_lower = result.stderr.lower()
+        assert "hypervisors.txt not found" in err_lower
+        assert "set hypervisor_hosts" in err_lower
+        assert "hypervisors.txt.example" in err_lower
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
