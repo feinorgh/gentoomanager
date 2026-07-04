@@ -107,6 +107,7 @@ _is_unreachable_ssh_failure_line() {
     [[ "${lowered_line}" == *"unreachable!"* ]] || return 1
     [[ "${lowered_line}" == *"via ssh"* \
         || "${lowered_line}" == *"permission denied (publickey)"* \
+        || "${lowered_line}" == *"connection closed"* \
         || "${lowered_line}" == *"connection refused"* \
         || "${lowered_line}" == *"connection timed out"* \
         || "${lowered_line}" == *"no route to host"* \

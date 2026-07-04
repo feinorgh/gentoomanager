@@ -68,13 +68,16 @@ def _run_wrapper(
     args_file: Path,
     *,
     extra_env: dict[str, str] | None = None,
+    script_args: list[str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     env = {**os.environ, "PATH": f"{mock_bin_dir}:{os.environ['PATH']}"}
     if extra_env:
         env.update(extra_env)
+    if script_args is None:
+        script_args = []
 
     result = subprocess.run(
-        ["bash", str(repo_root / "scripts" / "provision_benchmarks.sh")],
+        ["bash", str(repo_root / "scripts" / "provision_benchmarks.sh"), *script_args],
         cwd=repo_root,
         env=env,
         capture_output=True,
@@ -89,6 +92,14 @@ def _write_mock_ansible_playbook(mock_bin_dir: Path, content: str) -> None:
     mock_ap = mock_bin_dir / "ansible-playbook"
     mock_ap.write_text(content)
     mock_ap.chmod(mock_ap.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _write_mock_ansible_inventory(mock_bin_dir: Path, content: str) -> None:
+    mock_inventory = mock_bin_dir / "ansible-inventory"
+    mock_inventory.write_text(content)
+    mock_inventory.chmod(
+        mock_inventory.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
+    )
 
 
 class TestMissingHypervisorsFile:
@@ -143,6 +154,30 @@ class TestMissingHypervisorsFile:
 
 
 class TestSshFailureOutputHinting:
+    def test_wrapper_preserves_nonzero_ansible_exit_code(
+        self,
+        wrapper_repo_copy: Path,
+        mock_bin: tuple[Path, Path],
+    ) -> None:
+        mock_bin_dir, args_file = mock_bin
+        _write_mock_ansible_playbook(
+            mock_bin_dir,
+            (
+                "#!/usr/bin/env bash\n"
+                "echo 'fatal: generic failure' >&2\n"
+                "exit 7\n"
+            ),
+        )
+
+        result, _recorded = _run_wrapper(
+            wrapper_repo_copy,
+            mock_bin_dir,
+            args_file,
+            extra_env={"HYPERVISOR_HOSTS": "hv-a"},
+        )
+
+        assert result.returncode == 7
+
     def test_unreachable_ssh_output_includes_hint_messages(
         self,
         wrapper_repo_copy: Path,
@@ -162,6 +197,68 @@ class TestSshFailureOutputHinting:
             wrapper_repo_copy,
             mock_bin_dir,
             args_file,
+            extra_env={"HYPERVISOR_HOSTS": "hv-a"},
+        )
+
+        assert result.returncode != 0
+        assert "SSH public key" in result.stderr
+        assert "~/.ssh/config" in result.stderr
+
+    def test_unreachable_connection_closed_includes_hint_messages(
+        self,
+        wrapper_repo_copy: Path,
+        mock_bin: tuple[Path, Path],
+    ) -> None:
+        mock_bin_dir, args_file = mock_bin
+        _write_mock_ansible_playbook(
+            mock_bin_dir,
+            (
+                "#!/usr/bin/env bash\n"
+                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => {\"msg\": \"Connection closed by remote host\"}' >&2\n"
+                "exit 4\n"
+            ),
+        )
+
+        result, _recorded = _run_wrapper(
+            wrapper_repo_copy,
+            mock_bin_dir,
+            args_file,
+            extra_env={"HYPERVISOR_HOSTS": "hv-a"},
+        )
+
+        assert result.returncode != 0
+        assert "SSH public key" in result.stderr
+        assert "~/.ssh/config" in result.stderr
+
+    def test_serial_mode_unreachable_ssh_output_includes_hint_messages(
+        self,
+        wrapper_repo_copy: Path,
+        mock_bin: tuple[Path, Path],
+    ) -> None:
+        mock_bin_dir, args_file = mock_bin
+        _write_mock_ansible_inventory(
+            mock_bin_dir,
+            (
+                "#!/usr/bin/env bash\n"
+                "cat <<'EOF'\n"
+                "{\"_meta\":{\"hostvars\":{\"openindiana-indiana\":{}}}}\n"
+                "EOF\n"
+            ),
+        )
+        _write_mock_ansible_playbook(
+            mock_bin_dir,
+            (
+                "#!/usr/bin/env bash\n"
+                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => {\"msg\": \"Failed to connect to the host via ssh: Connection closed by remote host\"}' >&2\n"
+                "exit 4\n"
+            ),
+        )
+
+        result, _recorded = _run_wrapper(
+            wrapper_repo_copy,
+            mock_bin_dir,
+            args_file,
+            script_args=["--serial"],
             extra_env={"HYPERVISOR_HOSTS": "hv-a"},
         )
 
