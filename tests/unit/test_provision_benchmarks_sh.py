@@ -192,5 +192,5 @@ class TestSshFailureOutputHinting:
         )
 
         assert result.returncode != 0
-        assert "package install failed" in result.stderr
+        assert "package install failed" in result.stdout
         assert "SSH public key" not in result.stderr
