@@ -168,6 +168,35 @@ class TestGetCapabilityGroups:
         assert self._get() == []
 
 
+# ── build_ssh_failure_hints ────────────────────────────────────────────────
+
+
+class TestBuildSshFailureHints:
+    def test_publickey_failure_includes_key_and_ssh_config_hints(self) -> None:
+        hints = inv.build_ssh_failure_hints(  # type: ignore[attr-defined]
+            "openindiana-indiana",
+            "Permission denied (publickey).",
+        )
+        joined = "\n".join(hints)
+        assert "SSH public key" in joined
+        assert "~/.ssh/config" in joined
+
+    def test_host_key_failure_includes_host_key_and_ssh_config_hints(self) -> None:
+        hints = inv.build_ssh_failure_hints(  # type: ignore[attr-defined]
+            "openindiana-indiana",
+            "Host key verification failed.",
+        )
+        joined = "\n".join(hints)
+        assert "host key verification" in joined.lower()
+        assert "~/.ssh/config" in joined
+
+    def test_unrelated_stderr_produces_no_hints(self) -> None:
+        assert inv.build_ssh_failure_hints(  # type: ignore[attr-defined]
+            "openindiana-indiana",
+            "some other error",
+        ) == []
+
+
 # ── build_inventory (end-to-end, no SSH) ────────────────────────────────
 
 SAMPLE_VMS: dict[str, list[dict]] = {
