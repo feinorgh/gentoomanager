@@ -26,7 +26,8 @@ Two independent pieces are needed:
 - [2. Passwordless Privilege Escalation](#2-passwordless-privilege-escalation)
   - [2.1 sudo — Linux (all distros)](#21-sudo--linux-all-distros)
   - [2.2 doas — Gentoo, FreeBSD, OpenBSD](#22-doas--gentoo-freebsd-openbsd)
-  - [2.3 Ansible Become Variables](#23-ansible-become-variables)
+  - [2.3 pfexec — OpenIndiana](#23-pfexec--openindiana)
+  - [2.4 Ansible Become Variables](#24-ansible-become-variables)
 - [3. Verifying Everything Works](#3-verifying-everything-works)
 - [4. Security Notes](#4-security-notes)
 - [References](#references)
@@ -784,7 +785,51 @@ become_method = doas
 
 ---
 
-### 2.3 Ansible Become Variables
+### 2.3 pfexec — OpenIndiana
+
+OpenIndiana uses RBAC with `pfexec` for privilege elevation. For this
+collection, assign the Ansible login user a profile that permits package
+administration tasks, then configure Ansible to use `pfexec` as its become
+method.
+
+**Recommended setup (managed node, as root):**
+
+```bash
+# Grant broad admin privileges needed for provisioning and package management
+usermod -P "Primary Administrator" ansible
+```
+
+The profile assignment takes effect on the next login session for that user.
+Disconnect and reconnect SSH before testing.
+
+**Verify on the managed node (as the Ansible login user):**
+
+```bash
+profiles
+pfexec pkg refresh --full
+```
+
+`profiles` should list `Primary Administrator`, and `pfexec pkg refresh --full`
+should run without prompting for a sudo password.
+
+**Tell Ansible to use pfexec on OpenIndiana hosts:**
+
+```yaml
+# host_vars/openindiana-<hostname>/vars.yml
+ansible_become: true
+ansible_become_method: pfexec
+ansible_become_user: root
+```
+
+**References:**
+- `man pfexec` — <https://illumos.org/man/1/pfexec>
+- `man usermod` — <https://illumos.org/man/8/usermod>
+- OpenIndiana Handbook — RBAC:
+  <https://docs.openindiana.org/handbook/security/#role-based-access-control-rbac>
+
+---
+
+### 2.4 Ansible Become Variables
 
 These variables control how Ansible escalates privileges. Set them in
 `group_vars`, `host_vars`, or `ansible.cfg`.
@@ -834,10 +879,15 @@ After completing the above, run this end-to-end check for each host:
 ansible -i 'managed-host,' all -m ping -u ansible \
   --private-key ~/.ssh/ansible_ed25519
 
-# 2. Passwordless privilege escalation
+# 2. Passwordless privilege escalation (example with sudo)
 ansible -i 'managed-host,' all -m command -a 'id' \
   -u ansible --private-key ~/.ssh/ansible_ed25519 \
   --become --become-method sudo
+
+# OpenIndiana: use pfexec
+ansible -i 'openindiana-host,' all -m command -a 'pkg refresh --full' \
+  -u ansible --private-key ~/.ssh/ansible_ed25519 \
+  --become --become-method pfexec
 
 # 3. Against all hosts in the collection inventory
 ansible all -m ping
