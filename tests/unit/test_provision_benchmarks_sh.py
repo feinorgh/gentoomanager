@@ -85,6 +85,12 @@ def _run_wrapper(
     return result, recorded
 
 
+def _write_mock_ansible_playbook(mock_bin_dir: Path, content: str) -> None:
+    mock_ap = mock_bin_dir / "ansible-playbook"
+    mock_ap.write_text(content)
+    mock_ap.chmod(mock_ap.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
 class TestMissingHypervisorsFile:
     def test_missing_hypervisors_file_warns_and_exits_nonzero(
         self,
@@ -134,3 +140,57 @@ class TestMissingHypervisorsFile:
 
         assert result.returncode != 0
         assert recorded == []
+
+
+class TestSshFailureOutputHinting:
+    def test_unreachable_ssh_output_includes_hint_messages(
+        self,
+        wrapper_repo_copy: Path,
+        mock_bin: tuple[Path, Path],
+    ) -> None:
+        mock_bin_dir, args_file = mock_bin
+        _write_mock_ansible_playbook(
+            mock_bin_dir,
+            (
+                "#!/usr/bin/env bash\n"
+                "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => {\"msg\": \"Failed to connect to the host via ssh: Permission denied (publickey).\"}' >&2\n"
+                "exit 4\n"
+            ),
+        )
+
+        result, _recorded = _run_wrapper(
+            wrapper_repo_copy,
+            mock_bin_dir,
+            args_file,
+            extra_env={"HYPERVISOR_HOSTS": "hv-a"},
+        )
+
+        assert result.returncode != 0
+        assert "SSH public key" in result.stderr
+        assert "~/.ssh/config" in result.stderr
+
+    def test_non_ssh_failure_does_not_emit_ssh_hint(
+        self,
+        wrapper_repo_copy: Path,
+        mock_bin: tuple[Path, Path],
+    ) -> None:
+        mock_bin_dir, args_file = mock_bin
+        _write_mock_ansible_playbook(
+            mock_bin_dir,
+            (
+                "#!/usr/bin/env bash\n"
+                "echo 'fatal: [openindiana-indiana]: FAILED! => {\"msg\": \"package install failed\"}'\n"
+                "exit 2\n"
+            ),
+        )
+
+        result, _recorded = _run_wrapper(
+            wrapper_repo_copy,
+            mock_bin_dir,
+            args_file,
+            extra_env={"HYPERVISOR_HOSTS": "hv-a"},
+        )
+
+        assert result.returncode != 0
+        assert "package install failed" in result.stderr
+        assert "SSH public key" not in result.stderr
