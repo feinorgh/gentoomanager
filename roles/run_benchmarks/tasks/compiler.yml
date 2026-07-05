@@ -916,7 +916,7 @@
 # Multi-file C project compile benchmark
 # ---------------------------------------------------------------------------
 # Generates a 30-module project (~5 800 lines) and benchmarks sequential
-# (-j1) vs parallel (-j$(nproc)) make with each available C compiler.
+# (-j 1) vs parallel (-j NPROC) make with each available C compiler.
 # Uses run_benchmarks_large_compile_runs / large_compile_warmup.
 
 - name: Generate multi-file C benchmark project
@@ -961,9 +961,9 @@
       if [ -x "{{ cc_exe }}" ]; then
         CMDS+=(
           --command-name "{{ cc_label }}-j1"
-            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j1 -s)"
+            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j 1 -s)"
           --command-name "{{ cc_label }}-jN"
-            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j${NPROC} -s)"
+            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j ${NPROC} -s)"
         )
       fi
       {% endif %}
@@ -989,7 +989,7 @@
       set -eo pipefail
       PROJ={{ run_benchmarks_work_dir }}/multifile_project
       CC_EXE="{{ ((run_benchmarks_cc_resolved.stdout_lines | default([]) | first | default('cc')).split() | last) }}"
-      (cd "$PROJ" && make clean && make CC="$CC_EXE" CFLAGS=-O2 -j1)
+      (cd "$PROJ" && make clean && make CC="$CC_EXE" CFLAGS=-O2 -j 1)
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"

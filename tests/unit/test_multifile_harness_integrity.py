@@ -69,6 +69,14 @@ def test_compiler_multifile_has_preflight_and_exitcode_validation() -> None:
     assert "Validate compiler_multifile exit codes" in content
 
 
+def test_compiler_multifile_uses_make_parallel_flag_format_compatible_with_dmake() -> None:
+    content = _read("roles/run_benchmarks/tasks/compiler.yml")
+    assert "make CC={{ cc_exe }} CFLAGS=-O2 -j 1 -s" in content
+    assert "make CC={{ cc_exe }} CFLAGS=-O2 -j ${NPROC} -s" in content
+    assert "make CC={{ cc_exe }} CFLAGS=-O2 -j1 -s" not in content
+    assert "make CC={{ cc_exe }} CFLAGS=-O2 -j${NPROC} -s" not in content
+
+
 @pytest.mark.parametrize(
     ("generator_path", "module_name"),
     [
@@ -98,6 +106,7 @@ def test_multifile_generators_do_not_use_gnu_make_only_patterns(generator_path: 
 
     assert "$(wildcard mod_*.c)" not in content
     assert "$(SRCS:.c=.o)" not in content
+    assert "?=" not in content
 
 
 def test_compiler_multifile_captures_failure_diagnostics() -> None:

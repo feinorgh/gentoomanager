@@ -27,8 +27,8 @@ def _render_makefile(module_count: int) -> str:
     objs = [f"mod_{module_index:02d}.o" for module_index in range(module_count)] + ["main.o"]
     return f"""\
 # Auto-generated Makefile for multi-file compilation benchmark.
-CC      ?= gcc
-CFLAGS  ?= -O2
+CC      = gcc
+CFLAGS  = -O2
 SRCS    = {" ".join(srcs)}
 OBJS    = {" ".join(objs)}
 BIN     = multifile_bench
