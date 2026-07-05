@@ -1,0 +1,2 @@
+bugfixes:
+  - "run_benchmarks(ffmpeg): avoid async job polling for FFmpeg video encoding on OpenIndiana (SunOS) to prevent spurious 'could not find job' async failures under pfexec."

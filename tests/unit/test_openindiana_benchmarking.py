@@ -61,3 +61,13 @@ def test_skip_complete_logic_excludes_openindiana_unsupported_categories(worktre
     assert unsupported_check in role_content
     assert "{%- set unsupported_on_openindiana = ['disk', 'boot_time'] -%}" in playbook_content
     assert unsupported_check in playbook_content
+
+
+def test_ffmpeg_video_encode_avoids_async_on_openindiana(worktree_root):
+    """FFmpeg video encode should not use async job polling on SunOS/OpenIndiana."""
+    ffmpeg_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "ffmpeg.yml")
+    content = _read(ffmpeg_path)
+
+    assert "run_benchmarks_ffmpeg_task_timeout_sec" in content
+    assert "ansible_system | default('Linux') != 'SunOS'" in content
+    assert " else omit" in content
