@@ -1,0 +1,3 @@
+---
+minor_changes:
+  - "provision_benchmarks(OpenIndiana): enable the `hipster-encumbered` publisher during provisioning and document why this non-default repository is required."

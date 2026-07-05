@@ -136,21 +136,20 @@ provision_benchmarks_packages:
     - ImageMagick
     - sqlite3
   OpenIndiana:
-    - hyperfine
-    - gcc
-    - clang
+    - developer/gcc-14
+    - developer/clang-18
     - openssl
-    - python3
-    - rust
-    - go
-    - git
+    - runtime/python
+    - developer/lang/rustc
+    - developer/golang
+    - developer/versioning/git
     - gzip
     - bzip2
     - xz
     - zstd
     - lz4
     - gnupg
-    - diffutils
+    - text/gnu-diffutils
     - p7zip
     - imagemagick
     - sqlite

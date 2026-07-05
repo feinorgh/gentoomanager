@@ -1,6 +1,20 @@
 ---
 # OpenIndiana – install via IPS (pkg).
 
+- name: Check whether hipster-encumbered publisher is configured (OpenIndiana)
+  ansible.builtin.command:
+    cmd: pkg publisher hipster-encumbered
+  become: true
+  changed_when: false
+  failed_when: false
+  register: provision_benchmarks_openindiana_encumbered_publisher_check
+
+- name: Enable hipster-encumbered publisher (OpenIndiana)
+  ansible.builtin.command:
+    cmd: pkg set-publisher -g https://pkg.openindiana.org/hipster-encumbered hipster-encumbered
+  become: true
+  when: provision_benchmarks_openindiana_encumbered_publisher_check.rc != 0
+
 - name: Refresh package metadata (OpenIndiana)
   ansible.builtin.command:
     cmd: pkg refresh --full
@@ -22,8 +36,50 @@
     state: present
   become: true
   loop: "{{ provision_benchmarks_packages['OpenIndiana'] }}"
-  when: provision_benchmarks_pkg_result is failed
+  when: provision_benchmarks_pkg_result.rc | default(0) != 0
   failed_when: false
+
+- name: Check whether hyperfine is already available (OpenIndiana)
+  ansible.builtin.command:
+    cmd: command -v hyperfine
+  become: true
+  changed_when: false
+  failed_when: false
+  register: provision_benchmarks_openindiana_hyperfine_check
+
+- name: Install Rust toolchain for hyperfine build (OpenIndiana)
+  ansible.builtin.package:
+    name: developer/lang/rustc
+    state: present
+  become: true
+  when: provision_benchmarks_openindiana_hyperfine_check.rc != 0
+  failed_when: false
+  register: provision_benchmarks_openindiana_rustc_install
+
+- name: Build and install hyperfine via cargo (OpenIndiana)
+  ansible.builtin.command:
+    cmd: cargo install --locked hyperfine --root /usr
+  become: true
+  when: provision_benchmarks_openindiana_hyperfine_check.rc != 0
+  failed_when: false
+  register: provision_benchmarks_openindiana_hyperfine_cargo_install
+
+- name: Re-check hyperfine after cargo install attempt (OpenIndiana)
+  ansible.builtin.command:
+    cmd: command -v hyperfine
+  become: true
+  changed_when: false
+  failed_when: false
+  register: provision_benchmarks_openindiana_hyperfine_recheck
+
+- name: Warn when hyperfine remains unavailable (OpenIndiana)
+  ansible.builtin.debug:
+    msg: >-
+      hyperfine is still unavailable on OpenIndiana after package/cargo attempts.
+      Ensure sufficient free space for developer/lang/rustc (rust toolchain is
+      required to build hyperfine via cargo) or install hyperfine via a local
+      package source.
+  when: provision_benchmarks_openindiana_hyperfine_recheck.rc != 0
 
 - name: Install ffmpeg (OpenIndiana)
   ansible.builtin.package:
@@ -88,6 +144,17 @@
   become: true
   when: provision_benchmarks_install_octave | bool
   failed_when: false
+  register: provision_benchmarks_openindiana_octave_install
+
+- name: Warn when Octave package is unavailable (OpenIndiana)
+  ansible.builtin.debug:
+    msg: >-
+      OpenIndiana package '{{ provision_benchmarks_octave_packages['OpenIndiana'] | join(', ') }}'
+      is unavailable in currently enabled IPS publishers. The Octave benchmark
+      remains optional and will be skipped.
+  when:
+    - provision_benchmarks_install_octave | bool
+    - provision_benchmarks_openindiana_octave_install.rc | default(0) != 0
 
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml

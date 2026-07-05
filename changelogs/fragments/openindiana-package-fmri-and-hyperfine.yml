@@ -1,0 +1,3 @@
+---
+bugfixes:
+  - "provision_benchmarks(OpenIndiana): switch git/compiler package entries to IPS FMRIs and add cargo-based hyperfine install attempt when `hyperfine` is not present."

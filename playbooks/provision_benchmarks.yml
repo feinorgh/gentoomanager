@@ -114,6 +114,11 @@
   gather_facts: true
   ignore_unreachable: true
   any_errors_fatal: false
+  vars:
+    # Keep pfexec-compatible defaults available during initial fact gathering
+    # when a host sets ansible_become_method=pfexec.
+    ansible_pfexec_flags: ""
+    ansible_pfexec_wrap_execution: true
   tasks:
     - name: Group by OS family (standard families)
       ansible.builtin.group_by:
@@ -394,6 +399,12 @@
   gather_facts: false
   ignore_unreachable: true
   any_errors_fatal: false
+  vars:
+    # community.general.pfexec defaults to sudo-style flags (-H -S -n),
+    # which OpenIndiana pfexec does not support.
+    ansible_become_method: pfexec
+    ansible_pfexec_flags: ""
+    ansible_pfexec_wrap_execution: true
   tasks:
     - name: Provision benchmark dependencies
       ansible.builtin.include_role:

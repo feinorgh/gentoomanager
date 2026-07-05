@@ -819,7 +819,13 @@ should run without prompting for a sudo password.
 ansible_become: true
 ansible_become_method: pfexec
 ansible_become_user: root
+ansible_pfexec_flags: ""
+ansible_pfexec_wrap_execution: true
 ```
+
+`ansible_pfexec_flags` must be empty on OpenIndiana (the default sudo-style
+flags are not accepted by `pfexec`), and `ansible_pfexec_wrap_execution: true`
+ensures remote module execution is wrapped with `/bin/sh -c`.
 
 **References:**
 - `man pfexec` — <https://illumos.org/man/1/pfexec>

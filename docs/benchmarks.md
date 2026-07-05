@@ -180,7 +180,7 @@ manager differences across OS families:
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — | |
 | SUSE (openSUSE, SLES) | zypper | — | |
 | FreeBSD | ports (`make BATCH=yes`) | — | All packages (including optional ones: GIMP, Inkscape, OpenCV, Botan, mold, Octave) are built from the ports tree to avoid mixing pkg and ports. |
-| OpenIndiana | pkg (IPS) | — | Official OpenIndiana repositories only (no third-party repos in default flow). |
+| OpenIndiana | pkg (IPS) | `hipster-encumbered` publisher | Required for ffmpeg and other encumbered packages not enabled by default. |
 | Void Linux | xbps-install | — | |
 | NixOS | nix-env | — | |
 | Solus | eopkg | — | |
@@ -1483,7 +1483,17 @@ All of these packages are available in OpenBSD's standard package repositories.
 OpenIndiana is supported as a provisioning target and as a benchmark runtime
 target with a safe-subset policy.
 
-- **Provisioning:** uses IPS (`pkg`) with official OpenIndiana repositories.
+- **Provisioning:** uses IPS (`pkg`) with the OpenIndiana `openindiana.org`
+  publisher and explicitly adds the `hipster-encumbered` publisher during
+  provisioning.
+  - Core tooling uses IPS FMRIs (for example, `developer/versioning/git`,
+    `developer/gcc-14`) so `git` and `gcc` resolve on `PATH`.
+  - `hyperfine` is attempted via `cargo install --locked hyperfine --root /usr`
+    when it is not available in IPS package catalogs.
+- **Why `hipster-encumbered` is configured:** this publisher is not enabled by
+  default and contains encumbered packages (for example ffmpeg and related
+  multimedia components), so provisioning enables it explicitly to make those
+  benchmark dependencies installable.
 - **Runtime safe subset:** categories are run with conservative platform guards.
 - **Tier 3 unsupported categories:** `disk` and `boot_time` are explicitly
   treated as unsupported on OpenIndiana and emit transparent skip/unsupported

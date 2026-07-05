@@ -1,0 +1,3 @@
+---
+bugfixes:
+  - "provision_benchmarks: set OpenIndiana play to use pfexec-compatible become vars (`ansible_pfexec_flags: \"\"`, `ansible_pfexec_wrap_execution: true`) to avoid sudo-style flag failures during module execution."
