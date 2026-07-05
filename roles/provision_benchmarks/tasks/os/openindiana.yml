@@ -22,6 +22,43 @@
   changed_when: false
   failed_when: false
 
+- name: Detect current OpenSSL mediator version (OpenIndiana)
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      pkg mediator -H openssl 2>/dev/null | awk 'NR==1{print $3}'
+  become: true
+  changed_when: false
+  failed_when: false
+  register: provision_benchmarks_openindiana_openssl_current_mediator_version
+
+- name: Detect latest available OpenSSL mediator version (OpenIndiana)
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      pkg mediator -a openssl 2>/dev/null \
+        | awk 'NR>1 && $3 != "-" {print $3}' \
+        | sort -n \
+        | tail -n 1
+  become: true
+  changed_when: false
+  failed_when: false
+  register: provision_benchmarks_openindiana_openssl_latest_mediator_version
+
+- name: Set OpenSSL mediator to latest available version (OpenIndiana)
+  ansible.builtin.command:
+    cmd: >-
+      pkg set-mediator -V
+      {{ provision_benchmarks_openindiana_openssl_latest_mediator_version.stdout | trim }}
+      openssl
+  become: true
+  when:
+    - provision_benchmarks_openindiana_openssl_latest_mediator_version.stdout | trim != ""
+    - >-
+      provision_benchmarks_openindiana_openssl_latest_mediator_version.stdout | trim
+      !=
+      provision_benchmarks_openindiana_openssl_current_mediator_version.stdout | trim
+
 - name: Install benchmark dependencies (OpenIndiana)
   ansible.builtin.package:
     name: "{{ provision_benchmarks_packages['OpenIndiana'] }}"

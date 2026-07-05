@@ -959,15 +959,27 @@
       {% set cc_label = cc_parts[0] %}
       {% set cc_exe = cc_parts[1] %}
       if [ -x "{{ cc_exe }}" ]; then
-        CMDS+=(
-          --command-name "{{ cc_label }}-j1"
-            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j 1 -s)"
-          --command-name "{{ cc_label }}-jN"
-            "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j ${NPROC} -s)"
-        )
+        LINK_TEST_C="$PROJ/.link_check_{{ cc_label }}.c"
+        LINK_TEST_BIN="$PROJ/.link_check_{{ cc_label }}"
+        printf 'int main(void){return 0;}\n' > "$LINK_TEST_C"
+        if "{{ cc_exe }}" -O2 -o "$LINK_TEST_BIN" "$LINK_TEST_C" >/dev/null 2>&1; then
+          CMDS+=(
+            --command-name "{{ cc_label }}-j1"
+              "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j 1 -s)"
+            --command-name "{{ cc_label }}-jN"
+              "(cd $PROJ && make clean -s && make CC={{ cc_exe }} CFLAGS=-O2 -j ${NPROC} -s)"
+          )
+        else
+          echo "Skipping {{ cc_label }} for compiler_multifile: linker probe failed" >&2
+        fi
+        rm -f "$LINK_TEST_C" "$LINK_TEST_BIN"
       fi
       {% endif %}
       {% endfor %}
+      if [ -z "${CMDS[*]}" ]; then
+        echo "No link-capable C compilers detected for compiler_multifile benchmark" >&2
+        exit 1
+      fi
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_large_compile_runs }} \
         --warmup {{ run_benchmarks_large_compile_warmup }} \

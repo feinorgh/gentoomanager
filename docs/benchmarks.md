@@ -1488,6 +1488,8 @@ target with a safe-subset policy.
   provisioning.
   - Core tooling uses IPS FMRIs (for example, `developer/versioning/git`,
     `developer/gcc-14`) so `git` and `gcc` resolve on `PATH`.
+  - OpenSSL CLI mediation is set to the highest available `openssl` mediator
+    version so `/usr/bin/openssl` tracks the newest installed OpenSSL branch.
   - `hyperfine` is attempted via `cargo install --locked hyperfine --root /usr`
     when it is not available in IPS package catalogs.
 - **Why `hipster-encumbered` is configured:** this publisher is not enabled by

@@ -1,0 +1,2 @@
+minor_changes:
+  - "provision_benchmarks(OpenIndiana): set IPS OpenSSL mediator to the highest available version so /usr/bin/openssl uses the newest installed OpenSSL branch."

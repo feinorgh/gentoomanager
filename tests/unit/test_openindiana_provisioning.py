@@ -165,6 +165,22 @@ def test_openindiana_warns_when_octave_install_fails(worktree_root):
     assert "provision_benchmarks_openindiana_octave_install.rc | default(0) != 0" in task_content
 
 
+def test_openindiana_sets_openssl_mediator_to_latest_available(worktree_root):
+    """OpenIndiana provisioning should select the newest available OpenSSL mediator."""
+    task_path = os.path.join(
+        worktree_root, "roles", "provision_benchmarks", "tasks", "os", "openindiana.yml"
+    )
+    with open(task_path, encoding="utf-8") as file_handle:
+        task_content = file_handle.read()
+
+    assert "pkg mediator -H openssl" in task_content
+    assert "pkg mediator -a openssl" in task_content
+    assert "pkg set-mediator -V" in task_content
+    assert "provision_benchmarks_openindiana_openssl_latest_mediator_version.stdout | trim" in (
+        task_content
+    )
+
+
 def test_benchmarks_doc_mentions_hipster_encumbered_repo_for_openindiana(worktree_root):
     """OpenIndiana docs should explain non-default encumbered repo usage."""
     docs_path = os.path.join(worktree_root, "docs", "benchmarks.md")
