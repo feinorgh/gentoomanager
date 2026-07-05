@@ -60,11 +60,13 @@
 - name: Probe passwordless privilege escalation
   ansible.builtin.shell:
     cmd: |
-      # Detect sudo or doas inline (runs before setup.yml defines run_benchmarks_priv_cmd)
+      # Detect sudo/doas/pfexec inline (runs before setup.yml defines run_benchmarks_priv_cmd)
       if command -v sudo >/dev/null 2>&1; then
         sudo -n true
       elif command -v doas >/dev/null 2>&1; then
         doas -n true
+      elif command -v pfexec >/dev/null 2>&1; then
+        pfexec true
       else
         exit 1
       fi
@@ -166,7 +168,7 @@
       {% if run_benchmarks_sanity_sudo.rc | default(1) != 0 %}
       ✗ Passwordless privilege escalation NOT available — CPU governor pinning
           and swap disable/restore steps will be skipped or may fail.
-          Ensure the Ansible user has passwordless sudo/doas access configured.
+          Ensure the Ansible user has passwordless sudo/doas/pfexec access configured.
       {% endif %}
       {% if not run_benchmarks_sanity_disk_ok %}
       ✗ Low disk space on partition '{{ run_benchmarks_sanity_disk_mount }}'

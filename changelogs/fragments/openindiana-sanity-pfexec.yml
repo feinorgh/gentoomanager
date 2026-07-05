@@ -1,0 +1,2 @@
+bugfixes:
+  - "run_benchmarks(sanity_check): include pfexec in passwordless privilege-escalation preflight probing and warning guidance, avoiding misleading sudo/doas-only warnings on OpenIndiana."

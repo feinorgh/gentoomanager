@@ -71,3 +71,14 @@ def test_ffmpeg_video_encode_avoids_async_on_openindiana(worktree_root):
     assert "run_benchmarks_ffmpeg_task_timeout_sec" in content
     assert "ansible_system | default('Linux') != 'SunOS'" in content
     assert " else omit" in content
+
+
+def test_sanity_check_privilege_probe_supports_pfexec_for_openindiana(worktree_root):
+    """OpenIndiana sanity-check privilege probe should test pfexec, not only sudo/doas."""
+    sanity_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "sanity_check.yml"
+    )
+    content = _read(sanity_path)
+
+    assert "pfexec true" in content
+    assert "sudo/doas/pfexec" in content
