@@ -1232,6 +1232,22 @@ def test_openbsd_support_avoids_undeclared_helper_commands(worktree_root):
         )
 
 
+def test_normalize_load_wait_uses_bsd_compatible_load_sources(worktree_root):
+    """Load-settle step should support BSD/OpenIndiana systems without /proc."""
+    normalize_path = os.path.join(
+        worktree_root, "roles", "run_benchmarks", "tasks", "normalize.yml"
+    )
+    with open(normalize_path, encoding="utf-8") as file_handle:
+        normalize_content = file_handle.read()
+
+    assert "kern.loadavg" in normalize_content, (
+        "normalize.yml load wait should query kern.loadavg for BSD/OpenIndiana support"
+    )
+    assert "uptime" in normalize_content, (
+        "normalize.yml load wait should include uptime parsing as portable fallback"
+    )
+
+
 def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_root):
     """OpenBSD completion logic should expect the artifact set OpenBSD can honestly produce."""
     role_main_path = os.path.join(worktree_root, "roles", "run_benchmarks", "tasks", "main.yml")

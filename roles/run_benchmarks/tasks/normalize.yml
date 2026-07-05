@@ -366,10 +366,57 @@
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
+      get_load_x100() {
+        if [ -r /proc/loadavg ]; then
+          awk '{printf "%.0f", $1 * 100}' /proc/loadavg
+          return 0
+        fi
+
+        if command -v sysctl >/dev/null 2>&1; then
+          _sysctl_load="$(sysctl -n vm.loadavg 2>/dev/null || sysctl -n kern.loadavg 2>/dev/null || true)"
+          if [ -n "$_sysctl_load" ]; then
+            # Extract first numeric token from forms like:
+            # "{ 0.23 0.11 0.08 }" or "0.23 0.11 0.08"
+            printf '%s\n' "$_sysctl_load" | awk '
+              {
+                for (_field_idx = 1; _field_idx <= NF; _field_idx++) {
+                  gsub(/[{},]/, "", $(_field_idx))
+                  if ($(_field_idx) ~ /^[0-9]+(\.[0-9]+)?$/) {
+                    printf "%.0f", $(_field_idx) * 100
+                    exit 0
+                  }
+                }
+                exit 1
+              }
+            '
+            return $?
+          fi
+        fi
+
+        if command -v uptime >/dev/null 2>&1; then
+          _uptime_line="$(uptime 2>/dev/null || true)"
+          if [ -n "$_uptime_line" ]; then
+            # Handle both "load average:" and "load averages:" styles.
+            printf '%s\n' "$_uptime_line" | awk '
+              match($0, /load averages?:[[:space:]]*([0-9]+(\.[0-9]+)?)/, _match_arr) {
+                printf "%.0f", _match_arr[1] * 100
+                exit 0
+              }
+              { exit 1 }
+            '
+            return $?
+          fi
+        fi
+
+        return 1
+      }
+
       _tries=0
       while [ "$_tries" -lt 30 ]; do
-        LOAD=$(awk '{printf "%.0f", $1 * 100}' /proc/loadavg 2>/dev/null \
-               || sysctl -n vm.loadavg 2>/dev/null | awk '{printf "%.0f", $2 * 100}')
+        if ! LOAD="$(get_load_x100)"; then
+          # No portable load source available; don't block the benchmark run.
+          exit 0
+        fi
         [ "$LOAD" -lt 50 ] && exit 0
         sleep 2
         _tries=$((_tries + 1))

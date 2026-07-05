@@ -1,0 +1,2 @@
+bugfixes:
+  - "run_benchmarks(normalize): make load-settle detection portable by checking /proc/loadavg, vm/kern.loadavg via sysctl, and uptime fallback to avoid failures on BSD/OpenIndiana hosts."
