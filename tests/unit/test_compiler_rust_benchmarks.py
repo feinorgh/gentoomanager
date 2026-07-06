@@ -9,10 +9,17 @@ RUN_BENCHMARKS_PLAYBOOK = Path(__file__).resolve().parents[2] / "playbooks" / "r
 RUN_BENCHMARKS_MAIN = (
     Path(__file__).resolve().parents[2] / "roles" / "run_benchmarks" / "tasks" / "main.yml"
 )
+RUST_BENCH_FILES = (
+    Path(__file__).resolve().parents[2] / "roles" / "run_benchmarks" / "files" / "rust_bench"
+)
 
 
 def _content() -> str:
     return COMPILER_TASK.read_text(encoding="utf-8")
+
+
+def _rust_file(path: str) -> str:
+    return (RUST_BENCH_FILES / path).read_text(encoding="utf-8")
 
 
 def _playbook_content() -> str:
@@ -56,28 +63,33 @@ def test_compiler_task_refreshes_rust_benchmark_project_files() -> None:
 
 
 def test_compiler_task_disables_rust_cargo_autobins_and_cleans_legacy_main() -> None:
-    text = _content()
-    assert "{{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/Cargo.toml" in text
-    assert "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/Cargo.toml" in text
-    assert "{{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src/main.rs" in text
-    assert "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/src/main.rs" in text
-    assert "regex = \"=1.11.1\"" in text
-    assert "serde_json = \"=1.0.140\"" in text
+    # Cargo.toml files are now static — check they exist and have correct content
+    runtime_toml = _rust_file("runtime_bench/Cargo.toml")
+    external_toml = _rust_file("external_bench/Cargo.toml")
+    assert "rust_runtime" in runtime_toml
+    assert "rust_external" in external_toml
+    # compiler.yml deploys them via ansible.builtin.copy
+    task_text = _content()
+    assert "runtime_bench/Cargo.toml" in task_text
+    assert "external_bench/Cargo.toml" in task_text
+    assert "runtime_bench/src/main.rs" in task_text
+    assert "external_bench/src/main.rs" in task_text
 
 
 def test_compiler_task_keeps_compile_benchmark_in_separate_compile_project() -> None:
     text = _content()
-    assert "{{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src" in text
-    assert "{{ run_benchmarks_work_dir }}/rust_bench/compile_bench/Cargo.toml" in text
+    assert "rust_bench/compile_bench/src" in text
+    assert "compile_bench/Cargo.toml" in text
     assert "cd {{ run_benchmarks_work_dir }}/rust_bench/compile_bench" in text
     assert '{{ tc_cargo }} build 2>&1' in text
     assert '{{ tc_cargo }} build --release 2>&1' in text
 
 
 def test_compiler_task_pins_external_rust_dependencies_exactly() -> None:
-    text = _content()
-    assert 'regex = "=1.11.1"' in text
-    assert 'serde_json = "=1.0.140"' in text
+    # Dependency pins live in the static Cargo.toml, not compiler.yml
+    external_toml = _rust_file("external_bench/Cargo.toml")
+    assert 'regex = "=1.11.1"' in external_toml
+    assert 'serde_json = "=1.0.140"' in external_toml
 
 
 def test_compiler_task_reports_failed_runtime_and_external_toolchain_builds() -> None:

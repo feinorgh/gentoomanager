@@ -293,119 +293,52 @@
     - run_benchmarks_compiler_c_runtime_result is not skipped
     - run_benchmarks_compiler_c_runtime_result.rc | default(0) != 0
 
-- name: Create Rust benchmark project
+- name: Create Rust benchmark directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src"
+    - "{{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src"
+    - "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/src"
+    - "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/fixtures"
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+
+- name: Deploy Rust benchmark sources
+  ansible.builtin.copy:
+    src: "rust_bench/{{ item.src }}"
+    dest: "{{ run_benchmarks_work_dir }}/rust_bench/{{ item.src }}"
+    mode: "0644"
+  loop:
+    - { src: compile_bench/Cargo.toml }
+    - { src: compile_bench/src/main.rs }
+    - { src: runtime_bench/Cargo.toml }
+    - { src: runtime_bench/src/main.rs }
+    - { src: external_bench/Cargo.toml }
+    - { src: external_bench/src/main.rs }
+    - { src: external_bench/fixtures/external_input.json }
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+
+- name: Remove stale top-level Rust workspace files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml"
+    - "{{ run_benchmarks_work_dir }}/rust_bench/src/main.rs"
+    - "{{ run_benchmarks_work_dir }}/rust_bench/src/runtime.rs"
+    - "{{ run_benchmarks_work_dir }}/rust_bench/src/external.rs"
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
+
+- name: Generate Cargo.lock for external Rust benchmark
   ansible.builtin.shell:
-    cmd: |
-      set -e
-      if command -v rustc >/dev/null 2>&1; then
-        mkdir -p \
-          {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src \
-          {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src \
-          {{ run_benchmarks_work_dir }}/rust_bench/external_bench/src \
-          {{ run_benchmarks_work_dir }}/rust_bench/external_bench/fixtures
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/Cargo.toml << 'TOML'
-      [package]
-      name = "bench"
-      version = "0.1.0"
-      edition = "2021"
-      TOML
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/Cargo.toml << 'TOML'
-      [package]
-      name = "bench"
-      version = "0.1.0"
-      edition = "2021"
-
-      [[bin]]
-      name = "rust_runtime"
-      path = "src/main.rs"
-      TOML
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/external_bench/Cargo.toml << 'TOML'
-      [package]
-      name = "bench"
-      version = "0.1.0"
-      edition = "2021"
-
-      [dependencies]
-      regex = "=1.11.1"
-      serde_json = "=1.0.140"
-
-      [[bin]]
-      name = "rust_external"
-      path = "src/main.rs"
-      TOML
-        rm -f \
-          {{ run_benchmarks_work_dir }}/rust_bench/Cargo.toml \
-          {{ run_benchmarks_work_dir }}/rust_bench/src/main.rs \
-          {{ run_benchmarks_work_dir }}/rust_bench/src/runtime.rs \
-          {{ run_benchmarks_work_dir }}/rust_bench/src/external.rs
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/compile_bench/src/main.rs << 'RUST'
-      fn matmul(a: &[[f64; 128]; 128], b: &[[f64; 128]; 128]) -> [[f64; 128]; 128] {
-          let mut c = [[0.0f64; 128]; 128];
-          for i in 0..128 {
-              for j in 0..128 {
-                  let mut sum = 0.0;
-                  for k in 0..128 { sum += a[i][k] * b[k][j]; }
-                  c[i][j] = sum;
-              }
-          }
-          c
-      }
-      fn main() {
-          let mut a = [[0.0f64; 128]; 128];
-          let mut b = [[0.0f64; 128]; 128];
-          let mut seed: u64 = 42;
-          for i in 0..128 {
-              for j in 0..128 {
-                  seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                  a[i][j] = (seed >> 33) as f64 / (1u64 << 31) as f64;
-                  seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                  b[i][j] = (seed >> 33) as f64 / (1u64 << 31) as f64;
-              }
-          }
-          let c = matmul(&a, &b);
-          println!("result: {}", c[64][64]);
-      }
-      RUST
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/runtime_bench/src/main.rs << 'RUST'
-      fn main() {
-          let mut x: u64 = 42;
-          let mut acc: u64 = 0;
-          for _ in 0..5_000_000 {
-              x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
-              acc ^= x.rotate_left(13);
-          }
-          println!("{}", acc);
-      }
-      RUST
-        cat > {{ run_benchmarks_work_dir }}/rust_bench/external_bench/src/main.rs << 'RUST'
-      use regex::Regex;
-      use serde_json::Value;
-      use std::fs;
-
-      fn main() {
-          let data = fs::read_to_string("fixtures/external_input.json").expect("fixture");
-          let value: Value = serde_json::from_str(&data).expect("json");
-          let re = Regex::new(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}").expect("regex");
-          let mut count = 0usize;
-          if let Some(arr) = value.as_array() {
-              for entry in arr {
-                  if let Some(s) = entry.as_str() {
-                      count += re.find_iter(s).count();
-                  }
-              }
-          }
-          println!("{}", count);
-      }
-      RUST
-      cat > {{ run_benchmarks_work_dir }}/rust_bench/external_bench/fixtures/external_input.json << 'JSON'
-      ["alice@example.com","invalid","bob.smith@example.org","carol+ops@example.net"]
-      JSON
-      if cd {{ run_benchmarks_work_dir }}/rust_bench/external_bench; then
-        cargo generate-lockfile >/dev/null 2>&1 || true
-      fi
-      fi
+    cmd: cargo generate-lockfile
+    chdir: "{{ run_benchmarks_work_dir }}/rust_bench/external_bench"
+    creates: "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/Cargo.lock"
   changed_when: false
   failed_when: false
+  when: "'rustc' in run_benchmarks_compilers_available.stdout"
 
 # Discover all Rust toolchains, outputting "LABEL /path/to/cargo" per unique binary.
 # Sources checked (in order, deduplicated by resolved real path):
