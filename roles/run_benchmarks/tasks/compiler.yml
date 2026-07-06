@@ -601,50 +601,28 @@
     - run_benchmarks_compiler_rust_external_result is not skipped
     - run_benchmarks_compiler_rust_external_result.rc | default(0) != 0
 
-- name: Create Go benchmark project
+- name: Create Go benchmark directory
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/go_bench"
+    state: directory
+    mode: "0755"
+  when: "'go' in run_benchmarks_compilers_available.stdout"
+
+- name: Deploy Go benchmark source
+  ansible.builtin.copy:
+    src: go_bench/main.go
+    dest: "{{ run_benchmarks_work_dir }}/go_bench/main.go"
+    mode: "0644"
+  when: "'go' in run_benchmarks_compilers_available.stdout"
+
+- name: Initialise Go module for benchmark
   ansible.builtin.shell:
-    cmd: |
-      set -e
-      if command -v go >/dev/null 2>&1 && [ ! -d {{ run_benchmarks_work_dir }}/go_bench ]; then
-        mkdir -p {{ run_benchmarks_work_dir }}/go_bench
-        cat > {{ run_benchmarks_work_dir }}/go_bench/main.go << 'GO'
-      package main
-
-      import (
-        "fmt"
-        "math/rand"
-        "sort"
-      )
-
-      const N = 256
-
-      func main() {
-        r := rand.New(rand.NewSource(42))
-        a := make([]float64, N*N)
-        b := make([]float64, N*N)
-        c := make([]float64, N*N)
-        for i := range a {
-          a[i] = r.Float64()
-          b[i] = r.Float64()
-        }
-        for i := 0; i < N; i++ {
-          for j := 0; j < N; j++ {
-            sum := 0.0
-            for k := 0; k < N; k++ {
-              sum += a[i*N+k] * b[k*N+j]
-            }
-            c[i*N+j] = sum
-          }
-        }
-        sort.Float64s(c)
-        fmt.Printf("result: %f\n", c[len(c)/2])
-      }
-      GO
-        cd {{ run_benchmarks_work_dir }}/go_bench && go mod init bench
-      fi
-    creates: "{{ run_benchmarks_work_dir }}/go_bench/main.go"
+    cmd: go mod init bench
+    chdir: "{{ run_benchmarks_work_dir }}/go_bench"
+    creates: "{{ run_benchmarks_work_dir }}/go_bench/go.mod"
   changed_when: false
   failed_when: false
+  when: "'go' in run_benchmarks_compilers_available.stdout"
 
 # Discover all go1.X binaries on PATH and in common SDK cache directories.
 # Deduplicates by resolved real path so a generic `go` symlink is not double-counted.
