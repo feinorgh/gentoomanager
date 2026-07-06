@@ -332,7 +332,7 @@
   when: "'rustc' in run_benchmarks_compilers_available.stdout"
 
 - name: Generate Cargo.lock for external Rust benchmark
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: cargo generate-lockfile
     chdir: "{{ run_benchmarks_work_dir }}/rust_bench/external_bench"
     creates: "{{ run_benchmarks_work_dir }}/rust_bench/external_bench/Cargo.lock"
@@ -616,7 +616,7 @@
   when: "'go' in run_benchmarks_compilers_available.stdout"
 
 - name: Initialise Go module for benchmark
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: go mod init bench
     chdir: "{{ run_benchmarks_work_dir }}/go_bench"
     creates: "{{ run_benchmarks_work_dir }}/go_bench/go.mod"
