@@ -95,6 +95,14 @@
           [ -x "$cc_path" ] || continue
           printf '%s %s\n' "$(basename "$cc_path")" "$cc_path"
         done
+        # Versioned compilers installed under /usr/local/bin (FreeBSD ports,
+        # Homebrew, pkgsrc) — these are not guaranteed to be in the SSH PATH
+        # so the $PATH loop above may miss them entirely.
+        for f in /usr/local/bin/gcc-[0-9]* /usr/local/bin/gcc[0-9]* \
+                 /usr/local/bin/clang-[0-9]* /usr/local/bin/clang[0-9]*; do
+          [ -x "$f" ] || continue
+          printf '%s %s\n' "$(basename "$f")" "$f"
+        done
         # Gentoo: non-active gcc-config slots (may not be on PATH)
         if command -v gcc-config >/dev/null 2>&1; then
           gcc-config -l 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' |
