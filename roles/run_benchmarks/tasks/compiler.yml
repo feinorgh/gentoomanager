@@ -88,6 +88,13 @@
           full=$(command -v "$cc" 2>/dev/null) || continue
           printf '%s %s\n' "$cc" "$full"
         done
+        # Explicit probes for well-known BSD system compiler paths that may
+        # not be reachable via PATH in non-login SSH sessions (FreeBSD /usr/bin/cc
+        # is clang; /usr/local/bin/clangN / gccN are common ports locations).
+        for cc_path in /usr/bin/cc /usr/bin/clang /usr/local/bin/cc /usr/local/bin/clang; do
+          [ -x "$cc_path" ] || continue
+          printf '%s %s\n' "$(basename "$cc_path")" "$cc_path"
+        done
         # Gentoo: non-active gcc-config slots (may not be on PATH)
         if command -v gcc-config >/dev/null 2>&1; then
           gcc-config -l 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' |
@@ -849,13 +856,15 @@
   failed_when: run_benchmarks_compiler_multifile_make_check.rc != 0
   when: run_benchmarks_multifile_gen is not failed
 
-- name: Check resolved compiler command list for compiler_multifile
-  ansible.builtin.assert:
-    that:
-      - run_benchmarks_cc_resolved.stdout_lines | default([]) | length > 0
-    fail_msg: >-
-      {{ inventory_hostname }}: compiler_multifile requires at least one resolved C compiler.
-  when: run_benchmarks_multifile_gen is not failed
+- name: Warn when no resolved C compilers found for compiler_multifile
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: no resolved C compilers found;
+      compiler_multifile benchmark will be skipped.
+      Check that gcc or clang is installed and discoverable.
+  when:
+    - run_benchmarks_multifile_gen is not failed
+    - run_benchmarks_cc_resolved.stdout_lines | default([]) | length == 0
 
 - name: Run multi-file C project compile benchmarks
   ansible.builtin.shell:

@@ -1,0 +1,5 @@
+bugfixes:
+  - "roles/run_benchmarks: fix compiler_multifile failing on FreeBSD — add explicit
+    probes for /usr/bin/cc and /usr/bin/clang so compilers are found even when PATH
+    does not include /usr/bin in non-login SSH sessions; replace hard assert with a
+    debug warning so the benchmark skips gracefully instead of aborting the play."
