@@ -116,8 +116,10 @@
 - name: Detect resolved Python command
   ansible.builtin.raw: >-
     command -v python3 2>/dev/null ||
+    command -v python3.12 2>/dev/null ||
+    command -v python3.11 2>/dev/null ||
     command -v python 2>/dev/null ||
-    ls /usr/local/bin/python3.* 2>/dev/null | sort -t. -k2 -rn | head -1 ||
+    ls /usr/local/bin/python3.[0-9]* 2>/dev/null | grep -E 'python[0-9.]+$' | sort -t. -k2 -rn | head -1 ||
     echo python3
   register: run_benchmarks_python_cmd_probe
   changed_when: false

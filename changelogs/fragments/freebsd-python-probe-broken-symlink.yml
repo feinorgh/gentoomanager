@@ -1,0 +1,10 @@
+bugfixes:
+  - "roles/run_benchmarks/tasks/setup.yml: fix Python probe to handle broken
+    /usr/local/bin/python3 symlink (points to absent python3.11) by also
+    trying command -v python3.12 and python3.11, and by filtering the ls
+    fallback with grep -E 'python[0-9.]+$' to exclude python3.12-config."
+  - "roles/run_benchmarks/tasks/compiler.yml: guard all compiler_multifile
+    tasks on run_benchmarks_multifile_gen.rc==0 so that a silently-failed
+    generator (failed_when:false) does not proceed to run the benchmark
+    against a non-existent multifile_project directory, which caused an
+    irrelevant hard-fail via ansible.builtin.fail."
