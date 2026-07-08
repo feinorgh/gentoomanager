@@ -851,6 +851,7 @@
       generate_multifile_bench.py
       {{ run_benchmarks_work_dir }}/multifile_project
     creates: "{{ run_benchmarks_work_dir }}/multifile_project/Makefile"
+    executable: "{{ run_benchmarks_python_cmd }}"
   changed_when: false
   failed_when: false
   register: run_benchmarks_multifile_gen

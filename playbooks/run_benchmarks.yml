@@ -426,6 +426,7 @@
             gather_subset:
               - "!all"
               - "!min"
+              - platform
               - distribution
               - os_family
               - hardware
@@ -802,6 +803,7 @@
         gather_subset:
           - "!all"
           - "!min"
+          - platform
           - distribution
           - os_family
           - hardware

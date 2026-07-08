@@ -6,6 +6,7 @@
     cmd: gen_sortdata.py
     chdir: "{{ run_benchmarks_work_dir }}"
     creates: "{{ run_benchmarks_work_dir }}/sortdata.txt"
+    executable: "{{ run_benchmarks_python_cmd }}"
 
 - name: Check findtree file count
   ansible.builtin.shell:

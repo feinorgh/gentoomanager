@@ -1,0 +1,18 @@
+bugfixes:
+  - "playbooks/run_benchmarks.yml: add 'platform' to gather_subset so ansible_system
+    is populated on FreeBSD; previously !min excluded it, causing all
+    ansible_system | default('Linux') conditions to match and Linux-only tasks
+    (drop_caches, pm_qos C-state disable, irqbalance, KSM) to incorrectly
+    run on FreeBSD hosts."
+  - "roles/run_benchmarks/tasks/setup.yml: extend Python probe to also check
+    /usr/local/bin/python3.* so the resolved command is found on FreeBSD
+    even when /usr/local/bin is absent from the SSH session PATH. Without
+    this, run_benchmarks_python_cmd fell back to the bare 'python3' token
+    which is not on PATH, breaking the compiler version resolver and the
+    openssl speed benchmark."
+  - "roles/run_benchmarks/tasks/coreutils.yml: pass executable:
+    run_benchmarks_python_cmd to the gen_sortdata.py script task so it does
+    not depend on /usr/bin/env python3 being resolvable in the SSH PATH."
+  - "roles/run_benchmarks/tasks/compiler.yml: pass executable:
+    run_benchmarks_python_cmd to the generate_multifile_bench.py script task
+    for the same reason."
