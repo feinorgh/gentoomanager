@@ -1,0 +1,39 @@
+---
+# FreeBSD-specific capability checks required by benchmark categories.
+
+- name: Probe FFmpeg codec list (FreeBSD)
+  ansible.builtin.command:
+    cmd: ffmpeg -hide_banner -codecs
+  register: provision_benchmarks_freebsd_ffmpeg_codecs
+  changed_when: false
+  when: provision_benchmarks_install_ffmpeg | bool
+
+- name: Verify FFmpeg has H.264 codec support (FreeBSD)
+  ansible.builtin.assert:
+    that:
+      - "' h264 ' in (provision_benchmarks_freebsd_ffmpeg_codecs.stdout | lower)"
+    fail_msg: >-
+      FFmpeg is installed but H.264 codec support is missing on this FreeBSD host.
+      Ensure the selected backend builds/installs an FFmpeg variant with H.264 enabled.
+  when: provision_benchmarks_install_ffmpeg | bool
+
+- name: Verify FFmpeg has H.265/HEVC codec support (FreeBSD)
+  ansible.builtin.assert:
+    that:
+      - "' hevc ' in (provision_benchmarks_freebsd_ffmpeg_codecs.stdout | lower)"
+    fail_msg: >-
+      FFmpeg is installed but H.265/HEVC codec support is missing on this FreeBSD host.
+      Ensure the selected backend builds/installs an FFmpeg variant with HEVC enabled.
+  when: provision_benchmarks_install_ffmpeg | bool
+
+- name: Verify NumPy import works (FreeBSD)
+  ansible.builtin.command:
+    cmd: python3 -c "import numpy; print(numpy.__version__)"
+  changed_when: false
+  when: provision_benchmarks_install_numpy | bool
+
+- name: Verify OpenCV import works (FreeBSD)
+  ansible.builtin.command:
+    cmd: python3 -c "import cv2; print(cv2.__version__)"
+  changed_when: false
+  when: provision_benchmarks_install_opencv | bool

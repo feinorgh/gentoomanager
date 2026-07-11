@@ -179,7 +179,7 @@ manager differences across OS families:
 | Debian (Ubuntu, Mint, elementary) | apt | — | |
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — | |
 | SUSE (openSUSE, SLES) | zypper | — | |
-| FreeBSD | ports (`make BATCH=yes`) | — | All packages (including optional ones: GIMP, Inkscape, OpenCV, Botan, mold, Octave) are built from the ports tree to avoid mixing pkg and ports. |
+| FreeBSD | ports (`make BATCH=yes`) or poudriere (`poudriere bulk`) | poudriere pkg repo (optional) | Default backend is ports. Set `provision_benchmarks_freebsd_backend` to `poudriere` (or `auto`) to build the complete dependency set via poudriere, then install from that pkg repo. |
 | OpenIndiana | pkg (IPS) | `hipster-encumbered` publisher | Required for ffmpeg and other encumbered packages not enabled by default. |
 | Void Linux | xbps-install | — | |
 | NixOS | nix-env | — | |

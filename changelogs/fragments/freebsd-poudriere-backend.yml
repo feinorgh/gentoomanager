@@ -1,0 +1,5 @@
+minor_changes:
+  - "roles/provision_benchmarks: add FreeBSD backend selection (`ports`, `poudriere`,
+    `auto`), including poudriere preflight checks (jail/tree/repo wiring), bulk
+    build preflight with `poudriere bulk -n`, and FreeBSD capability verification for
+    benchmark-critical software (FFmpeg codec support plus NumPy/OpenCV imports)."

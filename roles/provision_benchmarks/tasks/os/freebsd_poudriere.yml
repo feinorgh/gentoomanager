@@ -1,0 +1,66 @@
+---
+# FreeBSD poudriere backend: bulk-build and install from the selected pkg set.
+
+- name: Ensure ports tree is available and up to date
+  ansible.builtin.git: # noqa: latest[git]
+    repo: https://git.FreeBSD.org/ports.git
+    dest: /usr/ports
+    depth: 1
+    update: true
+    force: true
+  become: true
+  failed_when: false
+
+- name: Validate poudriere repository configuration for selected set
+  ansible.builtin.command:
+    cmd: pkg -vv
+  register: provision_benchmarks_freebsd_poudriere_repo_validation
+  changed_when: false
+  failed_when: >-
+    _provision_benchmarks_freebsd_poudriere_repo_fragment
+    not in (provision_benchmarks_freebsd_poudriere_repo_validation.stdout | default(''))
+  become: true
+
+- name: Preflight benchmark dependency set with poudriere bulk dry-run
+  ansible.builtin.command:
+    cmd: >-
+      poudriere bulk -n
+      -j {{ provision_benchmarks_freebsd_poudriere_jail }}
+      -p {{ provision_benchmarks_freebsd_poudriere_ports_tree }}
+      -z {{ provision_benchmarks_freebsd_poudriere_set }}
+      {{ _provision_benchmarks_freebsd_origins | join(' ') }}
+  become: true
+  changed_when: false
+
+- name: Build benchmark dependency set with poudriere
+  ansible.builtin.command:
+    cmd: >-
+      poudriere bulk
+      -j {{ provision_benchmarks_freebsd_poudriere_jail }}
+      -p {{ provision_benchmarks_freebsd_poudriere_ports_tree }}
+      -z {{ provision_benchmarks_freebsd_poudriere_set }}
+      {{ _provision_benchmarks_freebsd_origins | join(' ') }}
+  become: true
+  changed_when: true
+  async: 7200
+  poll: 30
+
+- name: Resolve package names from FreeBSD origins
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      for origin in {{ _provision_benchmarks_freebsd_origins | unique | join(' ') }}; do
+        make -C "/usr/ports/${origin}" -V PKGBASE
+      done | awk 'NF > 0' | sort -u
+    executable: /bin/sh
+  register: provision_benchmarks_freebsd_pkg_names_from_origins
+  changed_when: false
+  become: true
+
+- name: Install benchmark dependencies from poudriere pkg repo (FreeBSD)
+  ansible.builtin.command:
+    cmd: >-
+      pkg install -y
+      {{ provision_benchmarks_freebsd_pkg_names_from_origins.stdout_lines | join(' ') }}
+  become: true
+  changed_when: true

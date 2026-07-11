@@ -198,6 +198,10 @@ provision_benchmarks_install_ffmpeg: true
 # FreeBSD ports for hyperfine and ffmpeg
 provision_benchmarks_freebsd_hyperfine_port: benchmarks/hyperfine
 provision_benchmarks_freebsd_ffmpeg_port: multimedia/ffmpeg
+provision_benchmarks_freebsd_backend: ports
+provision_benchmarks_freebsd_poudriere_jail: benchmark
+provision_benchmarks_freebsd_poudriere_ports_tree: default
+provision_benchmarks_freebsd_poudriere_set: benchmark
 
 # Optional: install OpenCV Python bindings
 provision_benchmarks_install_opencv: true

@@ -1,48 +1,122 @@
 ---
-# FreeBSD – install everything from the ports tree using BSD make.
-# Mixing pkg (binary) and ports (source) is bad practice; all packages are
-# built from source via /usr/bin/make install BATCH=yes.
+- name: Build FreeBSD benchmark dependency origin list
+  ansible.builtin.set_fact:
+    _provision_benchmarks_freebsd_origins: >-
+      {{ provision_benchmarks_packages['FreeBSD'] +
+         [provision_benchmarks_freebsd_hyperfine_port] +
+         ([provision_benchmarks_freebsd_ffmpeg_port] if provision_benchmarks_install_ffmpeg | bool else []) +
+         (provision_benchmarks_numpy_packages['FreeBSD'] if provision_benchmarks_install_numpy | bool else []) +
+         (['graphics/gimp'] if provision_benchmarks_install_gimp | bool else []) +
+         (['graphics/inkscape'] if provision_benchmarks_install_inkscape | bool else []) +
+         (provision_benchmarks_opencv_packages['FreeBSD'] if provision_benchmarks_install_opencv | bool else []) +
+         (provision_benchmarks_botan_packages['FreeBSD'] if provision_benchmarks_install_botan | bool else []) +
+         (provision_benchmarks_mold_packages['FreeBSD'] if provision_benchmarks_install_mold | bool else []) +
+         (provision_benchmarks_octave_packages['FreeBSD'] if provision_benchmarks_install_octave | bool else []) }}
 
-- name: Ensure ports tree is available and up to date
-  ansible.builtin.git: # noqa: latest[git]
-    repo: https://git.FreeBSD.org/ports.git
-    dest: /usr/ports
-    depth: 1
-    update: true
-    force: true
-  become: true
-  failed_when: false
+- name: Set requested FreeBSD provisioning backend
+  ansible.builtin.set_fact:
+    _provision_benchmarks_freebsd_backend_requested: >-
+      {{ provision_benchmarks_freebsd_backend | default('ports') | lower | trim }}
+    _provision_benchmarks_freebsd_poudriere_repo_fragment: >-
+      /poudriere/data/packages/{{ provision_benchmarks_freebsd_poudriere_jail }}-{{ provision_benchmarks_freebsd_poudriere_ports_tree }}-{{ provision_benchmarks_freebsd_poudriere_set }}
 
-- name: Check which ports are already installed (FreeBSD)
+- name: Validate requested FreeBSD provisioning backend value
+  ansible.builtin.assert:
+    that:
+      - _provision_benchmarks_freebsd_backend_requested in ['ports', 'poudriere', 'auto']
+    fail_msg: >-
+      provision_benchmarks_freebsd_backend must be one of: ports, poudriere, auto.
+      Got '{{ _provision_benchmarks_freebsd_backend_requested }}'.
+
+- name: Check whether poudriere binary is present
   ansible.builtin.command:
-    cmd: pkg info -qO {{ item }}
-  loop: >-
-    {{ provision_benchmarks_packages['FreeBSD'] +
-       [provision_benchmarks_freebsd_hyperfine_port] +
-       ([provision_benchmarks_freebsd_ffmpeg_port] if provision_benchmarks_install_ffmpeg | bool else []) +
-       (provision_benchmarks_numpy_packages['FreeBSD'] if provision_benchmarks_install_numpy | bool else []) +
-       (['graphics/gimp'] if provision_benchmarks_install_gimp | bool else []) +
-       (['graphics/inkscape'] if provision_benchmarks_install_inkscape | bool else []) +
-       (provision_benchmarks_opencv_packages['FreeBSD'] if provision_benchmarks_install_opencv | bool else []) +
-       (provision_benchmarks_botan_packages['FreeBSD'] if provision_benchmarks_install_botan | bool else []) +
-       (provision_benchmarks_mold_packages['FreeBSD'] if provision_benchmarks_install_mold | bool else []) +
-       (provision_benchmarks_octave_packages['FreeBSD'] if provision_benchmarks_install_octave | bool else []) }}
-  register: provision_benchmarks_freebsd_pkg_check
-  failed_when: false
+    cmd: command -v poudriere
+  register: provision_benchmarks_freebsd_poudriere_bin
   changed_when: false
-  become: true
-
-- name: Install benchmark dependencies from ports (FreeBSD)
-  ansible.builtin.command:
-    cmd: /usr/bin/make install BATCH=yes
-    chdir: "/usr/ports/{{ item.item }}"
-  loop: "{{ provision_benchmarks_freebsd_pkg_check.results }}"
-  when: item.rc != 0
-  become: true
   failed_when: false
-  changed_when: true
-  async: 7200
-  poll: 30
+  when: _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
+
+- name: List configured poudriere jails
+  ansible.builtin.command:
+    cmd: poudriere jail -l
+  register: provision_benchmarks_freebsd_poudriere_jails
+  changed_when: false
+  failed_when: false
+  become: true
+  when:
+    - _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
+    - provision_benchmarks_freebsd_poudriere_bin.rc | default(1) == 0
+
+- name: List configured poudriere ports trees
+  ansible.builtin.command:
+    cmd: poudriere ports -l
+  register: provision_benchmarks_freebsd_poudriere_trees
+  changed_when: false
+  failed_when: false
+  become: true
+  when:
+    - _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
+    - provision_benchmarks_freebsd_poudriere_bin.rc | default(1) == 0
+
+- name: Probe pkg repository configuration
+  ansible.builtin.command:
+    cmd: pkg -vv
+  register: provision_benchmarks_freebsd_pkg_repo_conf
+  changed_when: false
+  failed_when: false
+  become: true
+  when: _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
+
+- name: Compute poudriere readiness flags
+  ansible.builtin.set_fact:
+    _provision_benchmarks_freebsd_poudriere_ready: >-
+      {{
+        (provision_benchmarks_freebsd_poudriere_bin.rc | default(1) == 0)
+        and (provision_benchmarks_freebsd_poudriere_jails.stdout | default('') is regex('(^|\\n)' ~ provision_benchmarks_freebsd_poudriere_jail ~ '(\\s|$)'))
+        and (provision_benchmarks_freebsd_poudriere_trees.stdout | default('') is regex('(^|\\n)' ~ provision_benchmarks_freebsd_poudriere_ports_tree ~ '(\\s|$)'))
+        and (_provision_benchmarks_freebsd_poudriere_repo_fragment in (provision_benchmarks_freebsd_pkg_repo_conf.stdout | default('')))
+      }}
+  when: _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
+
+- name: Set effective FreeBSD provisioning backend
+  ansible.builtin.set_fact:
+    _provision_benchmarks_freebsd_backend_effective: >-
+      {{
+        'poudriere'
+        if (_provision_benchmarks_freebsd_backend_requested == 'poudriere'
+            or (_provision_benchmarks_freebsd_backend_requested == 'auto'
+                and (_provision_benchmarks_freebsd_poudriere_ready | default(false))))
+        else 'ports'
+      }}
+
+- name: Require ready poudriere setup when backend is explicit
+  ansible.builtin.fail:
+    msg: >-
+      FreeBSD backend is set to poudriere but the setup is not ready.
+      Verify poudriere is installed, jail '{{ provision_benchmarks_freebsd_poudriere_jail }}'
+      exists, ports tree '{{ provision_benchmarks_freebsd_poudriere_ports_tree }}'
+      exists, and pkg repo URL points to
+      '{{ _provision_benchmarks_freebsd_poudriere_repo_fragment }}'.
+  when:
+    - _provision_benchmarks_freebsd_backend_requested == 'poudriere'
+    - not (_provision_benchmarks_freebsd_poudriere_ready | default(false))
+
+- name: Warn when auto backend falls back to ports
+  ansible.builtin.debug:
+    msg: >-
+      FreeBSD backend auto-detection did not find a complete poudriere setup;
+      using ports backend instead.
+  when:
+    - _provision_benchmarks_freebsd_backend_requested == 'auto'
+    - _provision_benchmarks_freebsd_backend_effective == 'ports'
+
+- name: Include FreeBSD ports provisioning tasks
+  ansible.builtin.include_tasks: freebsd_ports.yml
+  when: _provision_benchmarks_freebsd_backend_effective == 'ports'
+
+- name: Include FreeBSD poudriere provisioning tasks
+  ansible.builtin.include_tasks: freebsd_poudriere.yml
+  when: _provision_benchmarks_freebsd_backend_effective == 'poudriere'
 
 - name: Create gcc symlink (FreeBSD)
   ansible.builtin.file:
@@ -64,3 +138,6 @@
 
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml
+
+- name: Verify benchmark capability requirements (FreeBSD)
+  ansible.builtin.include_tasks: ../verify_freebsd_capabilities.yml

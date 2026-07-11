@@ -1,0 +1,33 @@
+---
+# FreeBSD ports backend: build dependencies directly from the local ports tree.
+
+- name: Ensure ports tree is available and up to date
+  ansible.builtin.git: # noqa: latest[git]
+    repo: https://git.FreeBSD.org/ports.git
+    dest: /usr/ports
+    depth: 1
+    update: true
+    force: true
+  become: true
+  failed_when: false
+
+- name: Check which ports are already installed (FreeBSD)
+  ansible.builtin.command:
+    cmd: pkg info -qO {{ item }}
+  loop: "{{ _provision_benchmarks_freebsd_origins }}"
+  register: provision_benchmarks_freebsd_pkg_check
+  failed_when: false
+  changed_when: false
+  become: true
+
+- name: Install benchmark dependencies from ports (FreeBSD)
+  ansible.builtin.command:
+    cmd: /usr/bin/make install BATCH=yes
+    chdir: "/usr/ports/{{ item.item }}"
+  loop: "{{ provision_benchmarks_freebsd_pkg_check.results }}"
+  when: item.rc != 0
+  become: true
+  failed_when: false
+  changed_when: true
+  async: 7200
+  poll: 30
