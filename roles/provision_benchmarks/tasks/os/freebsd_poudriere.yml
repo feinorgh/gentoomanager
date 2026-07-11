@@ -46,21 +46,29 @@
   poll: 30
 
 - name: Resolve package names from FreeBSD origins
-  ansible.builtin.shell:
-    cmd: |
-      set -e
-      for origin in {{ _provision_benchmarks_freebsd_origins | unique | join(' ') }}; do
-        make -C "/usr/ports/${origin}" -V PKGBASE
-      done | awk 'NF > 0' | sort -u
-    executable: /bin/sh
-  register: provision_benchmarks_freebsd_pkg_names_from_origins
+  ansible.builtin.command:
+    cmd: make -C /usr/ports/{{ item }} -V PKGBASE
+  loop: "{{ _provision_benchmarks_freebsd_origins | unique }}"
+  register: provision_benchmarks_freebsd_pkg_name_query
   changed_when: false
   become: true
+
+- name: Build unique FreeBSD package name list
+  ansible.builtin.set_fact:
+    provision_benchmarks_freebsd_pkg_names_from_origins: >-
+      {{
+        provision_benchmarks_freebsd_pkg_name_query.results
+        | map(attribute='stdout')
+        | map('trim')
+        | reject('equalto', '')
+        | unique
+        | list
+      }}
 
 - name: Install benchmark dependencies from poudriere pkg repo (FreeBSD)
   ansible.builtin.command:
     cmd: >-
       pkg install -y
-      {{ provision_benchmarks_freebsd_pkg_names_from_origins.stdout_lines | join(' ') }}
+      {{ provision_benchmarks_freebsd_pkg_names_from_origins | join(' ') }}
   become: true
   changed_when: true
