@@ -179,7 +179,7 @@ manager differences across OS families:
 | Debian (Ubuntu, Mint, elementary) | apt | — | |
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — | |
 | SUSE (openSUSE, SLES) | zypper | — | |
-| FreeBSD | ports (`make BATCH=yes`) or poudriere (`poudriere bulk`) | poudriere pkg repo (optional) | Default backend is ports. Set `provision_benchmarks_freebsd_backend` to `poudriere` (or `auto`) to build the complete dependency set via poudriere, then install from that pkg repo. |
+| FreeBSD | ports (`make BATCH=yes`) or poudriere (`poudriere bulk`) | poudriere pkg repo (optional) | Default backend is ports. Set `provision_benchmarks_freebsd_backend` to `poudriere` (or `auto`) to build the complete dependency set via poudriere, then install from that pkg repo. Default poudriere repo path expectation is `/usr/local/poudriere/data/packages/<jail>-<ports_tree>`; if `provision_benchmarks_freebsd_poudriere_set` is non-empty and not `default`, `-<set>` is appended. |
 | OpenIndiana | pkg (IPS) | `hipster-encumbered` publisher | Required for ffmpeg and other encumbered packages not enabled by default. |
 | Void Linux | xbps-install | — | |
 | NixOS | nix-env | — | |

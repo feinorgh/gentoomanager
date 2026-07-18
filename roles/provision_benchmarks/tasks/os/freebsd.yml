@@ -17,8 +17,19 @@
   ansible.builtin.set_fact:
     _provision_benchmarks_freebsd_backend_requested: >-
       {{ provision_benchmarks_freebsd_backend | default('ports') | lower | trim }}
+    _provision_benchmarks_freebsd_poudriere_basefs_effective: >-
+      {{ provision_benchmarks_freebsd_poudriere_basefs | default('/usr/local/poudriere') | regex_replace('/+$', '') }}
+    _provision_benchmarks_freebsd_poudriere_set_effective: >-
+      {{
+        ''
+        if (provision_benchmarks_freebsd_poudriere_set | default('') | trim) in ['', 'default']
+        else (provision_benchmarks_freebsd_poudriere_set | trim)
+      }}
+
+- name: Build expected poudriere repo path fragment
+  ansible.builtin.set_fact:
     _provision_benchmarks_freebsd_poudriere_repo_fragment: >-
-      /poudriere/data/packages/{{ provision_benchmarks_freebsd_poudriere_jail }}-{{ provision_benchmarks_freebsd_poudriere_ports_tree }}-{{ provision_benchmarks_freebsd_poudriere_set }}
+      {{ _provision_benchmarks_freebsd_poudriere_basefs_effective }}/data/packages/{{ provision_benchmarks_freebsd_poudriere_jail }}-{{ provision_benchmarks_freebsd_poudriere_ports_tree }}{% if _provision_benchmarks_freebsd_poudriere_set_effective | length > 0 %}-{{ _provision_benchmarks_freebsd_poudriere_set_effective }}{% endif %}
 
 - name: Validate requested FreeBSD provisioning backend value
   ansible.builtin.assert:
@@ -67,13 +78,38 @@
   become: true
   when: _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
 
+- name: Parse poudriere jail and ports tree names
+  ansible.builtin.set_fact:
+    _provision_benchmarks_freebsd_poudriere_jail_names: >-
+      {{
+        (provision_benchmarks_freebsd_poudriere_jails.stdout_lines | default([]))[1:]
+        | map('trim')
+        | reject('equalto', '')
+        | map('split')
+        | map('first')
+        | list
+      }}
+    _provision_benchmarks_freebsd_poudriere_ports_tree_names: >-
+      {{
+        (provision_benchmarks_freebsd_poudriere_trees.stdout_lines | default([]))[1:]
+        | map('trim')
+        | reject('equalto', '')
+        | map('split')
+        | map('first')
+        | list
+      }}
+  when: _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
+
 - name: Compute poudriere readiness flags
   ansible.builtin.set_fact:
     _provision_benchmarks_freebsd_poudriere_ready: >-
       {{
         (provision_benchmarks_freebsd_poudriere_bin.rc | default(1) == 0)
-        and (provision_benchmarks_freebsd_poudriere_jails.stdout | default('') is regex('(^|\\n)' ~ provision_benchmarks_freebsd_poudriere_jail ~ '(\\s|$)'))
-        and (provision_benchmarks_freebsd_poudriere_trees.stdout | default('') is regex('(^|\\n)' ~ provision_benchmarks_freebsd_poudriere_ports_tree ~ '(\\s|$)'))
+        and (provision_benchmarks_freebsd_poudriere_jails.rc | default(1) == 0)
+        and (provision_benchmarks_freebsd_poudriere_trees.rc | default(1) == 0)
+        and (provision_benchmarks_freebsd_pkg_repo_conf.rc | default(1) == 0)
+        and (provision_benchmarks_freebsd_poudriere_jail in _provision_benchmarks_freebsd_poudriere_jail_names)
+        and (provision_benchmarks_freebsd_poudriere_ports_tree in _provision_benchmarks_freebsd_poudriere_ports_tree_names)
         and (_provision_benchmarks_freebsd_poudriere_repo_fragment in (provision_benchmarks_freebsd_pkg_repo_conf.stdout | default('')))
       }}
   when: _provision_benchmarks_freebsd_backend_requested in ['poudriere', 'auto']
@@ -111,11 +147,11 @@
     - _provision_benchmarks_freebsd_backend_effective == 'ports'
 
 - name: Include FreeBSD ports provisioning tasks
-  ansible.builtin.include_tasks: freebsd_ports.yml
+  ansible.builtin.include_tasks: os/freebsd_ports.yml
   when: _provision_benchmarks_freebsd_backend_effective == 'ports'
 
 - name: Include FreeBSD poudriere provisioning tasks
-  ansible.builtin.include_tasks: freebsd_poudriere.yml
+  ansible.builtin.include_tasks: os/freebsd_poudriere.yml
   when: _provision_benchmarks_freebsd_backend_effective == 'poudriere'
 
 - name: Create gcc symlink (FreeBSD)
@@ -129,7 +165,7 @@
 
 - name: Create python3 symlink (FreeBSD)
   ansible.builtin.file:
-    src: /usr/local/bin/python3.11
+    src: /usr/local/bin/python3.12
     dest: /usr/local/bin/python3
     state: link
     force: true
@@ -140,4 +176,4 @@
   ansible.builtin.include_tasks: verify.yml
 
 - name: Verify benchmark capability requirements (FreeBSD)
-  ansible.builtin.include_tasks: ../verify_freebsd_capabilities.yml
+  ansible.builtin.include_tasks: verify_freebsd_capabilities.yml

@@ -3,3 +3,24 @@ minor_changes:
     `auto`), including poudriere preflight checks (jail/tree/repo wiring), bulk
     build preflight with `poudriere bulk -n`, and FreeBSD capability verification for
     benchmark-critical software (FFmpeg codec support plus NumPy/OpenCV imports)."
+  - "roles/provision_benchmarks: make poudriere repo-path validation use
+    `/usr/local/poudriere`-style defaults and treat `provision_benchmarks_freebsd_poudriere_set`
+    as optional (omit `-z` and `-<set>` suffix when empty or `default`)."
+  - "roles/provision_benchmarks: make poudriere bulk timeout configurable via
+    `provision_benchmarks_freebsd_poudriere_build_timeout_sec` (default 21600s)
+    to avoid false failures on long FreeBSD bulk builds."
+  - "roles/provision_benchmarks: update FreeBSD OpenCV origin default to
+    `graphics/py-opencv-python-headless` so poudriere/ports resolution works
+    with current FreeBSD ports trees."
+  - "roles/provision_benchmarks: align FreeBSD Python defaults with current
+    py312 flavored ports (`lang/python312`, `python3 -> python3.12`) so NumPy
+    and OpenCV imports succeed after provisioning."
+  - "roles/provision_benchmarks: add `databases/py-sqlite3` to FreeBSD
+    dependencies so Python's sqlite3 module is available for SQLite benchmark
+    dataset generation."
+  - "roles/run_benchmarks: enable `disk` benchmark execution on FreeBSD and
+    make setup reclaim `/tmp/ansible-benchmarks` ownership for the benchmark
+    user to avoid permission-denied failures after root-owned leftovers."
+  - "roles/run_benchmarks: make GIMP startup benchmark command auto-select
+    between GIMP 3 (`--quit`) and GIMP 2 (`--batch='(gimp-quit 0)'`) so
+    FreeBSD's GIMP 2.10 package yields a valid non-empty `gimp.json`."

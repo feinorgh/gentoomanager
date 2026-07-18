@@ -36,6 +36,16 @@
       -i inventory_generator.py --limit {{ inventory_hostname }}
   when: run_benchmarks_gimp_check.rc != 0
 
+- name: Select GIMP startup command for detected major version
+  ansible.builtin.set_fact:
+    run_benchmarks_gimp_start_command: >-
+      {{
+        "gimp -i -n --no-data --no-fonts --quit"
+        if " version 3." in (run_benchmarks_gimp_check.stdout | default(''))
+        else "gimp -i -n --batch='(gimp-quit 0)' --batch-interpreter=plug-in-script-fu-eval"
+      }}
+  when: run_benchmarks_gimp_check.rc == 0
+
 - name: Run GIMP startup benchmark
   ansible.builtin.shell: # noqa: command-instead-of-shell
     cmd: >-
@@ -43,7 +53,7 @@
       --warmup {{ run_benchmarks_gimp_warmup }}
       --runs {{ run_benchmarks_gimp_runs }}
       --export-json {{ run_benchmarks_work_dir }}/gimp.json
-      "gimp -i -n --no-data --no-fonts --quit"
+      "{{ run_benchmarks_gimp_start_command }}"
   register: run_benchmarks_gimp_result
   changed_when: false
   failed_when: false

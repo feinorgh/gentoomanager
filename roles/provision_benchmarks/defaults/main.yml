@@ -105,7 +105,8 @@ provision_benchmarks_packages:
     - lang/gcc13
     - devel/llvm
     - security/openssl
-    - lang/python311
+    - lang/python312
+    - databases/py-sqlite3
     - lang/rust
     - lang/go
     - devel/git
@@ -201,7 +202,9 @@ provision_benchmarks_freebsd_ffmpeg_port: multimedia/ffmpeg
 provision_benchmarks_freebsd_backend: ports
 provision_benchmarks_freebsd_poudriere_jail: benchmark
 provision_benchmarks_freebsd_poudriere_ports_tree: default
-provision_benchmarks_freebsd_poudriere_set: benchmark
+provision_benchmarks_freebsd_poudriere_set: ""
+provision_benchmarks_freebsd_poudriere_basefs: /usr/local/poudriere
+provision_benchmarks_freebsd_poudriere_build_timeout_sec: 21600
 
 # Optional: install OpenCV Python bindings
 provision_benchmarks_install_opencv: true
@@ -248,7 +251,7 @@ provision_benchmarks_opencv_packages:
   Suse:
     - python3-opencv
   FreeBSD:
-    - graphics/py-opencv
+    - graphics/py-opencv-python-headless
   OpenBSD:
     - py3-opencv
   OpenIndiana:

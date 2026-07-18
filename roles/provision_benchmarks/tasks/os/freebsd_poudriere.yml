@@ -27,10 +27,57 @@
       poudriere bulk -n
       -j {{ provision_benchmarks_freebsd_poudriere_jail }}
       -p {{ provision_benchmarks_freebsd_poudriere_ports_tree }}
-      -z {{ provision_benchmarks_freebsd_poudriere_set }}
+      {% if _provision_benchmarks_freebsd_poudriere_set_effective | length > 0 %}-z {{ _provision_benchmarks_freebsd_poudriere_set_effective }}{% endif %}
       {{ _provision_benchmarks_freebsd_origins | join(' ') }}
+  register: provision_benchmarks_freebsd_poudriere_preflight
   become: true
   changed_when: false
+  failed_when: false
+
+- name: Attempt to stop a stale running poudriere jail before retrying preflight
+  ansible.builtin.command:
+    cmd: >-
+      poudriere jail -k
+      -j {{ provision_benchmarks_freebsd_poudriere_jail }}
+      -p {{ provision_benchmarks_freebsd_poudriere_ports_tree }}
+      {% if _provision_benchmarks_freebsd_poudriere_set_effective | length > 0 %}-z {{ _provision_benchmarks_freebsd_poudriere_set_effective }}{% endif %}
+  register: provision_benchmarks_freebsd_poudriere_stop_jail
+  become: true
+  changed_when: provision_benchmarks_freebsd_poudriere_stop_jail.rc == 0
+  failed_when: false
+  when:
+    - provision_benchmarks_freebsd_poudriere_preflight.rc != 0
+    - "'jail already running' in (provision_benchmarks_freebsd_poudriere_preflight.stderr | default(''))"
+
+- name: Retry poudriere bulk dry-run preflight after stale jail stop attempt
+  ansible.builtin.command:
+    cmd: >-
+      poudriere bulk -n
+      -j {{ provision_benchmarks_freebsd_poudriere_jail }}
+      -p {{ provision_benchmarks_freebsd_poudriere_ports_tree }}
+      {% if _provision_benchmarks_freebsd_poudriere_set_effective | length > 0 %}-z {{ _provision_benchmarks_freebsd_poudriere_set_effective }}{% endif %}
+      {{ _provision_benchmarks_freebsd_origins | join(' ') }}
+  register: provision_benchmarks_freebsd_poudriere_preflight_retry
+  become: true
+  changed_when: false
+  when:
+    - provision_benchmarks_freebsd_poudriere_preflight.rc != 0
+    - "'jail already running' in (provision_benchmarks_freebsd_poudriere_preflight.stderr | default(''))"
+
+- name: Verify poudriere preflight succeeded
+  ansible.builtin.assert:
+    that:
+      - >-
+        provision_benchmarks_freebsd_poudriere_preflight.rc == 0
+        or (
+          provision_benchmarks_freebsd_poudriere_preflight_retry is defined
+          and provision_benchmarks_freebsd_poudriere_preflight_retry.rc == 0
+        )
+    fail_msg: >-
+      Poudriere bulk dry-run preflight failed. First stderr:
+      {{ provision_benchmarks_freebsd_poudriere_preflight.stderr | default('') }}.
+      Retry stderr:
+      {{ provision_benchmarks_freebsd_poudriere_preflight_retry.stderr | default('not attempted') }}.
 
 - name: Build benchmark dependency set with poudriere
   ansible.builtin.command:
@@ -38,16 +85,23 @@
       poudriere bulk
       -j {{ provision_benchmarks_freebsd_poudriere_jail }}
       -p {{ provision_benchmarks_freebsd_poudriere_ports_tree }}
-      -z {{ provision_benchmarks_freebsd_poudriere_set }}
+      {% if _provision_benchmarks_freebsd_poudriere_set_effective | length > 0 %}-z {{ _provision_benchmarks_freebsd_poudriere_set_effective }}{% endif %}
       {{ _provision_benchmarks_freebsd_origins | join(' ') }}
   become: true
   changed_when: true
-  async: 7200
+  async: "{{ provision_benchmarks_freebsd_poudriere_build_timeout_sec }}"
   poll: 30
+
+- name: Set poudriere ports tree root for origin-to-package resolution
+  ansible.builtin.set_fact:
+    _provision_benchmarks_freebsd_ports_tree_root: >-
+      {{
+        provision_benchmarks_freebsd_poudriere_basefs
+      }}/ports/{{ provision_benchmarks_freebsd_poudriere_ports_tree }}
 
 - name: Resolve package names from FreeBSD origins
   ansible.builtin.command:
-    cmd: make -C /usr/ports/{{ item }} -V PKGBASE
+    cmd: make -C {{ _provision_benchmarks_freebsd_ports_tree_root }}/{{ item }} -V PKGBASE
   loop: "{{ _provision_benchmarks_freebsd_origins | unique }}"
   register: provision_benchmarks_freebsd_pkg_name_query
   changed_when: false

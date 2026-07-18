@@ -27,7 +27,10 @@
   ansible.builtin.file:
     path: "{{ run_benchmarks_work_dir }}"
     state: directory
+    owner: "{{ ansible_user | default(lookup('env', 'USER')) }}"
+    group: "{{ ansible_user_gid | default(omit) }}"
     mode: "0700"
+  become: true
 
 # Remove any 0-byte files left by previous interrupted runs.
 # All generated fixture files have a creates: guard; a stale 0-byte file

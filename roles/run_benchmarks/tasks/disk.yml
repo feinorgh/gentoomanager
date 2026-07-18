@@ -27,6 +27,17 @@
   failed_when: false
   when: ansible_system | default('Linux') == 'Linux'
 
+- name: Detect work directory device (FreeBSD)
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      df {{ run_benchmarks_work_dir }} | awk 'NR==2 {print $1}'
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_disk_dev
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('Linux') == 'FreeBSD'
+
 - name: Skip disk benchmark if work directory is tmpfs
   ansible.builtin.set_fact:
     run_benchmarks_disk_skip: >-
@@ -34,12 +45,17 @@
          or run_benchmarks_disk_dev.stdout | default('') | regex_search('^(tmpfs|devtmpfs|ramfs)') }}
   when: ansible_system | default('Linux') == 'Linux'
 
+- name: Mark disk benchmark enabled on FreeBSD
+  ansible.builtin.set_fact:
+    run_benchmarks_disk_skip: false
+  when: ansible_system | default('Linux') == 'FreeBSD'
+
 - name: Show disk benchmark target
   ansible.builtin.debug:
     msg: >-
       Disk benchmark target: {{ run_benchmarks_disk_dev.stdout | default('unknown') }}
       {{ '(SKIP: tmpfs)' if run_benchmarks_disk_skip | default(false) else '' }}
-  when: ansible_system | default('Linux') == 'Linux'
+  when: ansible_system | default('Linux') in ['Linux', 'FreeBSD']
 
 # ── Disk I/O benchmarks ───────────────────────────────────────────────────
 
@@ -48,8 +64,12 @@
     cmd: |
       set -eo pipefail
       TESTFILE="{{ run_benchmarks_work_dir }}/disk_bench.bin"
-      # Drop caches if sudo is available; fall back to sync-only otherwise
-      DROP_CMD="sync; {{ run_benchmarks_priv_cmd }} -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || sync"
+      if [ "{{ ansible_system | default('Linux') }}" = "Linux" ]; then
+        # Drop caches if sudo is available; fall back to sync-only otherwise.
+        DROP_CMD="sync; {{ run_benchmarks_priv_cmd }} -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || sync"
+      else
+        DROP_CMD="sync; purge 2>/dev/null || sync"
+      fi
       {{ run_benchmarks_hyperfine_bin }} \
         --runs {{ run_benchmarks_runs }} \
         --warmup 1 \
@@ -66,15 +86,15 @@
   changed_when: false
   failed_when: false
   when:
-    - ansible_system | default('Linux') == 'Linux'
-    - not (run_benchmarks_disk_skip | default(true) | bool)
+    - ansible_system | default('Linux') in ['Linux', 'FreeBSD']
+    - not (run_benchmarks_disk_skip | default(false) | bool)
 
 - name: Warn if disk benchmarks failed
   ansible.builtin.debug:
     msg: "[WARN] disk benchmark failed or timed out"
   when:
-    - ansible_system | default('Linux') == 'Linux'
-    - not (run_benchmarks_disk_skip | default(true) | bool)
+    - ansible_system | default('Linux') in ['Linux', 'FreeBSD']
+    - not (run_benchmarks_disk_skip | default(false) | bool)
     - run_benchmarks_disk_result is defined
     - run_benchmarks_disk_result.rc | default(0) != 0
 
@@ -83,4 +103,4 @@
     path: "{{ run_benchmarks_work_dir }}/disk_bench.bin"
     state: absent
   failed_when: false
-  when: ansible_system | default('Linux') == 'Linux'
+  when: ansible_system | default('Linux') in ['Linux', 'FreeBSD']

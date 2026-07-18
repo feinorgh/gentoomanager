@@ -22,7 +22,9 @@ FFmpeg installation.
 | `provision_benchmarks_freebsd_backend` | `ports` | FreeBSD build/install backend: `ports`, `poudriere`, or `auto` |
 | `provision_benchmarks_freebsd_poudriere_jail` | `benchmark` | Poudriere jail name used when backend is `poudriere` or `auto` |
 | `provision_benchmarks_freebsd_poudriere_ports_tree` | `default` | Poudriere ports tree name |
-| `provision_benchmarks_freebsd_poudriere_set` | `benchmark` | Poudriere package set (`-z`) name |
+| `provision_benchmarks_freebsd_poudriere_set` | `""` | Optional poudriere package set (`-z`); empty (or `default`) means no set suffix |
+| `provision_benchmarks_freebsd_poudriere_basefs` | `/usr/local/poudriere` | Poudriere base filesystem root used to validate pkg repo path |
+| `provision_benchmarks_freebsd_poudriere_build_timeout_sec` | `21600` | Async timeout (seconds) for `poudriere bulk` build task |
 
 ## OS-Specific Notes
 
@@ -54,6 +56,11 @@ The role now supports two FreeBSD backends:
 2. `poudriere`: validates poudriere jail/tree/pkg-repo wiring, runs
    `poudriere bulk -n` preflight for the full benchmark dependency set,
    then builds and installs from the poudriere pkg repository.
+
+By default, the role expects a repo path layout like:
+`/usr/local/poudriere/data/packages/<jail>-<ports_tree>`.
+If `provision_benchmarks_freebsd_poudriere_set` is non-empty and not `default`, the role
+expects `<jail>-<ports_tree>-<set>` and passes `-z <set>` to poudriere.
 
 Set `provision_benchmarks_freebsd_backend: auto` to prefer poudriere only
 when a complete poudriere setup is detected; otherwise the role falls back
