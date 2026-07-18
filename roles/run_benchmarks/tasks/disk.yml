@@ -64,10 +64,11 @@
     cmd: |
       set -eo pipefail
       TESTFILE="{{ run_benchmarks_work_dir }}/disk_bench.bin"
-      if [ "{{ ansible_system | default('Linux') }}" = "Linux" ]; then
-        # Drop caches if sudo is available; fall back to sync-only otherwise.
+      if [ -w /proc/sys/vm/drop_caches ]; then
+        # Linux: drop page cache when available; fall back to sync-only otherwise.
         DROP_CMD="sync; {{ run_benchmarks_priv_cmd }} -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || sync"
       else
+        # BSD: use purge when available; otherwise sync only.
         DROP_CMD="sync; purge 2>/dev/null || sync"
       fi
       {{ run_benchmarks_hyperfine_bin }} \
