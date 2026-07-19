@@ -28,7 +28,9 @@ def test_freebsd_backend_defaults_exist(worktree_root):
     assert defaults["provision_benchmarks_freebsd_poudriere_build_timeout_sec"] >= 7200
     assert "lang/python312" in defaults["provision_benchmarks_packages"]["FreeBSD"]
     assert "databases/py-sqlite3" in defaults["provision_benchmarks_packages"]["FreeBSD"]
-    assert "graphics/py-opencv-python-headless" in defaults["provision_benchmarks_opencv_packages"]["FreeBSD"]
+    assert "graphics/py-opencv-python-headless" in defaults[
+        "provision_benchmarks_opencv_packages"
+    ]["FreeBSD"]
 
 
 def test_freebsd_task_file_supports_backend_auto_detection(worktree_root):
@@ -82,10 +84,16 @@ def test_freebsd_poudriere_task_has_preflight_and_bulk_checks(worktree_root):
     assert "Build benchmark dependency set with poudriere" in task_content
     assert "if _provision_benchmarks_freebsd_poudriere_set_effective | length > 0" in task_content
     assert "provision_benchmarks_freebsd_poudriere_build_timeout_sec" in task_content
-    assert "Attempt to stop a stale running poudriere jail before retrying preflight" in task_content
+    assert (
+        "Attempt to stop a stale running poudriere jail before retrying preflight"
+        in task_content
+    )
     assert "Verify poudriere preflight succeeded" in task_content
     assert "Set poudriere ports tree root for origin-to-package resolution" in task_content
-    assert "make -C {{ _provision_benchmarks_freebsd_ports_tree_root }}/{{ item }} -V PKGBASE" in task_content
+    assert (
+        "make -C {{ _provision_benchmarks_freebsd_ports_tree_root }}/{{ item }} -V PKGBASE"
+        in task_content
+    )
 
 
 def test_freebsd_capability_verification_is_present(worktree_root):

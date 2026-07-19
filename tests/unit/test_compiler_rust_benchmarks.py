@@ -97,9 +97,9 @@ def test_compiler_task_reports_failed_runtime_and_external_toolchain_builds() ->
     assert 'FAILED_TOOLCHAINS=()' in text
     assert 'failed Rust runtime builds for:' in text
     assert 'failed Rust external builds for:' in text
-    assert text.index('if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then') < text.index(
-        '[ -z "${CMDS[*]}" ] && exit 0'
-    )
+    assert text.index(
+        'if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then'
+    ) < text.index('[ -z "${CMDS[*]}" ] && exit 0')
 
 
 def test_compiler_task_only_removes_rust_json_on_total_build_failure() -> None:
