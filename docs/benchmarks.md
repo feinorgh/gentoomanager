@@ -438,6 +438,19 @@ re-running completed categories.
 ./scripts/run_benchmarks.sh --skip-complete --skip-existing
 ```
 
+### Short Benchmark Result Validation
+
+During report generation, `validate_short_benchmark_results.py` validates
+short-workload result files that are actually present for each host
+(`bash.json`, `coreutils.json`, `git.json`, `compiler_rust_runtime.json`,
+`compiler_rust_external.json`):
+
+- each discovered file must parse as JSON and contain a non-empty `results` array
+- each result entry must have only zero exit codes in `exit_codes`
+
+This validation is intentionally discovery-based, so subset-category runs do
+not fail just because unrelated short benchmark files are absent.
+
 ### VM Power Management
 
 When `--manage-power` is passed, the playbook will boot VMs that are currently
@@ -1571,6 +1584,13 @@ or in inventory.
 | `run_benchmarks_crypto_ssh_sign_runs` | `3` | Hyperfine iterations for SSH sign/verify benchmarks |
 | `run_benchmarks_crypto_ssh_sign_warmup` | `1` | Warmup runs for SSH sign/verify benchmarks |
 | `run_benchmarks_crypto_ssh_sign_iterations` | `500` | Inner-loop operations per SSH sign/verify benchmark command |
+| `run_benchmarks_bash_startup_iterations` | `200` | Inner-loop iterations for the short `bash` `startup-bare` command |
+| `run_benchmarks_coreutils_wc_repeat` | `50` | Repeats of `wc -l` inside the short coreutils benchmark command |
+| `run_benchmarks_coreutils_find_repeat` | `20` | Repeats of `find` inside the short coreutils benchmark command |
+| `run_benchmarks_git_repo_commits` | `500` | Commit count used to build the short git repository-history workload |
+| `run_benchmarks_git_feature_commits` | `100` | Commit count on the git feature branch in the short history workload |
+| `run_benchmarks_rust_runtime_iterations` | `50000000` | Loop iterations for the short Rust runtime benchmark command |
+| `run_benchmarks_short_results_require_exit_code_zero` | `true` | Run controller-side validation for discovered short result files (non-empty results + zero exit codes) |
 | `run_benchmarks_categories` | `[]` (all) | Categories to run |
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
