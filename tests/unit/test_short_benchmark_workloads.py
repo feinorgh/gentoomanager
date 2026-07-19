@@ -27,14 +27,35 @@ def _get_task_by_name(tasks: list[dict[str, object]], task_name: str, *, source:
     raise AssertionError(f"missing task '{task_name}' in {source}")
 
 
-def _shell_cmd_for_task(task: dict[str, object], *, source: str) -> str:
-    shell_task = task.get("ansible.builtin.shell")
-    if not isinstance(shell_task, dict):
-        raise AssertionError(f"task '{task.get('name')}' in {source} must use ansible.builtin.shell")
-    cmd = shell_task.get("cmd")
-    if not isinstance(cmd, str):
-        raise AssertionError(f"task '{task.get('name')}' in {source} must define a shell cmd string")
-    return cmd
+def _task_cmd_for_task(task: dict[str, object], *, source: str) -> str:
+    for module_name in ("ansible.builtin.shell", "ansible.builtin.command"):
+        module_task = task.get(module_name)
+        if isinstance(module_task, str):
+            return module_task
+        if isinstance(module_task, dict):
+            cmd = module_task.get("cmd")
+            if isinstance(cmd, str):
+                return cmd
+    raise AssertionError(
+        f"task '{task.get('name')}' in {source} must define ansible.builtin.shell "
+        "or ansible.builtin.command command text"
+    )
+
+
+def _iter_play_section_tasks(plays: list[dict[str, object]]) -> list[dict[str, object]]:
+    section_names = ("pre_tasks", "tasks", "post_tasks")
+    collected: list[dict[str, object]] = []
+    for play in plays:
+        if not isinstance(play, dict):
+            continue
+        for section_name in section_names:
+            section = play.get(section_name)
+            if not isinstance(section, list):
+                continue
+            for task in section:
+                if isinstance(task, dict):
+                    collected.append(task)
+    return collected
 
 
 def test_short_benchmark_defaults_are_defined() -> None:
@@ -53,15 +74,15 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
     bash_tasks = _load_yaml_list(BASH_TASK_FILE)
     coreutils_tasks = _load_yaml_list(COREUTILS_TASK_FILE)
 
-    bash_benchmark_cmd = _shell_cmd_for_task(
+    bash_benchmark_cmd = _task_cmd_for_task(
         _get_task_by_name(bash_tasks, "Run bash benchmarks", source="bash.yml"),
         source="bash.yml",
     )
-    coreutils_benchmark_cmd = _shell_cmd_for_task(
+    coreutils_benchmark_cmd = _task_cmd_for_task(
         _get_task_by_name(coreutils_tasks, "Run coreutils benchmarks", source="coreutils.yml"),
         source="coreutils.yml",
     )
-    create_git_repo_cmd = _shell_cmd_for_task(
+    create_git_repo_cmd = _task_cmd_for_task(
         _get_task_by_name(coreutils_tasks, "Create git test repo", source="coreutils.yml"),
         source="coreutils.yml",
     )
@@ -82,16 +103,10 @@ def test_run_benchmarks_playbook_has_short_results_validation_hook() -> None:
     plays = _load_yaml_list(RUN_BENCHMARKS_PLAYBOOK)
     validate_task_name = "Validate short benchmark results (controller-side)"
 
-    for play in plays:
-        if not isinstance(play, dict):
-            continue
-        tasks = play.get("tasks")
-        if not isinstance(tasks, list):
-            continue
-        for task in tasks:
-            if isinstance(task, dict) and task.get("name") == validate_task_name:
-                cmd = _shell_cmd_for_task(task, source="run_benchmarks.yml")
-                assert "scripts/validate_short_benchmark_results.py" in cmd
-                return
+    for task in _iter_play_section_tasks(plays):
+        if task.get("name") == validate_task_name:
+            cmd = _task_cmd_for_task(task, source="run_benchmarks.yml")
+            assert "scripts/validate_short_benchmark_results.py" in cmd
+            return
 
     raise AssertionError(f"missing task '{validate_task_name}' in run_benchmarks.yml")
