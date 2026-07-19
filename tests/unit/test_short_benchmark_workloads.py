@@ -36,25 +36,41 @@ def _task_cmd_for_task(task: dict[str, object], *, source: str) -> str:
             cmd = module_task.get("cmd")
             if isinstance(cmd, str):
                 return cmd
+            argv = module_task.get("argv")
+            if isinstance(argv, list):
+                if all(isinstance(part, str) for part in argv):
+                    return " ".join(argv)
+                raise AssertionError(
+                    f"task '{task.get('name')}' in {source} has non-string argv entries for {module_name}"
+                )
     raise AssertionError(
         f"task '{task.get('name')}' in {source} must define ansible.builtin.shell "
         "or ansible.builtin.command command text"
     )
 
 
+def _collect_nested_tasks(tasks: list[object]) -> list[dict[str, object]]:
+    collected: list[dict[str, object]] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        collected.append(task)
+        for nested_section_name in ("block", "rescue", "always"):
+            nested_section = task.get(nested_section_name)
+            if isinstance(nested_section, list):
+                collected.extend(_collect_nested_tasks(nested_section))
+    return collected
+
+
 def _iter_play_section_tasks(plays: list[dict[str, object]]) -> list[dict[str, object]]:
-    section_names = ("pre_tasks", "tasks", "post_tasks")
     collected: list[dict[str, object]] = []
     for play in plays:
         if not isinstance(play, dict):
             continue
-        for section_name in section_names:
+        for section_name in ("pre_tasks", "tasks", "post_tasks"):
             section = play.get(section_name)
-            if not isinstance(section, list):
-                continue
-            for task in section:
-                if isinstance(task, dict):
-                    collected.append(task)
+            if isinstance(section, list):
+                collected.extend(_collect_nested_tasks(section))
     return collected
 
 
