@@ -119,6 +119,11 @@ def test_short_benchmark_defaults_are_defined() -> None:
     assert defaults["run_benchmarks_short_results_require_exit_code_zero"] is True
 
 
+def test_short_results_validator_has_no_shebang() -> None:
+    first_line = SHORT_RESULTS_VALIDATOR.read_text(encoding="utf-8").splitlines()[0]
+    assert not first_line.startswith("#!")
+
+
 def test_short_benchmark_wiring_is_present_in_task_files() -> None:
     bash_tasks = _load_yaml_list(BASH_TASK_FILE)
     coreutils_tasks = _load_yaml_list(COREUTILS_TASK_FILE)
@@ -162,6 +167,12 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         raise AssertionError("coreutils task must reference run_benchmarks_git_repo_commits")
     if "run_benchmarks_git_feature_commits" not in create_git_repo_cmd:
         raise AssertionError("coreutils task must reference run_benchmarks_git_feature_commits")
+    if 'while [ "$i" -le "$target_git_repo_commits" ]; do' not in create_git_repo_cmd:
+        raise AssertionError("git repo creation loop must compare against numeric variable")
+    if 'while [ "$i" -le "$target_git_feature_commits" ]; do' not in create_git_repo_cmd:
+        raise AssertionError(
+            "git feature commit loop must compare against numeric variable"
+        )
     if "git rev-list --count" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must count commit history")
     if "run_benchmarks_git_repo_commits" not in git_repo_size_check_cmd:
@@ -182,6 +193,27 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         )
     if "main_branch}..feature" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must compute feature branch commit depth")
+    if "cd {{ run_benchmarks_work_dir }} || {" not in git_repo_size_check_cmd:
+        raise AssertionError(
+            "git repo sizing task must handle workdir cd failure without shellcheck warnings"
+        )
+    if '[ "${main_commits}" -lt "${target_git_repo_commits}" ]' not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must compare against numeric target variable")
+    if (
+        '[ "${feature_commits}" -lt "${target_git_feature_commits}" ]'
+        not in git_repo_size_check_cmd
+    ):
+        raise AssertionError(
+            "git repo sizing task must compare feature commits against numeric target variable"
+        )
+    if "wc_repeat={{ run_benchmarks_coreutils_wc_repeat }}" not in coreutils_benchmark_cmd:
+        raise AssertionError("coreutils wc loop must compare against numeric variable")
+    if '\\"\\$i\\" -lt \\"\\$wc_repeat\\"' not in coreutils_benchmark_cmd:
+        raise AssertionError("coreutils wc loop must compare against numeric variable")
+    if "find_repeat={{ run_benchmarks_coreutils_find_repeat }}" not in coreutils_benchmark_cmd:
+        raise AssertionError("coreutils find loop must compare against numeric variable")
+    if '\\"\\$i\\" -lt \\"\\$find_repeat\\"' not in coreutils_benchmark_cmd:
+        raise AssertionError("coreutils find loop must compare against numeric variable")
     if (
         "RUST_RUNTIME_ITERATIONS={{ run_benchmarks_rust_runtime_iterations }}"
         not in rust_runtime_benchmark_cmd

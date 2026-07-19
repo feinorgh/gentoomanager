@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate short benchmark JSON outputs."""
 
 from __future__ import annotations

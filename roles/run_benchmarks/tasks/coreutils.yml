@@ -61,9 +61,9 @@
         --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
         --command-name 'sort' 'sort sortdata.txt > /dev/null' \
         --command-name 'sort-unique' 'sort -u sortdata.txt > /dev/null' \
-        --command-name 'wc-lines' 'i=0; while [ "$i" -lt {{ run_benchmarks_coreutils_wc_repeat }} ]; do wc -l sortdata.txt > /dev/null; i=$((i + 1)); done' \
+        --command-name 'wc-lines' "wc_repeat={{ run_benchmarks_coreutils_wc_repeat }}; i=0; while [ \"\$i\" -lt \"\$wc_repeat\" ]; do wc -l sortdata.txt > /dev/null; i=\$((i + 1)); done" \
         --command-name 'grep-pattern' 'grep -c "^[A-Z].*[0-9]$" sortdata.txt || true' \
-        --command-name 'find-files' 'i=0; while [ "$i" -lt {{ run_benchmarks_coreutils_find_repeat }} ]; do find findtree -name "*.txt" -type f > /dev/null; i=$((i + 1)); done' \
+        --command-name 'find-files' "find_repeat={{ run_benchmarks_coreutils_find_repeat }}; i=0; while [ \"\$i\" -lt \"\$find_repeat\" ]; do find findtree -name \"*.txt\" -type f > /dev/null; i=\$((i + 1)); done" \
         --command-name 'find-exec' 'find findtree -name "*.txt" -exec wc -c {} +' \
         --command-name 'tar-create' 'tar cf /dev/null findtree' \
         --command-name 'du-summary' 'du -sh findtree'
@@ -95,7 +95,10 @@
       emit_rebuild() {
         echo "main_commits=0 feature_commits=0 needs_rebuild=1"
       }
-      cd {{ run_benchmarks_work_dir }}
+      cd {{ run_benchmarks_work_dir }} || {
+        emit_rebuild
+        exit 0
+      }
       if [ ! -d gitrepo/.git ]; then
         emit_rebuild
         exit 0
@@ -137,8 +140,10 @@
           exit 0
           ;;
       esac
+      target_git_repo_commits={{ run_benchmarks_git_repo_commits }}
+      target_git_feature_commits={{ run_benchmarks_git_feature_commits }}
       needs_rebuild=0
-      if [ "${main_commits}" -lt "{{ run_benchmarks_git_repo_commits }}" ] || [ "${feature_commits}" -lt "{{ run_benchmarks_git_feature_commits }}" ]; then
+      if [ "${main_commits}" -lt "${target_git_repo_commits}" ] || [ "${feature_commits}" -lt "${target_git_feature_commits}" ]; then
         needs_rebuild=1
       fi
       echo "main_commits=${main_commits} feature_commits=${feature_commits} needs_rebuild=${needs_rebuild}"
@@ -163,13 +168,15 @@
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
       if [ ! -d gitrepo/.git ]; then
+        target_git_repo_commits={{ run_benchmarks_git_repo_commits }}
+        target_git_feature_commits={{ run_benchmarks_git_feature_commits }}
         mkdir -p gitrepo && cd gitrepo
         git init
         git config user.email "bench@test"
         git config user.name "Bench"
         # Create commit history
         i=1
-        while [ "$i" -le {{ run_benchmarks_git_repo_commits }} ]; do
+        while [ "$i" -le "$target_git_repo_commits" ]; do
           echo "Content for commit $i with random data $(head -c 100 /dev/urandom | base64)" > "file_$i.txt"
           git add .
           git commit -m "Commit $i" --quiet
@@ -178,7 +185,7 @@
         # Create a branch with changes
         git checkout -b feature
         i=1
-        while [ "$i" -le {{ run_benchmarks_git_feature_commits }} ]; do
+        while [ "$i" -le "$target_git_feature_commits" ]; do
           echo "Feature change $i" >> file_1.txt
           git commit -am "Feature $i" --quiet
           i=$((i + 1))
