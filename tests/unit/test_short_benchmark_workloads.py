@@ -102,6 +102,17 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         _get_task_by_name(coreutils_tasks, "Create git test repo", source="coreutils.yml"),
         source="coreutils.yml",
     )
+    git_repo_size_check_task = _get_task_by_name(
+        coreutils_tasks,
+        "Check git benchmark repo sizing",
+        source="coreutils.yml",
+    )
+    git_repo_size_check_cmd = _task_cmd_for_task(git_repo_size_check_task, source="coreutils.yml")
+    remove_undersized_git_repo_task = _get_task_by_name(
+        coreutils_tasks,
+        "Remove undersized git benchmark repo (will be regenerated)",
+        source="coreutils.yml",
+    )
 
     if "run_benchmarks_bash_startup_iterations" not in bash_benchmark_cmd:
         raise AssertionError("bash task must reference run_benchmarks_bash_startup_iterations")
@@ -113,6 +124,19 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         raise AssertionError("coreutils task must reference run_benchmarks_git_repo_commits")
     if "run_benchmarks_git_feature_commits" not in create_git_repo_cmd:
         raise AssertionError("coreutils task must reference run_benchmarks_git_feature_commits")
+    if "git rev-list --count" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must count commit history")
+    if "run_benchmarks_git_repo_commits" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must reference run_benchmarks_git_repo_commits")
+    if "run_benchmarks_git_feature_commits" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must reference run_benchmarks_git_feature_commits")
+    if "main_branch}..feature" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must compute feature branch commit depth")
+    remove_when = remove_undersized_git_repo_task.get("when")
+    if not isinstance(remove_when, list) or not any(
+        isinstance(entry, str) and "needs_rebuild=1" in entry for entry in remove_when
+    ):
+        raise AssertionError("undersized git repo removal must be gated by needs_rebuild flag")
 
 
 def test_run_benchmarks_playbook_has_short_results_validation_hook() -> None:

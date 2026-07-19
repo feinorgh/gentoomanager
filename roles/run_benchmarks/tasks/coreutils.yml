@@ -88,6 +88,46 @@
   changed_when: false
   failed_when: false
 
+- name: Check git benchmark repo sizing
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}
+      if [ ! -d gitrepo/.git ]; then
+        echo "main_commits=0 feature_commits=0 needs_rebuild=0"
+        exit 0
+      fi
+      cd gitrepo
+      main_branch="main"
+      if ! git rev-parse --verify main >/dev/null 2>&1; then
+        main_branch="master"
+      fi
+      main_commits="$(git rev-list --count "${main_branch}")"
+      if git rev-parse --verify feature >/dev/null 2>&1; then
+        feature_commits="$(git rev-list --count "${main_branch}..feature")"
+      else
+        feature_commits="0"
+      fi
+      needs_rebuild=0
+      if [ "${main_commits}" -lt "{{ run_benchmarks_git_repo_commits }}" ] || [ "${feature_commits}" -lt "{{ run_benchmarks_git_feature_commits }}" ]; then
+        needs_rebuild=1
+      fi
+      echo "main_commits=${main_commits} feature_commits=${feature_commits} needs_rebuild=${needs_rebuild}"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: run_benchmarks_git_check.rc == 0
+  register: run_benchmarks_git_repo_size
+  changed_when: false
+  failed_when: false
+
+- name: Remove undersized git benchmark repo (will be regenerated)
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/gitrepo"
+    state: absent
+  when:
+    - run_benchmarks_git_check.rc == 0
+    - run_benchmarks_git_repo_size.stdout is defined
+    - run_benchmarks_git_repo_size.stdout is search("needs_rebuild=1")
+
 - name: Create git test repo
   ansible.builtin.shell:
     cmd: |
