@@ -130,6 +130,12 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         raise AssertionError("git repo sizing task must reference run_benchmarks_git_repo_commits")
     if "run_benchmarks_git_feature_commits" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must reference run_benchmarks_git_feature_commits")
+    if "needs_rebuild=1" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must default to rebuild for invalid repository states")
+    if "git rev-parse --verify main >/dev/null 2>&1" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must verify main branch before counting commits")
+    if "git rev-parse --verify master >/dev/null 2>&1" not in git_repo_size_check_cmd:
+        raise AssertionError("git repo sizing task must verify master branch fallback before counting commits")
     if "main_branch}..feature" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must compute feature branch commit depth")
     remove_when = remove_undersized_git_repo_task.get("when")

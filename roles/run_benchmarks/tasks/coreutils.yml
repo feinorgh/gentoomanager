@@ -91,23 +91,52 @@
 - name: Check git benchmark repo sizing
   ansible.builtin.shell:
     cmd: |
-      set -eo pipefail
+      set -uo pipefail
+      emit_rebuild() {
+        echo "main_commits=0 feature_commits=0 needs_rebuild=1"
+      }
       cd {{ run_benchmarks_work_dir }}
       if [ ! -d gitrepo/.git ]; then
-        echo "main_commits=0 feature_commits=0 needs_rebuild=0"
+        emit_rebuild
         exit 0
       fi
-      cd gitrepo
-      main_branch="main"
-      if ! git rev-parse --verify main >/dev/null 2>&1; then
-        main_branch="master"
+      if ! cd gitrepo; then
+        emit_rebuild
+        exit 0
       fi
-      main_commits="$(git rev-list --count "${main_branch}")"
+      main_branch=""
+      if git rev-parse --verify main >/dev/null 2>&1; then
+        main_branch="main"
+      elif git rev-parse --verify master >/dev/null 2>&1; then
+        main_branch="master"
+      else
+        emit_rebuild
+        exit 0
+      fi
+      if ! main_commits="$(git rev-list --count "${main_branch}" 2>/dev/null)"; then
+        emit_rebuild
+        exit 0
+      fi
       if git rev-parse --verify feature >/dev/null 2>&1; then
-        feature_commits="$(git rev-list --count "${main_branch}..feature")"
+        if ! feature_commits="$(git rev-list --count "${main_branch}..feature" 2>/dev/null)"; then
+          emit_rebuild
+          exit 0
+        fi
       else
         feature_commits="0"
       fi
+      case "${main_commits}" in
+        ''|*[!0-9]*)
+          emit_rebuild
+          exit 0
+          ;;
+      esac
+      case "${feature_commits}" in
+        ''|*[!0-9]*)
+          emit_rebuild
+          exit 0
+          ;;
+      esac
       needs_rebuild=0
       if [ "${main_commits}" -lt "{{ run_benchmarks_git_repo_commits }}" ] || [ "${feature_commits}" -lt "{{ run_benchmarks_git_feature_commits }}" ]; then
         needs_rebuild=1
