@@ -192,7 +192,7 @@ def test_run_benchmarks_playbook_has_short_results_validation_hook() -> None:
     raise AssertionError(f"missing task '{validate_task_name}' in run_benchmarks.yml")
 
 
-def test_short_results_validator_fails_when_expected_file_is_missing() -> None:
+def test_short_results_validator_allows_subset_run_outputs() -> None:
     validator = _load_short_results_validator_module()
 
     with _repo_scoped_tempdir() as tmp_dir:
@@ -201,7 +201,19 @@ def test_short_results_validator_fails_when_expected_file_is_missing() -> None:
         (host_dir / "bash.json").write_text(json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8")
         failures = validator.validate(tmp_dir)
 
-    assert any("missing expected file" in failure for failure in failures)
+    assert failures == []
+
+
+def test_short_results_validator_fails_when_required_file_is_missing() -> None:
+    validator = _load_short_results_validator_module()
+
+    with _repo_scoped_tempdir() as tmp_dir:
+        host_dir = tmp_dir / "host-a"
+        host_dir.mkdir(parents=True)
+        (host_dir / "bash.json").write_text(json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8")
+        failures = validator.validate(tmp_dir, required_files={"coreutils.json"})
+
+    assert any("missing expected file coreutils.json" in failure for failure in failures)
 
 
 def test_short_results_validator_fails_on_empty_results_array() -> None:

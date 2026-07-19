@@ -28,8 +28,17 @@ def _nonzero_exit_codes(result: dict[str, object]) -> list[int]:
     return [code for code in exit_codes if isinstance(code, int) and code != 0]
 
 
-def validate(results_root: Path) -> list[str]:
+def _discover_short_result_files(host_result_dir: Path) -> set[str]:
+    discovered: set[str] = set()
+    for path in host_result_dir.iterdir():
+        if path.is_file() and path.name in SHORT_RESULT_FILES:
+            discovered.add(path.name)
+    return discovered
+
+
+def validate(results_root: Path, required_files: set[str] | None = None) -> list[str]:
     failures: list[str] = []
+    required_files = required_files or set()
     if not results_root.exists() or not results_root.is_dir():
         return [f"{results_root}: results directory does not exist"]
 
@@ -38,7 +47,8 @@ def validate(results_root: Path) -> list[str]:
         return [f"{results_root}: no host result directories found"]
 
     for host_result_dir in host_result_dirs:
-        for result_filename in sorted(SHORT_RESULT_FILES):
+        result_files_to_validate = _discover_short_result_files(host_result_dir) | required_files
+        for result_filename in sorted(result_files_to_validate):
             result_file = host_result_dir / result_filename
             if not result_file.is_file():
                 failures.append(f"{host_result_dir}: missing expected file {result_filename}")
@@ -76,9 +86,10 @@ def validate(results_root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("results_root", type=Path)
+    parser.add_argument("--required-file", action="append", default=[])
     args = parser.parse_args()
 
-    failures = validate(args.results_root)
+    failures = validate(args.results_root, required_files=set(args.required_file))
     if failures:
         for failure in failures:
             print(f"[FAIL] {failure}", file=sys.stderr)
