@@ -1,0 +1,3 @@
+minor_changes:
+  - "run_benchmarks: hardened short bash/coreutils/git/rust workloads with dedicated tuning knobs for stable timing samples."
+  - "run_benchmarks: added short-result integrity validation that checks discovered short result files for non-empty results and zero exit codes without breaking subset-category runs."

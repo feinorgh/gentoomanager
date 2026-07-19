@@ -61,9 +61,9 @@
         --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
         --command-name 'sort' 'sort sortdata.txt > /dev/null' \
         --command-name 'sort-unique' 'sort -u sortdata.txt > /dev/null' \
-        --command-name 'wc-lines' 'wc -l sortdata.txt' \
+        --command-name 'wc-lines' 'i=0; while [ "$i" -lt {{ run_benchmarks_coreutils_wc_repeat }} ]; do wc -l sortdata.txt > /dev/null; i=$((i + 1)); done' \
         --command-name 'grep-pattern' 'grep -c "^[A-Z].*[0-9]$" sortdata.txt || true' \
-        --command-name 'find-files' 'find findtree -name "*.txt" -type f' \
+        --command-name 'find-files' 'i=0; while [ "$i" -lt {{ run_benchmarks_coreutils_find_repeat }} ]; do find findtree -name "*.txt" -type f > /dev/null; i=$((i + 1)); done' \
         --command-name 'find-exec' 'find findtree -name "*.txt" -exec wc -c {} +' \
         --command-name 'tar-create' 'tar cf /dev/null findtree' \
         --command-name 'du-summary' 'du -sh findtree'
@@ -88,6 +88,75 @@
   changed_when: false
   failed_when: false
 
+- name: Check git benchmark repo sizing
+  ansible.builtin.shell:
+    cmd: |
+      set -uo pipefail
+      emit_rebuild() {
+        echo "main_commits=0 feature_commits=0 needs_rebuild=1"
+      }
+      cd {{ run_benchmarks_work_dir }}
+      if [ ! -d gitrepo/.git ]; then
+        emit_rebuild
+        exit 0
+      fi
+      if ! cd gitrepo; then
+        emit_rebuild
+        exit 0
+      fi
+      main_branch=""
+      if git rev-parse --verify main >/dev/null 2>&1; then
+        main_branch="main"
+      elif git rev-parse --verify master >/dev/null 2>&1; then
+        main_branch="master"
+      else
+        emit_rebuild
+        exit 0
+      fi
+      if ! main_commits="$(git rev-list --count "${main_branch}" 2>/dev/null)"; then
+        emit_rebuild
+        exit 0
+      fi
+      if git rev-parse --verify feature >/dev/null 2>&1; then
+        if ! feature_commits="$(git rev-list --count "${main_branch}..feature" 2>/dev/null)"; then
+          emit_rebuild
+          exit 0
+        fi
+      else
+        feature_commits="0"
+      fi
+      case "${main_commits}" in
+        ''|*[!0-9]*)
+          emit_rebuild
+          exit 0
+          ;;
+      esac
+      case "${feature_commits}" in
+        ''|*[!0-9]*)
+          emit_rebuild
+          exit 0
+          ;;
+      esac
+      needs_rebuild=0
+      if [ "${main_commits}" -lt "{{ run_benchmarks_git_repo_commits }}" ] || [ "${feature_commits}" -lt "{{ run_benchmarks_git_feature_commits }}" ]; then
+        needs_rebuild=1
+      fi
+      echo "main_commits=${main_commits} feature_commits=${feature_commits} needs_rebuild=${needs_rebuild}"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: run_benchmarks_git_check.rc == 0
+  register: run_benchmarks_git_repo_size
+  changed_when: false
+  failed_when: false
+
+- name: Remove undersized git benchmark repo (will be regenerated)
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/gitrepo"
+    state: absent
+  when:
+    - run_benchmarks_git_check.rc == 0
+    - run_benchmarks_git_repo_size.stdout is defined
+    - run_benchmarks_git_repo_size.stdout is search("needs_rebuild=1")
+
 - name: Create git test repo
   ansible.builtin.shell:
     cmd: |
@@ -100,7 +169,7 @@
         git config user.name "Bench"
         # Create commit history
         i=1
-        while [ "$i" -le 100 ]; do
+        while [ "$i" -le {{ run_benchmarks_git_repo_commits }} ]; do
           echo "Content for commit $i with random data $(head -c 100 /dev/urandom | base64)" > "file_$i.txt"
           git add .
           git commit -m "Commit $i" --quiet
@@ -109,7 +178,7 @@
         # Create a branch with changes
         git checkout -b feature
         i=1
-        while [ "$i" -le 20 ]; do
+        while [ "$i" -le {{ run_benchmarks_git_feature_commits }} ]; do
           echo "Feature change $i" >> file_1.txt
           git commit -am "Feature $i" --quiet
           i=$((i + 1))

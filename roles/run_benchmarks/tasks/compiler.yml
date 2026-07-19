@@ -511,7 +511,10 @@
           FAILED_TOOLCHAINS+=("{{ tc_label }}")
         fi
         if [ -x "$runtime_bin" ]; then
-          CMDS+=(--command-name "{{ tc_label }}-runtime" "$runtime_bin")
+          CMDS+=(
+            --command-name "{{ tc_label }}-runtime"
+            "RUST_RUNTIME_ITERATIONS={{ run_benchmarks_rust_runtime_iterations }} $runtime_bin"
+          )
         fi
       fi
       {% endif %}

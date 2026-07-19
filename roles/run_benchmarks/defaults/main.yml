@@ -145,6 +145,13 @@ run_benchmarks_ffmpeg_extended_codecs: false
 # git task files for their shortest-running commands.
 run_benchmarks_fast_runs: 30
 run_benchmarks_fast_warmup: 10
+run_benchmarks_bash_startup_iterations: 200
+run_benchmarks_coreutils_wc_repeat: 50
+run_benchmarks_coreutils_find_repeat: 20
+run_benchmarks_git_repo_commits: 500
+run_benchmarks_git_feature_commits: 100
+run_benchmarks_rust_runtime_iterations: 50000000
+run_benchmarks_short_results_require_exit_code_zero: true
 
 # Application startup: more runs than the old default of 3 to reduce the
 # impact of cold-cache outliers; variance is inherent in GUI startup.

@@ -1262,7 +1262,19 @@ def load_results(base_dir: Path) -> dict[str, dict[str, Any]]:
                     )
                     continue
             if "results" in data:
-                hosts[hostname]["benchmarks"][category] = data["results"]
+                benchmark_rows = data["results"]
+                if isinstance(benchmark_rows, list):
+                    benchmark_rows = [
+                        row
+                        for row in benchmark_rows
+                        if not (
+                            isinstance(row, dict)
+                            and "exit_codes" in row
+                            and isinstance(row.get("exit_codes"), list)
+                            and any(exit_code != 0 for exit_code in row.get("exit_codes", []))
+                        )
+                    ]
+                hosts[hostname]["benchmarks"][category] = benchmark_rows
             elif "packages" in data:
                 # Gentoo build time data
                 hosts[hostname]["gentoo_build_times"] = data["packages"]

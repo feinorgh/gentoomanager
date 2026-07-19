@@ -14,6 +14,7 @@ def test_run_playbook_records_and_fetches_failure_artifacts() -> None:
     assert "Record benchmark suite failure artifact" in content
     assert "Find partial benchmark result files after failure (Unix)" in content
     assert "Fetch partial benchmark results to controller after failure" in content
+    assert "Validate short benchmark results (controller-side)" in content
 
 
 def test_sanity_notes_include_benchmark_failures_key() -> None:

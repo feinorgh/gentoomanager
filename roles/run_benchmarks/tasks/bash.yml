@@ -86,7 +86,7 @@
       CMDS=()
 
       # Startup: binary load + exit (no rc files, no profile)
-      CMDS+=(--command-name "startup-bare" "{{ _run_benchmarks_bash | default('bash') }} --norc --noprofile -c true")
+      CMDS+=(--command-name "startup-bare" "i=0; while [ \"\$i\" -lt {{ run_benchmarks_bash_startup_iterations }} ]; do {{ _run_benchmarks_bash | default('bash') }} --norc --noprofile -c true; i=\$((i + 1)); done")
 
       # Execution benchmarks
       for bench in \
