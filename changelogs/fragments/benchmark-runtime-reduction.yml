@@ -1,0 +1,2 @@
+minor_changes:
+  - "run_benchmarks: reduced default rounds for compression and FFmpeg video benchmarks, and made SQLite compiler optimization levels configurable via run_benchmarks_compiler_sqlite_opt_levels."
