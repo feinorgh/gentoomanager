@@ -862,6 +862,14 @@
   tags: [generate_report]
 
   tasks:
+    - name: Validate short benchmark results (controller-side)
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ playbook_dir }}/../scripts/validate_short_benchmark_results.py
+          {{ playbook_dir }}/../benchmarks/results
+      changed_when: false
+      when: run_benchmarks_short_results_require_exit_code_zero | default(true) | bool
+
     - name: Generate Markdown and HTML reports
       ansible.builtin.command:
         cmd: >-

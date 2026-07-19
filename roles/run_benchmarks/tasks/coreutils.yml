@@ -61,9 +61,9 @@
         --export-json {{ run_benchmarks_work_dir }}/coreutils.json \
         --command-name 'sort' 'sort sortdata.txt > /dev/null' \
         --command-name 'sort-unique' 'sort -u sortdata.txt > /dev/null' \
-        --command-name 'wc-lines' 'wc -l sortdata.txt' \
+        --command-name 'wc-lines' 'i=0; while [ "$i" -lt {{ run_benchmarks_coreutils_wc_repeat }} ]; do wc -l sortdata.txt > /dev/null; i=$((i + 1)); done' \
         --command-name 'grep-pattern' 'grep -c "^[A-Z].*[0-9]$" sortdata.txt || true' \
-        --command-name 'find-files' 'find findtree -name "*.txt" -type f' \
+        --command-name 'find-files' 'i=0; while [ "$i" -lt {{ run_benchmarks_coreutils_find_repeat }} ]; do find findtree -name "*.txt" -type f > /dev/null; i=$((i + 1)); done' \
         --command-name 'find-exec' 'find findtree -name "*.txt" -exec wc -c {} +' \
         --command-name 'tar-create' 'tar cf /dev/null findtree' \
         --command-name 'du-summary' 'du -sh findtree'
@@ -100,7 +100,7 @@
         git config user.name "Bench"
         # Create commit history
         i=1
-        while [ "$i" -le 100 ]; do
+        while [ "$i" -le {{ run_benchmarks_git_repo_commits }} ]; do
           echo "Content for commit $i with random data $(head -c 100 /dev/urandom | base64)" > "file_$i.txt"
           git add .
           git commit -m "Commit $i" --quiet
@@ -109,7 +109,7 @@
         # Create a branch with changes
         git checkout -b feature
         i=1
-        while [ "$i" -le 20 ]; do
+        while [ "$i" -le {{ run_benchmarks_git_feature_commits }} ]; do
           echo "Feature change $i" >> file_1.txt
           git commit -am "Feature $i" --quiet
           i=$((i + 1))
