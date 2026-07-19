@@ -17,12 +17,8 @@ SHORT_RESULT_FILES = {
 }
 
 
-def _iter_short_result_files(results_root: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in results_root.glob("*/*.json")
-        if path.name in SHORT_RESULT_FILES
-    )
+def _iter_host_result_dirs(results_root: Path) -> list[Path]:
+    return sorted(path for path in results_root.iterdir() if path.is_dir())
 
 
 def _nonzero_exit_codes(result: dict[str, object]) -> list[int]:
@@ -34,29 +30,45 @@ def _nonzero_exit_codes(result: dict[str, object]) -> list[int]:
 
 def validate(results_root: Path) -> list[str]:
     failures: list[str] = []
-    for result_file in _iter_short_result_files(results_root):
-        try:
-            payload = json.loads(result_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            failures.append(f"{result_file}: unable to read/parse JSON ({error})")
-            continue
+    if not results_root.exists() or not results_root.is_dir():
+        return [f"{results_root}: results directory does not exist"]
 
-        results = payload.get("results", [])
-        if not isinstance(results, list):
-            failures.append(f"{result_file}: missing 'results' array")
-            continue
+    host_result_dirs = _iter_host_result_dirs(results_root)
+    if not host_result_dirs:
+        return [f"{results_root}: no host result directories found"]
 
-        for index, bench_result in enumerate(results):
-            if not isinstance(bench_result, dict):
-                failures.append(f"{result_file}: results[{index}] is not an object")
+    for host_result_dir in host_result_dirs:
+        for result_filename in sorted(SHORT_RESULT_FILES):
+            result_file = host_result_dir / result_filename
+            if not result_file.is_file():
+                failures.append(f"{host_result_dir}: missing expected file {result_filename}")
                 continue
-            nonzero_exit_codes = _nonzero_exit_codes(bench_result)
-            if nonzero_exit_codes:
-                command_name = bench_result.get("command", f"index {index}")
-                failures.append(
-                    f"{result_file}: command {command_name!r} has non-zero exit codes "
-                    f"{nonzero_exit_codes}"
-                )
+
+            try:
+                payload = json.loads(result_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                failures.append(f"{result_file}: unable to read/parse JSON ({error})")
+                continue
+
+            results = payload.get("results")
+            if not isinstance(results, list):
+                failures.append(f"{result_file}: missing 'results' array")
+                continue
+            if not results:
+                failures.append(f"{result_file}: results array is empty")
+                continue
+
+            for index, bench_result in enumerate(results):
+                if not isinstance(bench_result, dict):
+                    failures.append(f"{result_file}: results[{index}] is not an object")
+                    continue
+                nonzero_exit_codes = _nonzero_exit_codes(bench_result)
+                if nonzero_exit_codes:
+                    command_name = bench_result.get("command", f"index {index}")
+                    failures.append(
+                        f"{result_file}: command {command_name!r} has non-zero exit codes "
+                        f"{nonzero_exit_codes}"
+                    )
 
     return failures
 

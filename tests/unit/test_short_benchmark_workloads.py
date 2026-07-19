@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
+from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import yaml
 
@@ -11,6 +15,7 @@ DEFAULTS_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "defaults" / "main.yml"
 BASH_TASK_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "tasks" / "bash.yml"
 COREUTILS_TASK_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "tasks" / "coreutils.yml"
 RUN_BENCHMARKS_PLAYBOOK = REPO_ROOT / "playbooks" / "run_benchmarks.yml"
+SHORT_RESULTS_VALIDATOR = REPO_ROOT / "scripts" / "validate_short_benchmark_results.py"
 
 
 def _load_yaml_list(path: Path) -> list[dict[str, object]]:
@@ -72,6 +77,31 @@ def _iter_play_section_tasks(plays: list[dict[str, object]]) -> list[dict[str, o
             if isinstance(section, list):
                 collected.extend(_collect_nested_tasks(section))
     return collected
+
+
+def _load_short_results_validator_module() -> object:
+    spec = importlib.util.spec_from_file_location(
+        "validate_short_benchmark_results",
+        SHORT_RESULTS_VALIDATOR,
+    )
+    if spec is None or spec.loader is None:
+        raise AssertionError("unable to import short benchmark validator module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@contextmanager
+def _repo_scoped_tempdir() -> Path:
+    with TemporaryDirectory(dir=REPO_ROOT) as temp_dir:
+        yield Path(temp_dir)
+
+
+def _write_short_result(path: Path, *, exit_codes: list[int] | None = None) -> None:
+    payload: dict[str, object] = {"results": [{"command": "bench"}]}
+    if exit_codes is not None:
+        payload["results"] = [{"command": "bench", "exit_codes": exit_codes}]
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def test_short_benchmark_defaults_are_defined() -> None:
@@ -153,6 +183,63 @@ def test_run_benchmarks_playbook_has_short_results_validation_hook() -> None:
         if task.get("name") == validate_task_name:
             cmd = _task_cmd_for_task(task, source="run_benchmarks.yml")
             assert "scripts/validate_short_benchmark_results.py" in cmd
+            assert "benchmarks/results" in cmd
+            when_expr = task.get("when")
+            assert isinstance(when_expr, str)
+            assert "run_benchmarks_short_results_require_exit_code_zero" in when_expr
             return
 
     raise AssertionError(f"missing task '{validate_task_name}' in run_benchmarks.yml")
+
+
+def test_short_results_validator_fails_when_expected_file_is_missing() -> None:
+    validator = _load_short_results_validator_module()
+
+    with _repo_scoped_tempdir() as tmp_dir:
+        host_dir = tmp_dir / "host-a"
+        host_dir.mkdir(parents=True)
+        (host_dir / "bash.json").write_text(json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8")
+        failures = validator.validate(tmp_dir)
+
+    assert any("missing expected file" in failure for failure in failures)
+
+
+def test_short_results_validator_fails_on_empty_results_array() -> None:
+    validator = _load_short_results_validator_module()
+
+    with _repo_scoped_tempdir() as tmp_dir:
+        host_dir = tmp_dir / "host-a"
+        host_dir.mkdir(parents=True)
+        short_files = (
+            "bash.json",
+            "coreutils.json",
+            "git.json",
+            "compiler_rust_runtime.json",
+            "compiler_rust_external.json",
+        )
+        for filename in short_files:
+            payload = {"results": [{"command": "bench"}]}
+            if filename == "coreutils.json":
+                payload = {"results": []}
+            (host_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
+
+        failures = validator.validate(tmp_dir)
+
+    assert any("results array is empty" in failure for failure in failures)
+
+
+def test_short_results_validator_fails_on_nonzero_exit_code() -> None:
+    validator = _load_short_results_validator_module()
+
+    with _repo_scoped_tempdir() as tmp_dir:
+        host_dir = tmp_dir / "host-a"
+        host_dir.mkdir(parents=True)
+        _write_short_result(host_dir / "bash.json")
+        _write_short_result(host_dir / "coreutils.json")
+        _write_short_result(host_dir / "git.json")
+        _write_short_result(host_dir / "compiler_rust_runtime.json")
+        _write_short_result(host_dir / "compiler_rust_external.json", exit_codes=[0, 7])
+
+        failures = validator.validate(tmp_dir)
+
+    assert any("non-zero exit codes [7]" in failure for failure in failures)
