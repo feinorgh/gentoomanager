@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULTS_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "defaults" / "main.yml"
 BASH_TASK_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "tasks" / "bash.yml"
 COREUTILS_TASK_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "tasks" / "coreutils.yml"
+COMPILER_TASK_FILE = REPO_ROOT / "roles" / "run_benchmarks" / "tasks" / "compiler.yml"
 RUN_BENCHMARKS_PLAYBOOK = REPO_ROOT / "playbooks" / "run_benchmarks.yml"
 SHORT_RESULTS_VALIDATOR = REPO_ROOT / "scripts" / "validate_short_benchmark_results.py"
 
@@ -119,6 +120,7 @@ def test_short_benchmark_defaults_are_defined() -> None:
 def test_short_benchmark_wiring_is_present_in_task_files() -> None:
     bash_tasks = _load_yaml_list(BASH_TASK_FILE)
     coreutils_tasks = _load_yaml_list(COREUTILS_TASK_FILE)
+    compiler_tasks = _load_yaml_list(COMPILER_TASK_FILE)
 
     bash_benchmark_cmd = _task_cmd_for_task(
         _get_task_by_name(bash_tasks, "Run bash benchmarks", source="bash.yml"),
@@ -142,6 +144,10 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         coreutils_tasks,
         "Remove undersized git benchmark repo (will be regenerated)",
         source="coreutils.yml",
+    )
+    rust_runtime_benchmark_cmd = _task_cmd_for_task(
+        _get_task_by_name(compiler_tasks, "Run Rust runtime benchmark", source="compiler.yml"),
+        source="compiler.yml",
     )
 
     if "run_benchmarks_bash_startup_iterations" not in bash_benchmark_cmd:
@@ -168,6 +174,10 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         raise AssertionError("git repo sizing task must verify master branch fallback before counting commits")
     if "main_branch}..feature" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must compute feature branch commit depth")
+    if "RUST_RUNTIME_ITERATIONS={{ run_benchmarks_rust_runtime_iterations }}" not in rust_runtime_benchmark_cmd:
+        raise AssertionError(
+            "rust runtime benchmark task must pass run_benchmarks_rust_runtime_iterations via environment"
+        )
     remove_when = remove_undersized_git_repo_task.get("when")
     if not isinstance(remove_when, list) or not any(
         isinstance(entry, str) and "needs_rebuild=1" in entry for entry in remove_when

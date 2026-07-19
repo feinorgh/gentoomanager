@@ -48,12 +48,21 @@ def test_compiler_task_labels_new_rust_commands() -> None:
     text = _content()
     assert '--command-name "{{ tc_label }}-runtime"' in text
     assert '--command-name "{{ tc_label }}-external"' in text
+    assert "RUST_RUNTIME_ITERATIONS={{ run_benchmarks_rust_runtime_iterations }}" in text
 
 
 def test_compiler_task_uses_toolchain_specific_rust_runtime_and_external_binaries() -> None:
     text = _content()
     assert 'runtime_bin="./target/release/rust_runtime_{{ tc_label }}"' in text
     assert 'external_bin="./target/release/rust_external_{{ tc_label }}"' in text
+
+
+def test_runtime_bench_binary_reads_iterations_from_env_with_safe_fallback() -> None:
+    runtime_source = _rust_file("runtime_bench/src/main.rs")
+    assert 'std::env::var("RUST_RUNTIME_ITERATIONS")' in runtime_source
+    assert "parse::<u64>().ok()" in runtime_source
+    assert "unwrap_or(DEFAULT_ITERATIONS)" in runtime_source
+    assert "const DEFAULT_ITERATIONS: u64 = 50_000_000;" in runtime_source
 
 
 def test_compiler_task_refreshes_rust_benchmark_project_files() -> None:
