@@ -26,7 +26,9 @@ def _load_yaml_list(path: Path) -> list[dict[str, object]]:
     return loaded
 
 
-def _get_task_by_name(tasks: list[dict[str, object]], task_name: str, *, source: str) -> dict[str, object]:
+def _get_task_by_name(
+    tasks: list[dict[str, object]], task_name: str, *, source: str
+) -> dict[str, object]:
     for task in tasks:
         if isinstance(task, dict) and task.get("name") == task_name:
             return task
@@ -47,7 +49,7 @@ def _task_cmd_for_task(task: dict[str, object], *, source: str) -> str:
                 if all(isinstance(part, str) for part in argv):
                     return " ".join(argv)
                 raise AssertionError(
-                    f"task '{task.get('name')}' in {source} has non-string argv entries for {module_name}"
+                    f"task '{task.get('name')}' in {source} has non-string argv entries"
                 )
     raise AssertionError(
         f"task '{task.get('name')}' in {source} must define ansible.builtin.shell "
@@ -165,18 +167,28 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
     if "run_benchmarks_git_repo_commits" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must reference run_benchmarks_git_repo_commits")
     if "run_benchmarks_git_feature_commits" not in git_repo_size_check_cmd:
-        raise AssertionError("git repo sizing task must reference run_benchmarks_git_feature_commits")
+        raise AssertionError(
+            "git repo sizing task must reference run_benchmarks_git_feature_commits"
+        )
     if "needs_rebuild=1" not in git_repo_size_check_cmd:
-        raise AssertionError("git repo sizing task must default to rebuild for invalid repository states")
+        raise AssertionError(
+            "git repo sizing task must default to rebuild for invalid repository states"
+        )
     if "git rev-parse --verify main >/dev/null 2>&1" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must verify main branch before counting commits")
     if "git rev-parse --verify master >/dev/null 2>&1" not in git_repo_size_check_cmd:
-        raise AssertionError("git repo sizing task must verify master branch fallback before counting commits")
+        raise AssertionError(
+            "git repo sizing task must verify master branch fallback before counting commits"
+        )
     if "main_branch}..feature" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must compute feature branch commit depth")
-    if "RUST_RUNTIME_ITERATIONS={{ run_benchmarks_rust_runtime_iterations }}" not in rust_runtime_benchmark_cmd:
+    if (
+        "RUST_RUNTIME_ITERATIONS={{ run_benchmarks_rust_runtime_iterations }}"
+        not in rust_runtime_benchmark_cmd
+    ):
         raise AssertionError(
-            "rust runtime benchmark task must pass run_benchmarks_rust_runtime_iterations via environment"
+            "rust runtime benchmark task must pass "
+            "run_benchmarks_rust_runtime_iterations via environment"
         )
     remove_when = remove_undersized_git_repo_task.get("when")
     if not isinstance(remove_when, list) or not any(
@@ -208,7 +220,9 @@ def test_short_results_validator_allows_subset_run_outputs() -> None:
     with _repo_scoped_tempdir() as tmp_dir:
         host_dir = tmp_dir / "host-a"
         host_dir.mkdir(parents=True)
-        (host_dir / "bash.json").write_text(json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8")
+        (host_dir / "bash.json").write_text(
+            json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8"
+        )
         failures = validator.validate(tmp_dir)
 
     assert failures == []
@@ -220,7 +234,9 @@ def test_short_results_validator_fails_when_required_file_is_missing() -> None:
     with _repo_scoped_tempdir() as tmp_dir:
         host_dir = tmp_dir / "host-a"
         host_dir.mkdir(parents=True)
-        (host_dir / "bash.json").write_text(json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8")
+        (host_dir / "bash.json").write_text(
+            json.dumps({"results": [{"command": "bash"}]}), encoding="utf-8"
+        )
         failures = validator.validate(tmp_dir, required_files={"coreutils.json"})
 
     assert any("missing expected file coreutils.json" in failure for failure in failures)
