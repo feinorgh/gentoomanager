@@ -803,11 +803,10 @@
       {% set cc_label = cc_parts[0] %}
       {% set cc_exe = cc_parts[1] %}
       if [ -x "{{ cc_exe }}" ]; then
-        for opt in "-O0" "-O2" "-O3"; do
-          OPTLABEL=$(echo "$opt" | tr ' ' '_')
-          CMDS+=(--command-name "{{ cc_label }}-${OPTLABEL}"
-            "{{ cc_exe }} $opt -o /dev/null -c sqlite3.c")
-        done
+        {% for opt in run_benchmarks_compiler_sqlite_opt_levels %}
+        CMDS+=(--command-name "{{ cc_label }}-{{ opt | replace(' ', '_') }}"
+          "{{ cc_exe }} {{ opt }} -o /dev/null -c sqlite3.c")
+        {% endfor %}
       fi
       {% endif %}
       {% endfor %}

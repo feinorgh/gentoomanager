@@ -303,15 +303,15 @@
 # Post-quantum algorithms require OpenSSL 3.5+ (April 2025) and are
 # detected at runtime; the benchmark skips them gracefully if unavailable.
 #
-# All algorithms run the same 1000-iteration inner loop so wall-clock totals
-# are directly comparable across key types.
+# All algorithms run the same configured inner loop so wall-clock totals are
+# directly comparable across key types.
 - name: Run OpenSSL asymmetric benchmarks
   ansible.builtin.shell:
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
 
-      N=1000
+      N={{ run_benchmarks_crypto_asymmetric_iterations }}
 
       # ── Generate classical keys ──────────────────────────────────────────
       [ -f rsa2048.pem ] || openssl genrsa -out rsa2048.pem 2048 2>/dev/null
@@ -435,8 +435,8 @@
       fi
 
       {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_crypto_asymmetric_runs }} \
+        --warmup {{ run_benchmarks_crypto_asymmetric_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_asymmetric.json \
         "${CMDS[@]}"
@@ -595,8 +595,8 @@
 # that OpenSSH supports: RSA-2048/3072/4096, ECDSA P-256/P-384/P-521, Ed25519.
 # This measures the full real-world cost of SSH signing including process
 # startup, key parsing, and protocol overhead — not just raw crypto math.
-# Each inner loop runs 1000 operations for direct comparison to the OpenSSL
-# asymmetric benchmark (crypto_asymmetric.json).
+# Each inner loop runs a configured operation count for direct comparison to
+# the OpenSSL asymmetric benchmark (crypto_asymmetric.json).
 - name: Check if ssh-keygen supports file signing (-Y, OpenSSH 8.0+)
   ansible.builtin.shell:
     cmd: |
@@ -613,7 +613,7 @@
     cmd: |
       set -eo pipefail
       cd {{ run_benchmarks_work_dir }}
-      N=1000
+      N={{ run_benchmarks_crypto_ssh_sign_iterations }}
 
       # ── Generate passphrase-free SSH keys ────────────────────────────────
       [ -f ssh_ed25519 ]   || ssh-keygen -t ed25519  -f ssh_ed25519   -N "" -q
@@ -688,8 +688,8 @@
         "$(repeat_cmd 'ssh-keygen -Y verify -f ssh_allowed_signers -I bench-ecdsa521 -n benchmark -s ssh_sig_ecdsa521.sig < signdata.bin >/dev/null 2>&1')")
 
       {{ run_benchmarks_hyperfine_bin }} \
-        --runs {{ run_benchmarks_runs }} \
-        --warmup {{ run_benchmarks_warmup }} \
+        --runs {{ run_benchmarks_crypto_ssh_sign_runs }} \
+        --warmup {{ run_benchmarks_crypto_ssh_sign_warmup }} \
         --ignore-failure \
         --export-json {{ run_benchmarks_work_dir }}/crypto_ssh_sign.json \
         "${CMDS[@]}"

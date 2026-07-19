@@ -1,9 +1,6 @@
 """Tests for benchmark failure logging in run_benchmarks playbook flow."""
 
-from __future__ import annotations
-
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

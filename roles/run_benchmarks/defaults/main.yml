@@ -10,13 +10,27 @@ run_benchmarks_warmup: 3
 # each compile takes 5–35 s depending on optimisation level and host speed.
 run_benchmarks_large_compile_runs: 2
 run_benchmarks_large_compile_warmup: 1
+run_benchmarks_compiler_sqlite_opt_levels:
+  - "-O2"
+  - "-O3"
 
 # Runs and warmup for compression benchmarks.  bzip2 and xz are deterministic
 # single-threaded CPU operations with negligible run-to-run variance; 3 runs
 # + 1 warmup is statistically sufficient and roughly halves wall-clock time
 # compared with the global defaults (5 runs + 3 warmup).
-run_benchmarks_compression_runs: 3
+run_benchmarks_compression_runs: 2
 run_benchmarks_compression_warmup: 1
+
+# Runtime tuning for heavy crypto sections.  Asymmetric OpenSSL and SSH
+# sign/verify operations are expensive at high inner-loop counts; reducing
+# loop iterations and sample rounds keeps wall-clock time manageable while
+# preserving stable relative comparisons across algorithms.
+run_benchmarks_crypto_asymmetric_runs: 3
+run_benchmarks_crypto_asymmetric_warmup: 1
+run_benchmarks_crypto_asymmetric_iterations: 500
+run_benchmarks_crypto_ssh_sign_runs: 3
+run_benchmarks_crypto_ssh_sign_warmup: 1
+run_benchmarks_crypto_ssh_sign_iterations: 500
 
 # GIMP benchmark tuning.
 # GIMP is launched once; all four operations (load, blur, unsharp, pipeline)
@@ -102,9 +116,9 @@ run_benchmarks_ffmpeg_duration_sec: 10
 run_benchmarks_ffmpeg_cmd_timeout_sec: 120
 
 # Per-category runs/warmup overrides for slow categories.
-# FFmpeg video encode: 3 runs, 1 warmup — encoding variance is low (<0.5%),
-# and 4 total rounds keep the video encode section under ~5 minutes.
-run_benchmarks_ffmpeg_video_runs: 3
+# FFmpeg video encode: 2 runs, 1 warmup — encoding variance is low (<0.5%),
+# and 3 total rounds keep the video encode section under ~5 minutes.
+run_benchmarks_ffmpeg_video_runs: 2
 run_benchmarks_ffmpeg_video_warmup: 1
 # FFmpeg audio encode/decode: audio codecs are fast but there are many of
 # them; 3 runs + 1 warmup keeps audio under ~8 minutes total.
