@@ -290,6 +290,50 @@ class TestBuildComparisonTable:
         bob = table["compression"]["gzip-compress"]["gentoo-bob"]["mean"]
         assert bob < alice
 
+    def test_excludes_rows_with_non_zero_exit_codes(self, tmp_path: Path) -> None:
+        results = tmp_path / "results"
+        host_dir = results / "gentoo-alice"
+        host_dir.mkdir(parents=True)
+
+        (host_dir / "metadata.json").write_text(json.dumps(_make_metadata("gentoo-alice")))
+        (host_dir / "bash.json").write_text(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "command": "bash -lc true",
+                            "mean": 0.01,
+                            "stddev": 0.001,
+                            "min": 0.009,
+                            "max": 0.011,
+                            "median": 0.01,
+                            "times": [0.01, 0.01, 0.01],
+                            "exit_codes": [0, 0],
+                        },
+                        {
+                            "command": "bash -lc missing-binary",
+                            "mean": 0.02,
+                            "stddev": 0.002,
+                            "min": 0.018,
+                            "max": 0.022,
+                            "median": 0.02,
+                            "times": [0.02, 0.02, 0.02],
+                            "exit_codes": [127, 127],
+                        },
+                    ]
+                }
+            )
+        )
+
+        hosts = load_results(tmp_path)
+        table = build_comparison_table(hosts)
+
+        assert "bash -lc true" in table["bash"]
+        if "bash -lc missing-binary" in table["bash"]:
+            raise AssertionError(
+                "rows with non-zero exit_codes should be excluded from comparison tables"
+            )
+
 
 def test_markdown_includes_linux_perf_context_defaults_and_deltas(tmp_path: Path) -> None:
     results = tmp_path / "results"
