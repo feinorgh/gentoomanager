@@ -509,8 +509,8 @@ exercising multi-core performance in addition to per-core IPC.
 
 The compression category uses its own run/warmup defaults
 (`run_benchmarks_compression_runs=2`, `run_benchmarks_compression_warmup=1`)
-rather than the global values, since bzip2 and xz are deterministic
-single-threaded operations with negligible run-to-run variance — two
+rather than the global values, since bzip2 and xz runs are deterministic and
+show negligible run-to-run variance on stable hosts — two
 measured runs is statistically sufficient and keeps this category under
 ~5 minutes on typical hardware.
 
@@ -602,17 +602,17 @@ directly comparable to `crypto_asymmetric.json`.  Skipped on hosts where
 
 | Benchmark (sign + verify pair) | Algorithm |
 |---|---|
-| `rsa-2048-sign-500x` / `rsa-2048-verify-500x` | RSA-2048 |
-| `rsa-3072-sign-500x` / `rsa-3072-verify-500x` | RSA-3072 |
-| `rsa-4096-sign-500x` / `rsa-4096-verify-500x` | RSA-4096 |
-| `ecdsa-p256-sign-500x` / `ecdsa-p256-verify-500x` | ECDSA P-256 |
-| `ecdsa-p384-sign-500x` / `ecdsa-p384-verify-500x` | ECDSA P-384 |
-| `ecdsa-p521-sign-500x` / `ecdsa-p521-verify-500x` | ECDSA P-521 |
-| `ed25519-sign-500x` / `ed25519-verify-500x` | Ed25519 |
-| `ed448-sign-500x` / `ed448-verify-500x` | Ed448 |
-| `ml-dsa-44-sign-500x` / `ml-dsa-44-verify-500x` | ML-DSA-44 — skipped if Botan < 3.4 |
-| `ml-dsa-65-sign-500x` / `ml-dsa-65-verify-500x` | ML-DSA-65 — skipped if Botan < 3.4 |
-| `ml-dsa-87-sign-500x` / `ml-dsa-87-verify-500x` | ML-DSA-87 — skipped if Botan < 3.4 |
+| `rsa-2048-sign-1000x` / `rsa-2048-verify-1000x` | RSA-2048 |
+| `rsa-3072-sign-1000x` / `rsa-3072-verify-1000x` | RSA-3072 |
+| `rsa-4096-sign-1000x` / `rsa-4096-verify-1000x` | RSA-4096 |
+| `ecdsa-p256-sign-1000x` / `ecdsa-p256-verify-1000x` | ECDSA P-256 |
+| `ecdsa-p384-sign-1000x` / `ecdsa-p384-verify-1000x` | ECDSA P-384 |
+| `ecdsa-p521-sign-1000x` / `ecdsa-p521-verify-1000x` | ECDSA P-521 |
+| `ed25519-sign-1000x` / `ed25519-verify-1000x` | Ed25519 |
+| `ed448-sign-1000x` / `ed448-verify-1000x` | Ed448 |
+| `ml-dsa-44-sign-1000x` / `ml-dsa-44-verify-1000x` | ML-DSA-44 — skipped if Botan < 3.4 |
+| `ml-dsa-65-sign-1000x` / `ml-dsa-65-verify-1000x` | ML-DSA-65 — skipped if Botan < 3.4 |
+| `ml-dsa-87-sign-1000x` / `ml-dsa-87-verify-1000x` | ML-DSA-87 — skipped if Botan < 3.4 |
 
 **HMAC:** `hmac-sha256`, `hmac-sha512`, `hmac-sha3-256`
 
