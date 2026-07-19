@@ -18,6 +18,17 @@ run_benchmarks_large_compile_warmup: 1
 run_benchmarks_compression_runs: 3
 run_benchmarks_compression_warmup: 1
 
+# Runtime tuning for heavy crypto sections.  Asymmetric OpenSSL and SSH
+# sign/verify operations are expensive at high inner-loop counts; reducing
+# loop iterations and sample rounds keeps wall-clock time manageable while
+# preserving stable relative comparisons across algorithms.
+run_benchmarks_crypto_asymmetric_runs: 3
+run_benchmarks_crypto_asymmetric_warmup: 1
+run_benchmarks_crypto_asymmetric_iterations: 500
+run_benchmarks_crypto_ssh_sign_runs: 3
+run_benchmarks_crypto_ssh_sign_warmup: 1
+run_benchmarks_crypto_ssh_sign_iterations: 500
+
 # GIMP benchmark tuning.
 # GIMP is launched once; all four operations (load, blur, unsharp, pipeline)
 # are timed inside that single Script-Fu session using gettimeofday.
