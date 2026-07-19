@@ -334,6 +334,35 @@ class TestBuildComparisonTable:
                 "rows with non-zero exit_codes should be excluded from comparison tables"
             )
 
+    def test_keeps_rows_without_exit_codes(self, tmp_path: Path) -> None:
+        results = tmp_path / "results"
+        host_dir = results / "gentoo-alice"
+        host_dir.mkdir(parents=True)
+
+        (host_dir / "metadata.json").write_text(json.dumps(_make_metadata("gentoo-alice")))
+        (host_dir / "bash.json").write_text(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "command": "bash -lc no-exit-codes",
+                            "mean": 0.03,
+                            "stddev": 0.003,
+                            "min": 0.028,
+                            "max": 0.032,
+                            "median": 0.03,
+                            "times": [0.03, 0.03, 0.03],
+                        }
+                    ]
+                }
+            )
+        )
+
+        hosts = load_results(tmp_path)
+        table = build_comparison_table(hosts)
+
+        assert "bash -lc no-exit-codes" in table["bash"]
+
 
 def test_markdown_includes_linux_perf_context_defaults_and_deltas(tmp_path: Path) -> None:
     results = tmp_path / "results"
