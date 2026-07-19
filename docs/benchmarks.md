@@ -508,9 +508,9 @@ The `xz-compress` benchmark passes `-T0` to enable multi-threaded compression,
 exercising multi-core performance in addition to per-core IPC.
 
 The compression category uses its own run/warmup defaults
-(`run_benchmarks_compression_runs=3`, `run_benchmarks_compression_warmup=1`)
+(`run_benchmarks_compression_runs=2`, `run_benchmarks_compression_warmup=1`)
 rather than the global values, since bzip2 and xz are deterministic
-single-threaded operations with negligible run-to-run variance — three
+single-threaded operations with negligible run-to-run variance — two
 measured runs is statistically sufficient and keeps this category under
 ~5 minutes on typical hardware.
 
@@ -551,24 +551,25 @@ and SHA-NI hardware instructions), LTO, and optimization level.
 
 Individual asymmetric operations complete in well under 1 ms, making it
 impossible for hyperfine to measure them accurately in a single invocation.
-Each command therefore wraps the `openssl` call in a shell loop of **1000
-iterations** so wall-clock totals are directly comparable across algorithms.
-Command names carry the suffix `-1000x` (e.g. `rsa-2048-sign-1000x`).
+Each command therefore wraps the `openssl` call in a shell loop of
+`run_benchmarks_crypto_asymmetric_iterations` iterations (default **500**) so
+wall-clock totals are directly comparable across algorithms.  Command names
+carry the suffix `-${N}x` (default: `-500x`, e.g. `rsa-2048-sign-500x`).
 
 | Benchmark (sign + verify pair) | Algorithm / security level |
 |---|---|
-| `rsa-2048-sign-1000x` / `rsa-2048-verify-1000x` | RSA-2048, SHA-256 (acceptable to 2030, NIST SP 800-57) |
-| `rsa-3072-sign-1000x` / `rsa-3072-verify-1000x` | RSA-3072, SHA-256 (NIST minimum for post-2030) |
-| `rsa-4096-sign-1000x` / `rsa-4096-verify-1000x` | RSA-4096, SHA-256 (long-lived CA keys) |
-| `ecdsa-p256-sign-1000x` / `ecdsa-p256-verify-1000x` | ECDSA P-256, 128-bit security |
-| `ecdsa-p384-sign-1000x` / `ecdsa-p384-verify-1000x` | ECDSA P-384, 192-bit security (CNSA Suite 2.0 minimum) |
-| `ecdsa-p521-sign-1000x` / `ecdsa-p521-verify-1000x` | ECDSA P-521, 260-bit security |
-| `ed25519-sign-1000x` / `ed25519-verify-1000x` | Ed25519, 128-bit security, FIPS 186-5 |
-| `ed448-sign-1000x` / `ed448-verify-1000x` | Ed448, 224-bit security |
-| `ml-dsa-44-sign-1000x` / `ml-dsa-44-verify-1000x` | ML-DSA-44 (FIPS 204, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
-| `ml-dsa-65-sign-1000x` / `ml-dsa-65-verify-1000x` | ML-DSA-65 (FIPS 204, 192-bit PQ security) — skipped if OpenSSL < 3.5 |
-| `ml-dsa-87-sign-1000x` / `ml-dsa-87-verify-1000x` | ML-DSA-87 (FIPS 204, 256-bit PQ security) — skipped if OpenSSL < 3.5 |
-| `slh-dsa-sha2-128f-sign-1000x` / `slh-dsa-sha2-128f-verify-1000x` | SLH-DSA-SHA2-128f (FIPS 205, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `rsa-2048-sign-500x` / `rsa-2048-verify-500x` | RSA-2048, SHA-256 (acceptable to 2030, NIST SP 800-57) |
+| `rsa-3072-sign-500x` / `rsa-3072-verify-500x` | RSA-3072, SHA-256 (NIST minimum for post-2030) |
+| `rsa-4096-sign-500x` / `rsa-4096-verify-500x` | RSA-4096, SHA-256 (long-lived CA keys) |
+| `ecdsa-p256-sign-500x` / `ecdsa-p256-verify-500x` | ECDSA P-256, 128-bit security |
+| `ecdsa-p384-sign-500x` / `ecdsa-p384-verify-500x` | ECDSA P-384, 192-bit security (CNSA Suite 2.0 minimum) |
+| `ecdsa-p521-sign-500x` / `ecdsa-p521-verify-500x` | ECDSA P-521, 260-bit security |
+| `ed25519-sign-500x` / `ed25519-verify-500x` | Ed25519, 128-bit security, FIPS 186-5 |
+| `ed448-sign-500x` / `ed448-verify-500x` | Ed448, 224-bit security |
+| `ml-dsa-44-sign-500x` / `ml-dsa-44-verify-500x` | ML-DSA-44 (FIPS 204, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `ml-dsa-65-sign-500x` / `ml-dsa-65-verify-500x` | ML-DSA-65 (FIPS 204, 192-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `ml-dsa-87-sign-500x` / `ml-dsa-87-verify-500x` | ML-DSA-87 (FIPS 204, 256-bit PQ security) — skipped if OpenSSL < 3.5 |
+| `slh-dsa-sha2-128f-sign-500x` / `slh-dsa-sha2-128f-verify-500x` | SLH-DSA-SHA2-128f (FIPS 205, 128-bit PQ security) — skipped if OpenSSL < 3.5 |
 
 The input file `signdata.bin` is **1 KiB** of random data.
 Post-quantum algorithms (ML-DSA, SLH-DSA) are silently skipped on hosts
@@ -576,19 +577,20 @@ whose OpenSSL version does not support them.
 
 **SSH asymmetric signing** (output file: `crypto_ssh_sign.json`):
 
-The same 1000-iteration loop methodology is applied to SSH key types using
-`ssh-keygen -Y sign`.  Results are directly comparable to the OpenSSL
+The same configurable loop methodology is applied to SSH key types using
+`ssh-keygen -Y sign` with `run_benchmarks_crypto_ssh_sign_iterations` (default
+**500**). Results are directly comparable to the OpenSSL
 asymmetric benchmarks above.
 
 | Benchmark (sign + verify pair) | Algorithm |
 |---|---|
-| `ssh-ed25519-sign-1000x` / `ssh-ed25519-verify-1000x` | Ed25519 |
-| `ssh-rsa-2048-sign-1000x` / `ssh-rsa-2048-verify-1000x` | RSA-2048 |
-| `ssh-rsa-3072-sign-1000x` / `ssh-rsa-3072-verify-1000x` | RSA-3072 |
-| `ssh-rsa-4096-sign-1000x` / `ssh-rsa-4096-verify-1000x` | RSA-4096 |
-| `ssh-ecdsa-p256-sign-1000x` / `ssh-ecdsa-p256-verify-1000x` | ECDSA P-256 |
-| `ssh-ecdsa-p384-sign-1000x` / `ssh-ecdsa-p384-verify-1000x` | ECDSA P-384 |
-| `ssh-ecdsa-p521-sign-1000x` / `ssh-ecdsa-p521-verify-1000x` | ECDSA P-521 |
+| `ssh-ed25519-sign-500x` / `ssh-ed25519-verify-500x` | Ed25519 |
+| `ssh-rsa-2048-sign-500x` / `ssh-rsa-2048-verify-500x` | RSA-2048 |
+| `ssh-rsa-3072-sign-500x` / `ssh-rsa-3072-verify-500x` | RSA-3072 |
+| `ssh-rsa-4096-sign-500x` / `ssh-rsa-4096-verify-500x` | RSA-4096 |
+| `ssh-ecdsa-p256-sign-500x` / `ssh-ecdsa-p256-verify-500x` | ECDSA P-256 |
+| `ssh-ecdsa-p384-sign-500x` / `ssh-ecdsa-p384-verify-500x` | ECDSA P-384 |
+| `ssh-ecdsa-p521-sign-500x` / `ssh-ecdsa-p521-verify-500x` | ECDSA P-521 |
 
 **Botan** (output file: `crypto_botan.json`):
 
@@ -600,17 +602,17 @@ directly comparable to `crypto_asymmetric.json`.  Skipped on hosts where
 
 | Benchmark (sign + verify pair) | Algorithm |
 |---|---|
-| `rsa-2048-sign-1000x` / `rsa-2048-verify-1000x` | RSA-2048 |
-| `rsa-3072-sign-1000x` / `rsa-3072-verify-1000x` | RSA-3072 |
-| `rsa-4096-sign-1000x` / `rsa-4096-verify-1000x` | RSA-4096 |
-| `ecdsa-p256-sign-1000x` / `ecdsa-p256-verify-1000x` | ECDSA P-256 |
-| `ecdsa-p384-sign-1000x` / `ecdsa-p384-verify-1000x` | ECDSA P-384 |
-| `ecdsa-p521-sign-1000x` / `ecdsa-p521-verify-1000x` | ECDSA P-521 |
-| `ed25519-sign-1000x` / `ed25519-verify-1000x` | Ed25519 |
-| `ed448-sign-1000x` / `ed448-verify-1000x` | Ed448 |
-| `ml-dsa-44-sign-1000x` / `ml-dsa-44-verify-1000x` | ML-DSA-44 — skipped if Botan < 3.4 |
-| `ml-dsa-65-sign-1000x` / `ml-dsa-65-verify-1000x` | ML-DSA-65 — skipped if Botan < 3.4 |
-| `ml-dsa-87-sign-1000x` / `ml-dsa-87-verify-1000x` | ML-DSA-87 — skipped if Botan < 3.4 |
+| `rsa-2048-sign-500x` / `rsa-2048-verify-500x` | RSA-2048 |
+| `rsa-3072-sign-500x` / `rsa-3072-verify-500x` | RSA-3072 |
+| `rsa-4096-sign-500x` / `rsa-4096-verify-500x` | RSA-4096 |
+| `ecdsa-p256-sign-500x` / `ecdsa-p256-verify-500x` | ECDSA P-256 |
+| `ecdsa-p384-sign-500x` / `ecdsa-p384-verify-500x` | ECDSA P-384 |
+| `ecdsa-p521-sign-500x` / `ecdsa-p521-verify-500x` | ECDSA P-521 |
+| `ed25519-sign-500x` / `ed25519-verify-500x` | Ed25519 |
+| `ed448-sign-500x` / `ed448-verify-500x` | Ed448 |
+| `ml-dsa-44-sign-500x` / `ml-dsa-44-verify-500x` | ML-DSA-44 — skipped if Botan < 3.4 |
+| `ml-dsa-65-sign-500x` / `ml-dsa-65-verify-500x` | ML-DSA-65 — skipped if Botan < 3.4 |
+| `ml-dsa-87-sign-500x` / `ml-dsa-87-verify-500x` | ML-DSA-87 — skipped if Botan < 3.4 |
 
 **HMAC:** `hmac-sha256`, `hmac-sha512`, `hmac-sha3-256`
 
@@ -785,6 +787,10 @@ level.
 ### SQLite
 
 Tests SQLite I/O, transaction throughput, and query performance.
+
+The compiler-focused SQLite benchmark matrix uses
+`run_benchmarks_compiler_sqlite_opt_levels` (default: `["-O2","-O3"]`) to
+control which optimization flags are tested.
 
 The template database contains **1 000 000 rows** and is created via Python's
 `sqlite3` module at setup time.  If an existing database is smaller than
@@ -1556,14 +1562,21 @@ or in inventory.
 | `run_benchmarks_warmup` | `3` | Warmup runs before measurement |
 | `run_benchmarks_large_compile_runs` | `2` | Hyperfine iterations for large-compile benchmarks (SQLite amalgamation, multi-file) |
 | `run_benchmarks_large_compile_warmup` | `1` | Warmup runs for large-compile benchmarks |
-| `run_benchmarks_compression_runs` | `3` | Hyperfine iterations for compression benchmarks (bzip2/xz are deterministic; 3 runs is sufficient) |
+| `run_benchmarks_compiler_sqlite_opt_levels` | `["-O2","-O3"]` | Optimization levels benchmarked for SQLite compiler tests |
+| `run_benchmarks_compression_runs` | `2` | Hyperfine iterations for compression benchmarks (bzip2/xz are deterministic; 2 runs is sufficient) |
 | `run_benchmarks_compression_warmup` | `1` | Warmup runs for compression benchmarks |
+| `run_benchmarks_crypto_asymmetric_runs` | `3` | Hyperfine iterations for OpenSSL asymmetric sign/verify benchmarks |
+| `run_benchmarks_crypto_asymmetric_warmup` | `1` | Warmup runs for OpenSSL asymmetric sign/verify benchmarks |
+| `run_benchmarks_crypto_asymmetric_iterations` | `500` | Inner-loop operations per OpenSSL asymmetric benchmark command |
+| `run_benchmarks_crypto_ssh_sign_runs` | `3` | Hyperfine iterations for SSH sign/verify benchmarks |
+| `run_benchmarks_crypto_ssh_sign_warmup` | `1` | Warmup runs for SSH sign/verify benchmarks |
+| `run_benchmarks_crypto_ssh_sign_iterations` | `500` | Inner-loop operations per SSH sign/verify benchmark command |
 | `run_benchmarks_categories` | `[]` (all) | Categories to run |
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
 | `run_benchmarks_work_dir_win` | `C:\ansible-benchmarks` | Remote working directory (Windows) |
 | `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
-| `run_benchmarks_ffmpeg_video_runs` | `3` | Hyperfine iterations for FFmpeg video encode/decode |
+| `run_benchmarks_ffmpeg_video_runs` | `2` | Hyperfine iterations for FFmpeg video encode/decode |
 | `run_benchmarks_ffmpeg_video_warmup` | `1` | Warmup runs for FFmpeg video benchmarks |
 | `run_benchmarks_ffmpeg_audio_runs` | `3` | Hyperfine iterations for FFmpeg audio encode/decode |
 | `run_benchmarks_ffmpeg_audio_warmup` | `1` | Warmup runs for FFmpeg audio benchmarks |
