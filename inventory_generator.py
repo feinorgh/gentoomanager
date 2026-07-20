@@ -372,6 +372,23 @@ def main():
                             if inventory_vm_name not in inventory[base_os]["hosts"]:
                                 inventory[base_os]["hosts"].append(inventory_vm_name)
 
+                        # Keep a canonical Windows umbrella group so existing
+                        # group_vars/mswindows and playbook host checks apply
+                        # consistently, regardless of version-specific groups.
+                        os_group_lc = os_group.lower()
+                        base_os_lc = base_os.lower() if base_os else ""
+                        is_windows_group = (
+                            base_os_lc in {"win", "windows", "mswindows"}
+                            or os_group_lc.startswith(("win", "windows", "mswindows"))
+                        )
+                        if is_windows_group:
+                            if "mswindows" not in inventory:
+                                inventory["mswindows"] = {"hosts": []}
+                                if "mswindows" not in inventory["all"]["children"]:
+                                    inventory["all"]["children"].append("mswindows")
+                            if inventory_vm_name not in inventory["mswindows"]["hosts"]:
+                                inventory["mswindows"]["hosts"].append(inventory_vm_name)
+
                         # Use the actual hostname reported by the VM (via QEMU guest agent)
                         # for ansible_host and the ProxyCommand target, so Ansible connects
                         # by the machine's real hostname rather than the libvirt domain name.

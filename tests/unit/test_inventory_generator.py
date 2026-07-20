@@ -7,6 +7,7 @@ building — all without SSH.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -565,3 +566,26 @@ def test_warns_when_hypervisors_file_missing_subprocess() -> None:
         assert "hypervisors.txt.example" in err_lower
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
+
+
+def test_windows_hosts_are_grouped_under_mswindows(monkeypatch, capsys) -> None:
+    """Dynamic inventory should expose canonical mswindows group for Windows vars."""
+
+    def fake_load_hosts(_path: Path) -> list[str]:
+        return ["adele"]
+
+    def fake_get_vms_from_host(_host: str) -> list[dict[str, str]]:
+        return [{"name": "win11-hayden", "os": "win11", "hostname": "hayden"}]
+
+    monkeypatch.setattr(inv, "load_hosts_from_file", fake_load_hosts)
+    monkeypatch.setattr(inv, "get_vms_from_host", fake_get_vms_from_host)
+    monkeypatch.delenv("HYPERVISOR_HOSTS", raising=False)
+    monkeypatch.setattr(sys, "argv", ["inventory_generator.py", "--list"])
+
+    inv.main()
+    captured = capsys.readouterr()
+    inventory = json.loads(captured.out)
+
+    assert "mswindows" in inventory, "inventory should include canonical mswindows group"
+    assert "win11-hayden" in inventory["mswindows"]["hosts"]
+    assert "mswindows" in inventory["all"]["children"]
