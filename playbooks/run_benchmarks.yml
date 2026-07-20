@@ -438,6 +438,31 @@
                  if (ansible_os_family | default('') == 'Windows')
                  else run_benchmarks_work_dir }}
 
+        - name: Probe OpenBSD privilege escalation command for benchmark tasks
+          ansible.builtin.raw: >-
+            command -v doas 2>/dev/null ||
+            command -v sudo 2>/dev/null ||
+            echo doas
+          register: run_benchmarks_openbsd_priv_probe
+          changed_when: false
+          failed_when: false
+          when:
+            - ansible_system | default('') == 'OpenBSD'
+            - ansible_become_method is not defined
+
+        - name: Set OpenBSD become method for benchmark tasks
+          ansible.builtin.set_fact:
+            ansible_become_method: >-
+              {{
+                'doas'
+                if (run_benchmarks_openbsd_priv_probe.stdout | default('doas') | trim)
+                is search('doas$')
+                else 'sudo'
+              }}
+          when:
+            - ansible_system | default('') == 'OpenBSD'
+            - ansible_become_method is not defined
+
         # ── 3. Sanity check: tools, sudo, disk space ──────────────────
         - name: Run pre-flight sanity check
           ansible.builtin.include_tasks:

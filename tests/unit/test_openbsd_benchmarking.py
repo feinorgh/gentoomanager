@@ -1290,6 +1290,29 @@ def test_openbsd_completion_logic_matches_supported_openbsd_artifacts(worktree_r
         )
 
 
+def test_run_benchmarks_playbook_bootstraps_openbsd_become_method(worktree_root):
+    """OpenBSD benchmark runs should not rely on sudo being present."""
+    playbook_path = os.path.join(worktree_root, "playbooks", "run_benchmarks.yml")
+    with open(playbook_path, encoding="utf-8") as file_handle:
+        playbook = file_handle.read()
+
+    assert "command -v doas" in playbook, (
+        "run_benchmarks.yml should probe doas for OpenBSD privilege escalation"
+    )
+    assert "ansible_become_method" in playbook, (
+        "run_benchmarks.yml should set ansible_become_method before running benchmark role tasks"
+    )
+    assert "ansible_become_method is not defined" in playbook, (
+        "run_benchmarks.yml should avoid overriding explicitly configured become methods"
+    )
+
+    bootstrap_index = playbook.find("ansible_become_method")
+    role_run_index = playbook.find("- name: Run benchmark suite")
+    assert bootstrap_index != -1 and role_run_index != -1 and bootstrap_index < role_run_index, (
+        "OpenBSD become-method bootstrap must happen before benchmark role execution"
+    )
+
+
 def test_openbsd_support_is_documented(worktree_root):
     """Test that OpenBSD support is documented in user-facing docs and playbook."""
     # Test 1: README.md should mention OpenBSD as a supported platform
