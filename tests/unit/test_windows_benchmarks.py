@@ -127,3 +127,12 @@ class TestNewWindowsTaskFileContent:
         with open(path) as f:
             content = f.read()
         assert "[WARN]" in content, f"{filename} should have a warning task for benchmark failure"
+
+    def test_ffmpeg_video_encode_commands_are_not_wrapped_for_hyperfine(self) -> None:
+        path = os.path.join(TASKS_DIR, "ffmpeg_win.yml")
+        with open(path, encoding="utf-8") as file_handle:
+            content = file_handle.read()
+        assert "function wrap($cmd)" not in content, (
+            "ffmpeg_win.yml should pass ffmpeg command strings directly to hyperfine; "
+            "wrapping via cmd /c causes argument parsing failures on Windows."
+        )

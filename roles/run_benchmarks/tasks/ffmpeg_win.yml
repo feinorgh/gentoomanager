@@ -101,40 +101,35 @@
     $enc = (ffmpeg -encoders 2>&1) | Where-Object { $_ -match '^\s*V' } |
              ForEach-Object { ($_ -split '\s+')[2] }
     $has = { param($c) $enc -contains $c }
-    $T   = {{ run_benchmarks_ffmpeg_cmd_timeout_sec | int }}
-
-    function wrap($cmd) {
-      if ($T -gt 0) { "cmd /c `"$cmd`" & exit 0" } else { $cmd }
-    }
 
     $cmds = @()
     if (& $has 'libx264')    { $cmds += '--command-name'; $cmds += 'h264-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libx264 -preset medium -crf 23 -an -f null NUL" }
     if (& $has 'libx265')    { $cmds += '--command-name'; $cmds += 'h265-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libx265 -preset medium -crf 28 -an -f null NUL" }
     if (& $has 'libvpx-vp9') { $cmds += '--command-name'; $cmds += 'vp9-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -cpu-used 8 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -deadline realtime -cpu-used 8 -an -f null NUL" }
     if (& $has 'libsvtav1')  { $cmds += '--command-name'; $cmds += 'av1-svt-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libsvtav1 -crf 35 -preset 8 -an -f null NUL" }
     {% if run_benchmarks_ffmpeg_extended_codecs %}
     if (& $has 'libvpx')     { $cmds += '--command-name'; $cmds += 'vp8-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline realtime -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libvpx -crf 10 -b:v 1M -deadline realtime -an -f null NUL" }
     {% endif %}
     {% if run_benchmarks_ffmpeg_extended_codecs or run_benchmarks_ffmpeg_include_libaom %}
     if (& $has 'libaom-av1') { $cmds += '--command-name'; $cmds += 'av1-aom-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libaom-av1 -crf 35 -cpu-used 8 -row-mt 1 -an -f null NUL" }
     {% endif %}
     {% if run_benchmarks_ffmpeg_extended_codecs %}
     if (& $has 'librav1e')   { $cmds += '--command-name'; $cmds += 'av1-rav1e-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v librav1e -qp 100 -speed 10 -an -f null NUL" }
     if (& $has 'libtheora')  { $cmds += '--command-name'; $cmds += 'theora-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libtheora -q:v 7 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libtheora -q:v 7 -an -f null NUL" }
     if (& $has 'libxvid')    { $cmds += '--command-name'; $cmds += 'xvid-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v libxvid -q:v 5 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v libxvid -q:v 5 -an -f null NUL" }
     if (& $has 'mpeg2video') { $cmds += '--command-name'; $cmds += 'mpeg2-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v mpeg2video -b:v 5M -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v mpeg2video -b:v 5M -an -f null NUL" }
     if (& $has 'mjpeg')      { $cmds += '--command-name'; $cmds += 'mjpeg-encode';
-      $cmds += (wrap "ffmpeg -y -i $wd\test_raw.avi -c:v mjpeg -q:v 5 -an -f null NUL") }
+      $cmds += "ffmpeg -y -i $wd\test_raw.avi -c:v mjpeg -q:v 5 -an -f null NUL" }
     {% endif %}
 
     if ($cmds.Count -eq 0) { Write-Output 'No supported video encoders found; skipping.'; exit 0 }
