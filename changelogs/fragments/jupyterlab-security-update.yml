@@ -1,0 +1,4 @@
+security_fixes:
+  - "docs: bump jupyterlab from 4.5.9 to 4.5.10 to address security vulnerabilities
+    GHSA-gx64-gj6p-pc4c, GHSA-89vp-jrxv-24w8, GHSA-h5v5-8746-g7mm, GHSA-pppj-hq3g-57pj,
+    and GHSA-whvh-wf3x-g77j."
