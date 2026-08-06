@@ -82,6 +82,23 @@ run_benchmarks_results_dir: "{{ playbook_dir }}/../benchmarks"
 run_benchmarks_work_dir: /tmp/ansible-benchmarks
 run_benchmarks_work_dir_win: C:\ansible-benchmarks
 
+# Automatically select a non-tmpfs Unix work directory when the configured
+# work_dir is RAM-backed or lacks free space for fixture + intermediate files.
+run_benchmarks_auto_select_work_dir: true
+
+# Candidate Unix base directories scanned (in order) when auto-selection is
+# required.  The selected work dir becomes "<candidate>/ansible-benchmarks".
+run_benchmarks_work_dir_candidates:
+  - /var/tmp
+  - /var/cache
+  - /opt
+  - /usr/local/tmp
+
+# Minimum free space required on the selected candidate (MB).  Should be at
+# least as large as run_benchmarks_min_disk_mb to safely hold benchmark
+# fixtures and generated intermediates.
+run_benchmarks_work_dir_required_mb: 2048
+
 # Local (controller-side) directory for deterministic benchmark fixture files.
 # The ImageMagick source images are generated here once and copied to every
 # host, ensuring bit-identical input across all benchmark runs.

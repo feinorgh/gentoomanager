@@ -29,6 +29,9 @@ recorded in `benchmark_notes.json`; boot-time writes its unsupported result to
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory |
+| `run_benchmarks_auto_select_work_dir` | `true` | Auto-select a non-tmpfs Unix work directory when configured path is RAM-backed or low on space |
+| `run_benchmarks_work_dir_candidates` | `[/var/tmp, /var/cache, /opt, /usr/local/tmp]` | Candidate Unix base directories scanned when fallback is needed |
+| `run_benchmarks_work_dir_required_mb` | `2048` | Required free space on selected work directory candidate (MB) |
 | `run_benchmarks_fixture_dir` | *(controller path)* | Local directory for corpora fixtures |
 | `run_benchmarks_runs` | `5` | Number of hyperfine timed runs |
 | `run_benchmarks_warmup` | `3` | Number of hyperfine warm-up runs |

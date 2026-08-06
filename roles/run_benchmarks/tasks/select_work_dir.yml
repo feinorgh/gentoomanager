@@ -1,0 +1,205 @@
+---
+# Select a durable Unix benchmark work directory when the configured path is
+# RAM-backed (tmpfs/ramfs) or lacks free space for benchmark fixtures.
+
+- name: Probe configured benchmark work directory capacity and filesystem
+  ansible.builtin.shell:
+    cmd: |
+      set -eu
+      wdir="{{ run_benchmarks_work_dir }}"
+      while [ ! -e "$wdir" ] && [ "$wdir" != "/" ]; do
+        wdir=$(dirname "$wdir")
+      done
+
+      if stat -f -c '%T' "$wdir" >/dev/null 2>&1; then
+        fstype=$(stat -f -c '%T' "$wdir")
+      else
+        fstype=$(stat -f '%T' "$wdir" 2>/dev/null || echo unknown)
+      fi
+
+      avail_kb=$(df -Pk "$wdir" 2>/dev/null | awk 'NR==2{print $4}')
+      echo "probe_path=$wdir"
+      echo "fstype=${fstype:-unknown}"
+      echo "avail_kb=${avail_kb:-0}"
+    executable: /bin/sh
+  register: run_benchmarks_workdir_probe_raw
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+
+- name: Evaluate whether work directory fallback selection is required
+  ansible.builtin.set_fact:
+    run_benchmarks_workdir_required_kb: >-
+      {{
+        (run_benchmarks_work_dir_required_mb
+         | default(run_benchmarks_min_disk_mb | default(2048))
+         | int) * 1024
+      }}
+    run_benchmarks_workdir_current_fstype: >-
+      {{
+        (run_benchmarks_workdir_probe_raw.stdout_lines
+         | select('match', '^fstype=')
+         | first
+         | default('fstype=unknown')
+         | regex_replace('^fstype=', ''))
+      }}
+    run_benchmarks_workdir_current_avail_kb: >-
+      {{
+        (run_benchmarks_workdir_probe_raw.stdout_lines
+         | select('match', '^avail_kb=')
+         | first
+         | default('avail_kb=0')
+         | regex_replace('^avail_kb=', '')
+         | int)
+      }}
+    run_benchmarks_workdir_needs_fallback: >-
+      {{
+        (
+          run_benchmarks_workdir_current_fstype
+          in ['tmpfs', 'ramfs', 'devtmpfs']
+        ) or (
+          run_benchmarks_workdir_current_avail_kb
+          < run_benchmarks_workdir_required_kb
+        ) or (
+          run_benchmarks_workdir_probe_raw.rc | default(1) != 0
+        )
+      }}
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+
+- name: Normalize benchmark work directory candidate list (Unix)
+  ansible.builtin.set_fact:
+    run_benchmarks_work_dir_candidates_normalized: >-
+      {{
+        ([
+          _raw_candidates
+        ] if _raw_candidates is string else _raw_candidates) | default(
+          ['/var/tmp', '/var/cache', '/opt', '/usr/local/tmp'],
+          true
+        )
+      }}
+  vars:
+    _raw_candidates: >-
+      {{
+        (
+          run_benchmarks_work_dir_candidates
+          if run_benchmarks_work_dir_candidates is not string
+          else (
+            run_benchmarks_work_dir_candidates | from_yaml
+            if run_benchmarks_work_dir_candidates | length > 0
+            else []
+          )
+        )
+      }}
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+    - run_benchmarks_workdir_needs_fallback | default(false) | bool
+
+- name: Select benchmark work directory candidate (Unix)
+  ansible.builtin.shell:
+    cmd: |
+      set -eu
+      required_kb="{{ run_benchmarks_workdir_required_kb | int }}"
+      suffix="{{ run_benchmarks_work_dir | basename }}"
+      for base in {{ run_benchmarks_work_dir_candidates_normalized | map('quote') | join(' ') }}; do
+        [ -d "$base" ] || continue
+
+        if stat -f -c '%T' "$base" >/dev/null 2>&1; then
+          fstype=$(stat -f -c '%T' "$base")
+        else
+          fstype=$(stat -f '%T' "$base" 2>/dev/null || echo unknown)
+        fi
+
+        avail_kb=$(df -Pk "$base" 2>/dev/null | awk 'NR==2{print $4}')
+        [ -n "${avail_kb:-}" ] || continue
+
+        case "$fstype" in
+          tmpfs|ramfs|devtmpfs) continue ;;
+        esac
+
+        if [ "$avail_kb" -ge "$required_kb" ]; then
+          target="${base%/}/$suffix"
+          mkdir -p "$target" 2>/dev/null || continue
+          probe="${target}/.ansible_write_probe.$$"
+          : >"$probe" 2>/dev/null || continue
+          rm -f "$probe"
+
+          echo "selected=${base%/}/$suffix"
+          echo "base=$base"
+          echo "fstype=$fstype"
+          echo "avail_kb=$avail_kb"
+          exit 0
+        fi
+      done
+      exit 1
+    executable: /bin/sh
+  register: run_benchmarks_workdir_select_raw
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+    - run_benchmarks_workdir_needs_fallback | default(false) | bool
+
+- name: Fail when no suitable non-tmpfs work directory is available
+  ansible.builtin.fail:
+    msg: >-
+      No suitable benchmark work directory found. Required free space:
+      {{
+        run_benchmarks_work_dir_required_mb
+        | default(run_benchmarks_min_disk_mb | default(2048))
+      }} MB. Checked candidates:
+      {{
+        run_benchmarks_work_dir_candidates_normalized
+        | default(['/var/tmp', '/var/cache', '/opt', '/usr/local/tmp'])
+        | join(', ')
+      }}.
+      Current configured path "{{ run_benchmarks_work_dir }}" is
+      filesystem={{ run_benchmarks_workdir_current_fstype | default('unknown') }},
+      available={{ ((run_benchmarks_workdir_current_avail_kb | default(0) | int) / 1024) | round(0) | int }} MB.
+      Override run_benchmarks_work_dir or provide a larger candidate list.
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+    - run_benchmarks_workdir_needs_fallback | default(false) | bool
+    - run_benchmarks_workdir_select_raw.rc | default(1) != 0
+
+- name: Set selected benchmark work directory facts
+  ansible.builtin.set_fact:
+    run_benchmarks_selected_work_dir: >-
+      {{
+        (run_benchmarks_workdir_select_raw.stdout_lines
+         | select('match', '^selected=')
+         | first
+         | default('selected=' + run_benchmarks_work_dir)
+         | regex_replace('^selected=', ''))
+      }}
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+
+- name: Apply selected benchmark work directory for downstream tasks
+  ansible.builtin.set_fact:
+    run_benchmarks_work_dir: >-
+      {{
+        run_benchmarks_selected_work_dir | default(run_benchmarks_work_dir)
+        if (
+          run_benchmarks_workdir_needs_fallback | default(false) | bool and
+          (run_benchmarks_workdir_select_raw.rc | default(1) == 0)
+        )
+        else run_benchmarks_work_dir
+      }}
+    run_benchmarks_effective_work_dir: >-
+      {{
+        run_benchmarks_selected_work_dir | default(run_benchmarks_work_dir)
+        if (
+          run_benchmarks_workdir_needs_fallback | default(false) | bool and
+          (run_benchmarks_workdir_select_raw.rc | default(1) == 0)
+        )
+        else run_benchmarks_work_dir
+      }}
+  when: ansible_os_family | default('') != 'Windows'

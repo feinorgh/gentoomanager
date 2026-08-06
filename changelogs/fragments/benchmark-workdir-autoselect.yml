@@ -1,0 +1,2 @@
+minor_changes:
+  - "roles/run_benchmarks: automatically fall back to a non-tmpfs Unix work directory with sufficient free space when the configured work dir is RAM-backed or too small for benchmark fixtures."

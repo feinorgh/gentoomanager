@@ -438,6 +438,18 @@
                  if (ansible_os_family | default('') == 'Windows')
                  else run_benchmarks_work_dir }}
 
+        - name: Resolve benchmark work directory (Unix)
+          ansible.builtin.include_tasks:
+            file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/select_work_dir.yml"
+          when: ansible_os_family | default('') != 'Windows'
+
+        - name: Preserve effective work directory after selection
+          ansible.builtin.set_fact:
+            run_benchmarks_effective_work_dir: >-
+              {{ run_benchmarks_work_dir_win
+                 if (ansible_os_family | default('') == 'Windows')
+                 else (run_benchmarks_effective_work_dir | default(run_benchmarks_work_dir)) }}
+
         - name: Probe OpenBSD privilege escalation command for benchmark tasks
           ansible.builtin.raw: >-
             command -v doas 2>/dev/null ||
@@ -836,6 +848,15 @@
     - name: Set effective work directory
       ansible.builtin.set_fact:
         run_benchmarks_effective_work_dir: "{{ run_benchmarks_work_dir }}"
+
+    - name: Resolve benchmark work directory
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/select_work_dir.yml"
+
+    - name: Preserve effective work directory after selection
+      ansible.builtin.set_fact:
+        run_benchmarks_effective_work_dir: >-
+          {{ run_benchmarks_effective_work_dir | default(run_benchmarks_work_dir) }}
 
     # ── Sanity check: tools, sudo, disk space ───────────────────────────
     - name: Run pre-flight sanity check

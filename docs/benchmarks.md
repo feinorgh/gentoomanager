@@ -1595,6 +1595,9 @@ or in inventory.
 | `run_benchmarks_results_dir` | `{{ playbook_dir }}/../benchmarks` | Local results directory |
 | `run_benchmarks_work_dir` | `/tmp/ansible-benchmarks` | Remote working directory (Unix) |
 | `run_benchmarks_work_dir_win` | `C:\ansible-benchmarks` | Remote working directory (Windows) |
+| `run_benchmarks_auto_select_work_dir` | `true` | Automatically select a non-tmpfs Unix work directory when the configured path is RAM-backed or lacks capacity |
+| `run_benchmarks_work_dir_candidates` | `[/var/tmp,/var/cache,/opt,/usr/local/tmp]` | Candidate Unix base directories scanned in order for fallback selection |
+| `run_benchmarks_work_dir_required_mb` | `2048` | Minimum free space required on selected Unix candidate directory (MB) |
 | `run_benchmarks_compress_size_mb` | `64` | Test data size for compression fallback (MB) |
 | `run_benchmarks_ffmpeg_video_runs` | `2` | Hyperfine iterations for FFmpeg video encode/decode |
 | `run_benchmarks_ffmpeg_video_warmup` | `1` | Warmup runs for FFmpeg video benchmarks |
@@ -1659,6 +1662,24 @@ ansible -m ping <hostname>
 - Verify `hypervisor_host` is set in the VM's inventory
 - Verify the controller can SSH to the hypervisor and `virsh` is available
 - Disable scaling: `./scripts/run_benchmarks.sh --no-ram-scale`
+
+### Fixture copy fails on `/tmp` with `Disk quota exceeded`
+
+Enable work-dir auto-selection (default) so Unix hosts avoid RAM-backed tmpfs
+for large fixture copies:
+
+```bash
+ansible-playbook playbooks/run_benchmarks.yml \
+  -e run_benchmarks_auto_select_work_dir=true
+```
+
+If needed, tune candidate paths and required capacity:
+
+```bash
+ansible-playbook playbooks/run_benchmarks.yml \
+  -e run_benchmarks_work_dir_candidates='["/var/tmp","/srv/tmp","/opt"]' \
+  -e run_benchmarks_work_dir_required_mb=3072
+```
 
 ### VM does not boot with `--manage-power`
 

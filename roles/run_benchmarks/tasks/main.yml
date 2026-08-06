@@ -8,6 +8,13 @@
   ansible.builtin.set_fact:
     run_benchmarks_is_windows: "{{ ansible_os_family | default('') == 'Windows' }}"
 
+# ── Resolve work directory (Unix) ─────────────────────────────────────────
+- name: Resolve benchmark work directory
+  ansible.builtin.include_tasks:
+    file: select_work_dir.yml
+  when: not run_benchmarks_is_windows
+  tags: [benchmark, setup]
+
 # ── Setup ─────────────────────────────────────────────────────────────────
 - name: Run benchmark setup
   ansible.builtin.include_tasks:
