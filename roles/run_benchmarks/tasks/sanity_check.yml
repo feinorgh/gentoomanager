@@ -143,12 +143,100 @@
          or (run_benchmarks_scale_ram | default(true) | bool) }}
   when: ansible_system | default('Linux') not in ['OpenBSD', 'SunOS']
 
+- name: Probe available RAM (MemAvailable from /proc/meminfo)
+  ansible.builtin.shell:
+    cmd: awk '/^MemAvailable:/{print $2}' /proc/meminfo
+    executable: /bin/sh
+  register: run_benchmarks_sanity_memavail_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Probe swap usage (SwapTotal/SwapFree from /proc/meminfo)
+  ansible.builtin.shell:
+    cmd: awk '/^SwapTotal:/{total=$2} /^SwapFree:/{free=$2} END{print total+0" "free+0}' /proc/meminfo
+    executable: /bin/sh
+  register: run_benchmarks_sanity_swap_raw
+  changed_when: false
+  failed_when: false
+  when: ansible_system | default('') == 'Linux'
+
+- name: Compute categories used for RAM-pressure threshold
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_effective_categories: >-
+      {%- if _cats_list | length > 0 -%}
+      {{ _cats_list }}{%- else -%}
+      {{ run_benchmarks_ram_pressure_category_add_mb | default({}) | dict2items | map(attribute='key') | list }}{%- endif -%}
+  vars:
+    _cats_yaml: >-
+      {{
+        run_benchmarks_categories
+        if run_benchmarks_categories is not string
+        else (run_benchmarks_categories | from_yaml
+              if run_benchmarks_categories | length > 0
+              else [])
+      }}
+    _cats_list: >-
+      {{
+        (_cats_yaml.split(',') | map('trim') | reject('equalto', '') | list)
+        if _cats_yaml is string
+        else (_cats_yaml | list if _cats_yaml is sequence else [])
+      }}
+  when: ansible_system | default('') == 'Linux'
+
+- name: Evaluate general RAM-pressure threshold inputs
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_ram_available_mb: >-
+      {{ ((run_benchmarks_sanity_memavail_raw.stdout | default('0') | int) / 1024) | round(0) | int }}
+    run_benchmarks_sanity_swap_total_kb: >-
+      {{ (run_benchmarks_sanity_swap_raw.stdout.split() | first | default('0')) | int }}
+    run_benchmarks_sanity_swap_free_kb: >-
+      {{ (run_benchmarks_sanity_swap_raw.stdout.split() | last | default('0')) | int }}
+    run_benchmarks_sanity_ram_pressure_add_mb: >-
+      {%- set cfg = run_benchmarks_ram_pressure_category_add_mb | default({}) -%}
+      {%- set selection = run_benchmarks_sanity_effective_categories | default([]) -%}
+      {%- set ns = namespace(max_add=0) -%}
+      {%- for category_name in selection -%}
+        {%- set category_add = cfg.get(category_name, 0) | int -%}
+        {%- if category_add > ns.max_add -%}
+          {%- set ns.max_add = category_add -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ns.max_add }}
+    run_benchmarks_sanity_ram_pressure_required_mb: >-
+      {{ (run_benchmarks_min_available_ram_mb | int) + (run_benchmarks_sanity_ram_pressure_add_mb | int) }}
+  when: ansible_system | default('') == 'Linux'
+
+- name: Evaluate RAM-pressure swap usage percentage
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_swap_used_pct: >-
+      {{
+        (100 - ((run_benchmarks_sanity_swap_free_kb | int * 100) / (run_benchmarks_sanity_swap_total_kb | int)))
+        | round(1)
+        if (run_benchmarks_sanity_swap_total_kb | int) > 0
+        else 0
+      }}
+  when: ansible_system | default('') == 'Linux'
+
+- name: Evaluate general RAM-pressure warning thresholds
+  ansible.builtin.set_fact:
+    run_benchmarks_sanity_ram_pressure_warn: >-
+      {{
+        (run_benchmarks_sanity_ram_available_mb | int) < (run_benchmarks_sanity_ram_pressure_required_mb | int)
+        or (run_benchmarks_sanity_swap_used_pct | float) > (run_benchmarks_warn_swap_used_pct | float)
+      }}
+  when: ansible_system | default('') == 'Linux'
+
 - name: Default tmpfs/RAM probe facts on OpenBSD/OpenIndiana
   ansible.builtin.set_fact:
     run_benchmarks_sanity_is_tmpfs: false
     run_benchmarks_sanity_ram_total_mb: 0
     run_benchmarks_sanity_ram_ok: true
-  when: ansible_system | default('Linux') in ['OpenBSD', 'SunOS']
+    run_benchmarks_sanity_ram_available_mb: 0
+    run_benchmarks_sanity_swap_used_pct: 0
+    run_benchmarks_sanity_ram_pressure_required_mb: 0
+    run_benchmarks_sanity_ram_pressure_warn: false
+  when: ansible_system | default('') != 'Linux'
 
 # ── 5. Emit warning when issues are detected ─────────────────────────────
 - name: Warn — benchmark sanity check issues detected
@@ -189,6 +277,14 @@
           their RAM temporarily raised to max_memory before benchmarks run.
           To override: set run_benchmarks_min_ram_mb to a lower value.
       {% endif %}
+      {% if run_benchmarks_sanity_ram_pressure_warn %}
+      ⚠ Low available RAM for selected benchmark categories:
+          available={{ run_benchmarks_sanity_ram_available_mb }} MB,
+          recommended>= {{ run_benchmarks_sanity_ram_pressure_required_mb }} MB,
+          swap used={{ run_benchmarks_sanity_swap_used_pct }}%
+          (warn threshold={{ run_benchmarks_warn_swap_used_pct }}%).
+          Results may be skewed by memory reclaim/swap pressure.
+      {% endif %}
       {% if run_benchmarks_sanity_missing_req | length > 0 or run_benchmarks_sanity_missing_opt | length > 0 %}
       ─────────────────────────────────────────────────────────────────────
       To install missing tools, run the provisioning playbook:
@@ -205,7 +301,8 @@
     run_benchmarks_sanity_missing_opt | length > 0 or
     run_benchmarks_sanity_sudo.rc | default(1) != 0 or
     not run_benchmarks_sanity_disk_ok or
-    (run_benchmarks_sanity_is_tmpfs and not run_benchmarks_sanity_ram_ok)
+    (run_benchmarks_sanity_is_tmpfs and not run_benchmarks_sanity_ram_ok) or
+    run_benchmarks_sanity_ram_pressure_warn
 
 # ── 6. Persist sanity-check notes ────────────────────────────────────────
 # Compute distro-specific notes for tools that are unavailable due to
@@ -302,6 +399,11 @@
       distro_notes: "{{ run_benchmarks_sanity_distro_notes | default([]) }}"
       normalization_notes: "{{ run_benchmarks_sanity_normalization_notes | default([]) }}"
       platform_notes: "{{ run_benchmarks_sanity_platform_notes | default([]) }}"
+      ram_pressure:
+        available_mb: "{{ run_benchmarks_sanity_ram_available_mb | default(0) }}"
+        required_mb: "{{ run_benchmarks_sanity_ram_pressure_required_mb | default(0) }}"
+        swap_used_pct: "{{ run_benchmarks_sanity_swap_used_pct | default(0) }}"
+        warning: "{{ run_benchmarks_sanity_ram_pressure_warn | default(false) }}"
       benchmark_failures: []
       category_skip_reasons:
         disk: "{{ run_benchmarks_disk_skip_reason | default('') }}"

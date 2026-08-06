@@ -1607,6 +1607,9 @@ or in inventory.
 | `run_benchmarks_ffmpeg_duration_sec` | `10` | Test clip duration for FFmpeg synthetic fallback (s) |
 | `run_benchmarks_min_disk_mb` | `2048` | Minimum free disk space on work_dir partition (MB) |
 | `run_benchmarks_min_ram_mb` | `4096` | Minimum total RAM when work_dir is on tmpfs (MB) |
+| `run_benchmarks_min_available_ram_mb` | `1024` | Base minimum recommended MemAvailable before warning (Linux pre-flight) |
+| `run_benchmarks_warn_swap_used_pct` | `25` | Swap usage percentage above which pre-flight warns (Linux) |
+| `run_benchmarks_ram_pressure_category_add_mb` | `{ffmpeg:1024,compression:512,compiler:512,linker:512,memory:1024}` | Extra recommended available RAM by selected heavy category |
 | `run_benchmarks_cpu_affinity` | `""` | CPU affinity range (e.g. `0-3`); empty = no pinning |
 | `run_benchmarks_hyperfine_bin` | `hyperfine` | Path or name of the hyperfine binary |
 | `run_benchmarks_include_windows` | `false` | Include Windows hosts |
@@ -1659,6 +1662,13 @@ ansible -m ping <hostname>
 - Verify `hypervisor_host` is set in the VM's inventory
 - Verify the controller can SSH to the hypervisor and `virsh` is available
 - Disable scaling: `./scripts/run_benchmarks.sh --no-ram-scale`
+
+### Pre-flight warns about RAM pressure
+
+When pre-flight reports low available RAM or high swap usage, benchmark timings
+may include reclaim and swap I/O overhead. For cross-host comparisons, rerun
+after reducing background load, increasing VM memory, or benchmarking fewer
+heavy categories in one pass.
 
 ### VM does not boot with `--manage-power`
 

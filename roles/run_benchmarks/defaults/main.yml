@@ -103,6 +103,24 @@ run_benchmarks_min_disk_mb: 2048
 # benchmarks run — check max_memory in host_vars if this warning fires.
 run_benchmarks_min_ram_mb: 4096
 
+# General Linux pre-flight RAM pressure warning threshold.  If MemAvailable is
+# below this value, the suite emits a warning because reclaim/swap pressure can
+# skew benchmark results.
+run_benchmarks_min_available_ram_mb: 1024
+
+# General Linux pre-flight swap pressure warning threshold (% used).  Warn when
+# swap usage exceeds this level before benchmarks begin.
+run_benchmarks_warn_swap_used_pct: 25
+
+# Category-aware RAM pressure headroom (MB).  The largest value for selected
+# categories is added to run_benchmarks_min_available_ram_mb.
+run_benchmarks_ram_pressure_category_add_mb:
+  ffmpeg: 1024
+  compression: 512
+  compiler: 512
+  linker: 512
+  memory: 1024
+
 # Test data sizes
 # Fallback random testdata.bin size (MiB) when the Silesia corpus is absent.
 # 64 MiB clearly differentiates fast (lz4/zstd) from slow (xz/bzip2) codecs
