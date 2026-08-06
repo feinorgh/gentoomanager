@@ -66,6 +66,7 @@ provision_benchmarks_packages:
   Archlinux:
     - gcc
     - clang
+    - make
     - openssl
     - python
     - rust
