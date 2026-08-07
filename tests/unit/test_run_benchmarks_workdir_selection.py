@@ -49,3 +49,41 @@ def test_role_main_includes_selector_for_direct_role_usage() -> None:
 
     assert "Resolve benchmark work directory" in content
     assert "file: select_work_dir.yml" in content
+
+
+def test_selector_avoids_same_task_set_fact_self_reference() -> None:
+    tasks = _read_yaml("roles/run_benchmarks/tasks/select_work_dir.yml")
+
+    for task in tasks:
+        facts = task.get("ansible.builtin.set_fact")
+        if not isinstance(facts, dict):
+            continue
+        assert not (
+            "run_benchmarks_workdir_current_fstype" in facts
+            and "run_benchmarks_workdir_needs_fallback" in facts
+        ), (
+            "set_fact must not define run_benchmarks_workdir_current_fstype and "
+            "run_benchmarks_workdir_needs_fallback in the same task; Ansible "
+            "cannot safely reference same-task facts during arg finalization."
+        )
+
+
+def test_selector_handles_undefined_candidate_var_before_role_defaults() -> None:
+    tasks = _read_yaml("roles/run_benchmarks/tasks/select_work_dir.yml")
+    normalize_task = next(
+        (
+            task
+            for task in tasks
+            if task.get("name") == "Normalize benchmark work directory candidate list (Unix)"
+        ),
+        None,
+    )
+    assert normalize_task is not None
+
+    configured_candidates = (normalize_task.get("vars") or {}).get("_configured_candidates", "")
+    assert "run_benchmarks_work_dir_candidates" in configured_candidates
+    assert "| default(" in configured_candidates, (
+        "Selector must guard run_benchmarks_work_dir_candidates with default() "
+        "because this task file runs from playbook pre_tasks before role defaults "
+        "are loaded."
+    )

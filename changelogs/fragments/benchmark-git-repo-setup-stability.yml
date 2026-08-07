@@ -1,0 +1,2 @@
+bugfixes:
+  - "roles/run_benchmarks: disable git auto-gc/auto-maintenance while generating the coreutils git test repo to avoid intermittent object corruption on some hosts."

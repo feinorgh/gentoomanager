@@ -167,6 +167,12 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
         raise AssertionError("coreutils task must reference run_benchmarks_git_repo_commits")
     if "run_benchmarks_git_feature_commits" not in create_git_repo_cmd:
         raise AssertionError("coreutils task must reference run_benchmarks_git_feature_commits")
+    if "git config gc.auto 0" not in create_git_repo_cmd:
+        raise AssertionError("git repo creation must disable git auto gc for deterministic setup")
+    if "git config maintenance.auto false" not in create_git_repo_cmd:
+        raise AssertionError(
+            "git repo creation must disable git auto maintenance for deterministic setup"
+        )
     if 'while [ "$i" -le "$target_git_repo_commits" ]; do' not in create_git_repo_cmd:
         raise AssertionError("git repo creation loop must compare against numeric variable")
     if 'while [ "$i" -le "$target_git_feature_commits" ]; do' not in create_git_repo_cmd:

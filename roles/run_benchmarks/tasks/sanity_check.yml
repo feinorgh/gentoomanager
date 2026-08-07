@@ -203,8 +203,12 @@
         {%- endif -%}
       {%- endfor -%}
       {{ ns.max_add }}
+  when: ansible_system | default('') == 'Linux'
+
+- name: Evaluate RAM-pressure required available memory threshold
+  ansible.builtin.set_fact:
     run_benchmarks_sanity_ram_pressure_required_mb: >-
-      {{ (run_benchmarks_min_available_ram_mb | int) + (run_benchmarks_sanity_ram_pressure_add_mb | int) }}
+      {{ (run_benchmarks_min_available_ram_mb | default(1024) | int) + (run_benchmarks_sanity_ram_pressure_add_mb | int) }}
   when: ansible_system | default('') == 'Linux'
 
 - name: Evaluate RAM-pressure swap usage percentage
@@ -223,7 +227,7 @@
     run_benchmarks_sanity_ram_pressure_warn: >-
       {{
         (run_benchmarks_sanity_ram_available_mb | int) < (run_benchmarks_sanity_ram_pressure_required_mb | int)
-        or (run_benchmarks_sanity_swap_used_pct | float) > (run_benchmarks_warn_swap_used_pct | float)
+        or (run_benchmarks_sanity_swap_used_pct | float) > (run_benchmarks_warn_swap_used_pct | default(25) | float)
       }}
   when: ansible_system | default('') == 'Linux'
 
@@ -282,7 +286,7 @@
           available={{ run_benchmarks_sanity_ram_available_mb }} MB,
           recommended>= {{ run_benchmarks_sanity_ram_pressure_required_mb }} MB,
           swap used={{ run_benchmarks_sanity_swap_used_pct }}%
-          (warn threshold={{ run_benchmarks_warn_swap_used_pct }}%).
+          (warn threshold={{ run_benchmarks_warn_swap_used_pct | default(25) }}%).
           Results may be skewed by memory reclaim/swap pressure.
       {% endif %}
       {% if run_benchmarks_sanity_missing_req | length > 0 or run_benchmarks_sanity_missing_opt | length > 0 %}

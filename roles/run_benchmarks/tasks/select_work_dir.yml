@@ -29,7 +29,7 @@
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
 
-- name: Evaluate whether work directory fallback selection is required
+- name: Evaluate work directory capacity and filesystem facts
   ansible.builtin.set_fact:
     run_benchmarks_workdir_required_kb: >-
       {{
@@ -54,6 +54,12 @@
          | regex_replace('^avail_kb=', '')
          | int)
       }}
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+
+- name: Evaluate whether work directory fallback selection is required
+  ansible.builtin.set_fact:
     run_benchmarks_workdir_needs_fallback: >-
       {{
         (
@@ -82,14 +88,19 @@
         )
       }}
   vars:
+    _configured_candidates: >-
+      {{
+        run_benchmarks_work_dir_candidates
+        | default(['/var/tmp', '/var/cache', '/opt', '/usr/local/tmp'], true)
+      }}
     _raw_candidates: >-
       {{
         (
-          run_benchmarks_work_dir_candidates
-          if run_benchmarks_work_dir_candidates is not string
+          _configured_candidates
+          if _configured_candidates is not string
           else (
-            run_benchmarks_work_dir_candidates | from_yaml
-            if run_benchmarks_work_dir_candidates | length > 0
+            _configured_candidates | from_yaml
+            if _configured_candidates | length > 0
             else []
           )
         )

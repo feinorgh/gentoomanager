@@ -31,6 +31,12 @@ def test_sanity_check_has_general_ram_pressure_warning_logic() -> None:
     assert "cfg.get(category_name, 0)" in content
 
 
+def test_sanity_check_guards_ram_threshold_vars_before_role_defaults() -> None:
+    content = _read("roles/run_benchmarks/tasks/sanity_check.yml")
+    assert "run_benchmarks_min_available_ram_mb | default(1024)" in content
+    assert "run_benchmarks_warn_swap_used_pct | default(25)" in content
+
+
 def test_sanity_notes_include_ram_pressure_context() -> None:
     content = _read("roles/run_benchmarks/tasks/sanity_check.yml")
     assert "ram_pressure" in content
@@ -46,3 +52,20 @@ def test_defaults_define_general_ram_warning_variables() -> None:
     assert "run_benchmarks_min_available_ram_mb" in defaults
     assert "run_benchmarks_warn_swap_used_pct" in defaults
     assert "run_benchmarks_ram_pressure_category_add_mb" in defaults
+
+
+def test_sanity_ram_required_mb_not_derived_from_same_task_fact() -> None:
+    tasks = yaml.safe_load(
+        (REPO_ROOT / "roles/run_benchmarks/tasks/sanity_check.yml").read_text(encoding="utf-8")
+    )
+    for task in tasks:
+        facts = task.get("ansible.builtin.set_fact")
+        if not isinstance(facts, dict):
+            continue
+        assert not (
+            "run_benchmarks_sanity_ram_pressure_add_mb" in facts
+            and "run_benchmarks_sanity_ram_pressure_required_mb" in facts
+        ), (
+            "set_fact must not define run_benchmarks_sanity_ram_pressure_add_mb and "
+            "run_benchmarks_sanity_ram_pressure_required_mb in the same task."
+        )
