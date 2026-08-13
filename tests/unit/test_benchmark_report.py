@@ -1567,6 +1567,9 @@ class TestCompilerDisplayVersion:
     def test_new_go_label(self) -> None:
         assert _compiler_display_version("go1.24.1", "host-a", {}) == "go 1.24.1"
 
+    def test_new_gccgo_label(self) -> None:
+        assert _compiler_display_version("gccgo-14.3.0", "host-a", {}) == "gccgo 14.3.0"
+
     def test_old_gcc_label_with_metadata(self) -> None:
         hosts = {
             "host-a": {
@@ -1596,6 +1599,9 @@ class TestSortCcLabel:
     def test_go_label(self) -> None:
         assert _sort_cc_label("go1.24.1") == ("go", (1, 24, 1))
 
+    def test_gccgo_label(self) -> None:
+        assert _sort_cc_label("gccgo-14.3.0") == ("gccgo", (14, 3, 0))
+
     def test_unknown_label(self) -> None:
         assert _sort_cc_label("unknown") == ("unknown", (0,))
 
@@ -1603,3 +1609,9 @@ class TestSortCcLabel:
 def test_category_titles_include_new_rust_compiler_outputs() -> None:
     assert CATEGORY_TITLES["compiler_rust_runtime"] == "Rust Runtime Performance"
     assert CATEGORY_TITLES["compiler_rust_external"] == "Rust External Workload Performance"
+
+
+def test_category_titles_include_new_go_compiler_outputs() -> None:
+    assert CATEGORY_TITLES["compiler_go_runtime"] == "Go Runtime Performance"
+    assert CATEGORY_TITLES["compiler_gccgo"] == "gccgo Compilation Speed"
+    assert CATEGORY_TITLES["compiler_gccgo_runtime"] == "gccgo Runtime Performance"
