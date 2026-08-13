@@ -116,7 +116,8 @@
       set -eu
       required_kb="{{ run_benchmarks_workdir_required_kb | int }}"
       suffix="{{ run_benchmarks_work_dir | basename }}"
-      for base in {{ run_benchmarks_work_dir_candidates_normalized | map('quote') | join(' ') }}; do
+      candidates=({{ run_benchmarks_work_dir_candidates_normalized | map('quote') | join(' ') }})
+      for base in "${candidates[@]}"; do
         [ -d "$base" ] || continue
 
         if stat -f -c '%T' "$base" >/dev/null 2>&1; then
