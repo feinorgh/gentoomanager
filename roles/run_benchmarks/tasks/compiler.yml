@@ -1,5 +1,5 @@
 ---
-# Compiler benchmarks: gcc, clang, rustc, go
+# Compiler benchmarks: gcc, clang, rustc, go, gccgo
 
 - name: Create C benchmark project
   ansible.builtin.copy:
@@ -50,7 +50,7 @@
       if command -v {{ run_benchmarks_gcc_cmd | quote }} >/dev/null 2>&1; then
         printf '%s\n' "$resolved_cc"
       fi
-      for cmd in gcc clang rustc go; do
+      for cmd in gcc clang rustc go gccgo; do
         command -v "$cmd" >/dev/null 2>&1 && echo "$cmd"
       done
   register: run_benchmarks_compilers_available
@@ -185,6 +185,7 @@
         (run_benchmarks_cc_resolved.stderr | default('{}') | from_json) |
         combine(run_benchmarks_rust_resolved.stderr | default('{}') | from_json) |
         combine(run_benchmarks_go_resolved.stderr | default('{}') | from_json) |
+        combine(run_benchmarks_gccgo_resolved.stderr | default('{}') | from_json) |
         to_nice_json
       }}
     mode: "0644"
@@ -624,14 +625,18 @@
     path: "{{ run_benchmarks_work_dir }}/go_bench"
     state: directory
     mode: "0755"
-  when: "'go' in run_benchmarks_compilers_available.stdout"
+  when: >-
+    'go' in (run_benchmarks_compilers_available.stdout_lines | default([])) or
+    'gccgo' in (run_benchmarks_compilers_available.stdout_lines | default([]))
 
 - name: Deploy Go benchmark source
   ansible.builtin.copy:
     src: go_bench/main.go
     dest: "{{ run_benchmarks_work_dir }}/go_bench/main.go"
     mode: "0644"
-  when: "'go' in run_benchmarks_compilers_available.stdout"
+  when: >-
+    'go' in (run_benchmarks_compilers_available.stdout_lines | default([])) or
+    'gccgo' in (run_benchmarks_compilers_available.stdout_lines | default([]))
 
 - name: Initialise Go module for benchmark
   ansible.builtin.command:
@@ -640,7 +645,7 @@
     creates: "{{ run_benchmarks_work_dir }}/go_bench/go.mod"
   changed_when: false
   failed_when: false
-  when: "'go' in run_benchmarks_compilers_available.stdout"
+  when: "'go' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
 
 # Discover all go1.X binaries on PATH and in common SDK cache directories.
 # Deduplicates by resolved real path so a generic `go` symlink is not double-counted.
@@ -688,7 +693,78 @@
   register: run_benchmarks_go_toolchains
   changed_when: false
   failed_when: false
-  when: "'go' in run_benchmarks_compilers_available.stdout"
+  when: "'go' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+
+# Discover gccgo binaries, outputting "LABEL /path/to/gccgo" per unique binary.
+# Deduplicates by resolved real path so a generic `gccgo` symlink is not double-counted.
+- name: Discover gccgo toolchains
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      {
+        IFS=:
+        for d in $PATH; do
+          [ -d "$d" ] || continue
+          for f in "$d"/gccgo-[0-9]* "$d"/gccgo[0-9]*; do
+            [ -x "$f" ] || continue
+            printf '%s %s\n' "$(basename "$f")" "$f"
+          done
+        done
+        unset IFS
+        full=$(command -v gccgo 2>/dev/null) || true
+        [ -n "$full" ] && printf 'gccgo %s\n' "$full"
+      } | while IFS=' ' read -r label path; do
+          real=$({{ run_benchmarks_python_cmd }} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$path" 2>/dev/null || echo "$path")
+          printf '%s\t%s\t%s\n' "$real" "$label" "$path"
+        done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_gccgo_toolchains
+  changed_when: false
+  failed_when: false
+  when: "'gccgo' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+
+# Resolves each gccgo binary to a normalized label (e.g. gccgo-14.3.0) and
+# deduplicates by full version.
+# stdout: "LABEL EXECUTABLE" lines for benchmark tasks
+# stderr: JSON version map merged into compiler_versions.json
+- name: Resolve gccgo toolchain versions and deduplicate
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
+      import json, re, subprocess, sys
+      lines = """{{ run_benchmarks_gccgo_toolchains.stdout | default('') }}""".strip().splitlines()
+      seen: dict = {}
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          _label, exe = parts[0], parts[1]
+          try:
+              out = subprocess.run([exe, '--version'], capture_output=True, text=True,
+                                   timeout=10, check=False)
+              ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
+          except Exception as exc:
+              ver_str = str(exc)
+          m = re.search(r'\b(\d+\.\d+\.\d+)\b', ver_str)
+          if not m:
+              continue
+          full_ver = m.group(1)
+          if full_ver not in seen:
+              new_label = f'gccgo-{full_ver}'
+              seen[full_ver] = (new_label, exe, ver_str)
+      version_map: dict = {}
+      for full_ver, (new_label, exe, ver_str) in sorted(seen.items()):
+          print(f'{new_label} {exe}')
+          version_map[new_label] = ver_str
+      print(json.dumps(version_map, indent=2), file=sys.stderr)
+      PYEOF
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_gccgo_resolved
+  changed_when: false
+  failed_when: false
+  when: "'gccgo' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
 
 # Resolves each Go toolchain to its full patch-level label (e.g. go1.24.1)
 # and deduplicates by full version.
@@ -730,7 +806,7 @@
   register: run_benchmarks_go_resolved
   changed_when: false
   failed_when: false
-  when: "'go' in run_benchmarks_compilers_available.stdout"
+  when: "'go' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
 
 - name: Run Go compile benchmark
   ansible.builtin.shell:
@@ -744,7 +820,7 @@
       {% set go_label = go_parts[0] %}
       {% set go_exe = go_parts[1] %}
       if [ -x "{{ go_exe }}" ]; then
-        CMDS+=(--command-name "{{ go_label }}-build"
+        CMDS+=(--command-name "{{ go_label }}-compile"
           "{{ go_exe }} build -o bench_{{ go_label }} .")
       fi
       {% endif %}
@@ -762,7 +838,7 @@
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
   args:
     executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
-  when: "'go' in run_benchmarks_compilers_available.stdout"
+  when: "'go' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
   register: run_benchmarks_compiler_go_result
   changed_when: false
   failed_when: false
@@ -776,6 +852,171 @@
   when:
     - run_benchmarks_compiler_go_result is not skipped
     - run_benchmarks_compiler_go_result.rc | default(0) != 0
+
+- name: Run Go runtime benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}/go_bench
+      CMDS=()
+      FAILED_TOOLCHAINS=()
+      {% for go in run_benchmarks_go_resolved.stdout_lines | default([]) %}
+      {% set go_parts = go.split() %}
+      {% if go_parts | length >= 2 %}
+      {% set go_label = go_parts[0] %}
+      {% set go_exe = go_parts[1] %}
+      if [ -x "{{ go_exe }}" ]; then
+        runtime_bin="./bench_{{ go_label }}"
+        rm -f "$runtime_bin"
+        if {{ go_exe }} build -o "$runtime_bin" . >/dev/null 2>&1; then
+          CMDS+=(--command-name "{{ go_label }}-runtime" "$runtime_bin")
+        else
+          FAILED_TOOLCHAINS+=("{{ go_label }}")
+        fi
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then
+        rm -f {{ run_benchmarks_work_dir }}/compiler_go_runtime.json
+        printf 'failed Go runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      [ -z "${CMDS[*]}" ] && exit 0
+      if {{ run_benchmarks_hyperfine_bin }} --runs {{ run_benchmarks_runs }} --warmup {{ run_benchmarks_warmup }} --ignore-failure --export-json {{ run_benchmarks_work_dir }}/compiler_go_runtime.json "${CMDS[@]}"; then
+        hyperfine_rc=0
+      else
+        hyperfine_rc=$?
+      fi
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then
+        if [ -z "${CMDS[*]}" ]; then
+          rm -f {{ run_benchmarks_work_dir }}/compiler_go_runtime.json
+        fi
+        printf 'failed Go runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      exit "$hyperfine_rc"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  args:
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: "'go' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+  register: run_benchmarks_compiler_go_runtime_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_go_runtime benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_go_runtime benchmark exited
+      rc={{ run_benchmarks_compiler_go_runtime_result.rc }}.
+      {{ run_benchmarks_compiler_go_runtime_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_go_runtime_result is not skipped
+    - run_benchmarks_compiler_go_runtime_result.rc | default(0) != 0
+
+- name: Run gccgo compile benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}/go_bench
+      CMDS=()
+      {% for gccgo in run_benchmarks_gccgo_resolved.stdout_lines | default([]) %}
+      {% set gccgo_parts = gccgo.split() %}
+      {% if gccgo_parts | length >= 2 %}
+      {% set gccgo_label = gccgo_parts[0] %}
+      {% set gccgo_exe = gccgo_parts[1] %}
+      if [ -x "{{ gccgo_exe }}" ]; then
+        CMDS+=(--command-name "{{ gccgo_label }}-compile"
+          "{{ gccgo_exe }} -O2 -o bench_{{ gccgo_label }} main.go")
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ -z "${CMDS[*]}" ]; then
+        exit 0
+      fi
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --prepare 'rm -f bench_*' \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_gccgo.json \
+        "${CMDS[@]}"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  args:
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: "'gccgo' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+  register: run_benchmarks_compiler_gccgo_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_gccgo benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_gccgo benchmark exited
+      rc={{ run_benchmarks_compiler_gccgo_result.rc }}.
+      {{ run_benchmarks_compiler_gccgo_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_gccgo_result is not skipped
+    - run_benchmarks_compiler_gccgo_result.rc | default(0) != 0
+
+- name: Run gccgo runtime benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}/go_bench
+      CMDS=()
+      FAILED_TOOLCHAINS=()
+      {% for gccgo in run_benchmarks_gccgo_resolved.stdout_lines | default([]) %}
+      {% set gccgo_parts = gccgo.split() %}
+      {% if gccgo_parts | length >= 2 %}
+      {% set gccgo_label = gccgo_parts[0] %}
+      {% set gccgo_exe = gccgo_parts[1] %}
+      if [ -x "{{ gccgo_exe }}" ]; then
+        runtime_bin="./bench_{{ gccgo_label }}"
+        rm -f "$runtime_bin"
+        if {{ gccgo_exe }} -O2 -o "$runtime_bin" main.go >/dev/null 2>&1; then
+          CMDS+=(--command-name "{{ gccgo_label }}-runtime" "$runtime_bin")
+        else
+          FAILED_TOOLCHAINS+=("{{ gccgo_label }}")
+        fi
+      fi
+      {% endif %}
+      {% endfor %}
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then
+        rm -f {{ run_benchmarks_work_dir }}/compiler_gccgo_runtime.json
+        printf 'failed gccgo runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      [ -z "${CMDS[*]}" ] && exit 0
+      if {{ run_benchmarks_hyperfine_bin }} --runs {{ run_benchmarks_runs }} --warmup {{ run_benchmarks_warmup }} --ignore-failure --export-json {{ run_benchmarks_work_dir }}/compiler_gccgo_runtime.json "${CMDS[@]}"; then
+        hyperfine_rc=0
+      else
+        hyperfine_rc=$?
+      fi
+      if [ -n "${FAILED_TOOLCHAINS[*]}" ]; then
+        if [ -z "${CMDS[*]}" ]; then
+          rm -f {{ run_benchmarks_work_dir }}/compiler_gccgo_runtime.json
+        fi
+        printf 'failed gccgo runtime builds for: %s\n' "${FAILED_TOOLCHAINS[*]}" >&2
+        exit 1
+      fi
+      exit "$hyperfine_rc"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  args:
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: "'gccgo' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+  register: run_benchmarks_compiler_gccgo_runtime_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_gccgo_runtime benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_gccgo_runtime benchmark exited
+      rc={{ run_benchmarks_compiler_gccgo_runtime_result.rc }}.
+      {{ run_benchmarks_compiler_gccgo_runtime_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_gccgo_runtime_result is not skipped
+    - run_benchmarks_compiler_gccgo_runtime_result.rc | default(0) != 0
 
 # ---------------------------------------------------------------------------
 # SQLite amalgamation compile benchmark
