@@ -1,5 +1,5 @@
 ---
-# Compiler benchmarks: gcc, clang, rustc, go, gccgo
+# Compiler benchmarks: gcc, clang, rustc, go, gccgo, node
 
 - name: Create C benchmark project
   ansible.builtin.copy:
@@ -49,6 +49,9 @@
       resolved_cc=$(basename {{ run_benchmarks_gcc_cmd | quote }})
       if command -v {{ run_benchmarks_gcc_cmd | quote }} >/dev/null 2>&1; then
         printf '%s\n' "$resolved_cc"
+      fi
+      if command -v node >/dev/null 2>&1 || command -v nodejs >/dev/null 2>&1; then
+        echo "node"
       fi
       for cmd in gcc clang rustc go gccgo; do
         command -v "$cmd" >/dev/null 2>&1 && echo "$cmd"
@@ -186,6 +189,7 @@
         combine(run_benchmarks_rust_resolved.stderr | default('{}') | from_json) |
         combine(run_benchmarks_go_resolved.stderr | default('{}') | from_json) |
         combine(run_benchmarks_gccgo_resolved.stderr | default('{}') | from_json) |
+        combine(run_benchmarks_node_resolved.stderr | default('{}') | from_json) |
         to_nice_json
       }}
     mode: "0644"
@@ -1017,6 +1021,133 @@
   when:
     - run_benchmarks_compiler_gccgo_runtime_result is not skipped
     - run_benchmarks_compiler_gccgo_runtime_result.rc | default(0) != 0
+
+- name: Create Node.js benchmark directory
+  ansible.builtin.file:
+    path: "{{ run_benchmarks_work_dir }}/node_bench"
+    state: directory
+    mode: "0755"
+  when: "'node' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+
+- name: Deploy Node.js benchmark source
+  ansible.builtin.copy:
+    src: node_bench/main.mjs
+    dest: "{{ run_benchmarks_work_dir }}/node_bench/main.mjs"
+    mode: "0644"
+  when: "'node' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+
+# Discover Node.js binaries and deduplicate by resolved path.
+- name: Discover Node.js runtimes
+  ansible.builtin.shell:
+    cmd: |
+      set +e
+      set -o pipefail
+      {
+        IFS=:
+        for d in $PATH; do
+          [ -d "$d" ] || continue
+          for f in "$d"/node "$d"/nodejs "$d"/node[0-9]* "$d"/nodejs[0-9]*; do
+            [ -x "$f" ] || continue
+            printf '%s %s\n' "$(basename "$f")" "$f"
+          done
+        done
+        unset IFS
+        for candidate in node nodejs; do
+          full=$(command -v "$candidate" 2>/dev/null) || continue
+          printf '%s %s\n' "$candidate" "$full"
+        done
+      } | while IFS=' ' read -r label path; do
+          real=$({{ run_benchmarks_python_cmd }} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$path" 2>/dev/null || echo "$path")
+          printf '%s\t%s\t%s\n' "$real" "$label" "$path"
+        done | sort -t$'\t' -k1,1 -u | awk -F'\t' '{print $2" "$3}'
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_node_runtimes
+  changed_when: false
+  failed_when: false
+  when: "'node' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+
+# Resolve each Node.js binary to a full semver label (e.g. node22.16.0).
+# stdout: "LABEL EXECUTABLE" lines for benchmark tasks
+# stderr: JSON version map merged into compiler_versions.json
+- name: Resolve Node.js versions and deduplicate
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      {{ run_benchmarks_python_cmd }} - << 'PYEOF'
+      import json, re, subprocess, sys
+
+      lines = """{{ run_benchmarks_node_runtimes.stdout | default('') }}""".strip().splitlines()
+      seen: dict = {}   # full_ver → (new_label, exe, ver_string)
+      for line in lines:
+          parts = line.split(None, 1)
+          if len(parts) < 2:
+              continue
+          _label, exe = parts[0], parts[1]
+          try:
+              out = subprocess.run([exe, '--version'], capture_output=True, text=True, timeout=10, check=False)
+              ver_str = (out.stdout or out.stderr).strip().splitlines()[0]
+          except Exception as exc:
+              ver_str = str(exc)
+          m = re.search(r'v?(\d+\.\d+\.\d+)', ver_str)
+          if not m:
+              continue
+          full_ver = m.group(1)
+          if full_ver not in seen:
+              new_label = f'node{full_ver}'
+              seen[full_ver] = (new_label, exe, ver_str)
+
+      version_map: dict = {}
+      for full_ver, (new_label, exe, ver_str) in sorted(seen.items()):
+          print(f'{new_label} {exe}')
+          version_map[new_label] = ver_str
+      print(json.dumps(version_map, indent=2), file=sys.stderr)
+      PYEOF
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  register: run_benchmarks_node_resolved
+  changed_when: false
+  failed_when: false
+  when: "'node' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+
+- name: Run Node.js runtime benchmark
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      cd {{ run_benchmarks_work_dir }}/node_bench
+      CMDS=()
+      {% for node_runtime in run_benchmarks_node_resolved.stdout_lines | default([]) %}
+      {% set node_parts = node_runtime.split() %}
+      {% if node_parts | length >= 2 %}
+      {% set node_label = node_parts[0] %}
+      {% set node_exe = node_parts[1] %}
+      if [ -x "{{ node_exe }}" ]; then
+        CMDS+=(--command-name "{{ node_label }}-runtime" "{{ node_exe }} main.mjs")
+      fi
+      {% endif %}
+      {% endfor %}
+      [ -z "${CMDS[*]}" ] && exit 0
+      {{ run_benchmarks_hyperfine_bin }} \
+        --runs {{ run_benchmarks_runs }} \
+        --warmup {{ run_benchmarks_warmup }} \
+        --ignore-failure \
+        --export-json {{ run_benchmarks_work_dir }}/compiler_node_runtime.json \
+        "${CMDS[@]}"
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  args:
+    executable: "{{ _run_benchmarks_bash | default('/bin/bash') }}"
+  when: "'node' in (run_benchmarks_compilers_available.stdout_lines | default([]))"
+  register: run_benchmarks_compiler_node_runtime_result
+  changed_when: false
+  failed_when: false
+
+- name: Warn on compiler_node_runtime benchmark failure
+  ansible.builtin.debug:
+    msg: >-
+      [WARN] {{ inventory_hostname }}: compiler_node_runtime benchmark exited
+      rc={{ run_benchmarks_compiler_node_runtime_result.rc }}.
+      {{ run_benchmarks_compiler_node_runtime_result.stderr | default('') | truncate(300) | trim }}
+  when:
+    - run_benchmarks_compiler_node_runtime_result is not skipped
+    - run_benchmarks_compiler_node_runtime_result.rc | default(0) != 0
 
 # ---------------------------------------------------------------------------
 # SQLite amalgamation compile benchmark

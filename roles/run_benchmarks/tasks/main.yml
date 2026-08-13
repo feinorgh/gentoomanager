@@ -76,6 +76,7 @@
     run_benchmarks_skip_existing_has_rustc: false
     run_benchmarks_skip_existing_has_go: false
     run_benchmarks_skip_existing_has_gccgo: false
+    run_benchmarks_skip_existing_has_node: false
   when: run_benchmarks_skip_existing | default(false) | bool
 
 - name: Detect rustc availability for skip-existing check
@@ -108,6 +109,16 @@
     - run_benchmarks_skip_existing | default(false) | bool
     - not run_benchmarks_is_windows
 
+- name: Detect node availability for skip-existing check
+  ansible.builtin.shell:
+    cmd: command -v node >/dev/null 2>&1 || command -v nodejs >/dev/null 2>&1
+  register: run_benchmarks_skip_existing_node
+  changed_when: false
+  failed_when: false
+  when:
+    - run_benchmarks_skip_existing | default(false) | bool
+    - not run_benchmarks_is_windows
+
 - name: Set compiler toolchain availability for skip-existing check
   ansible.builtin.set_fact:
     run_benchmarks_skip_existing_has_rustc: >-
@@ -116,6 +127,8 @@
       {{ run_benchmarks_skip_existing_go.rc | default(1) == 0 }}
     run_benchmarks_skip_existing_has_gccgo: >-
       {{ run_benchmarks_skip_existing_gccgo.rc | default(1) == 0 }}
+    run_benchmarks_skip_existing_has_node: >-
+      {{ run_benchmarks_skip_existing_node.rc | default(1) == 0 }}
   when:
     - run_benchmarks_skip_existing | default(false) | bool
     - not run_benchmarks_is_windows
@@ -164,6 +177,9 @@
             +
             (['compiler_gccgo.json', 'compiler_gccgo_runtime.json']
              if run_benchmarks_skip_existing_has_gccgo | default(false) else [])
+            +
+            (['compiler_node_runtime.json']
+             if run_benchmarks_skip_existing_has_node | default(false) else [])
           ) -%}
       {%- set _ = primary.update({
             'compiler': (primary['compiler'] + compiler_optional)

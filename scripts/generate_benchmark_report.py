@@ -91,6 +91,7 @@ CATEGORY_TITLES = {
     "compiler_go_runtime": "Go Runtime Performance",
     "compiler_gccgo": "gccgo Compilation Speed",
     "compiler_gccgo_runtime": "gccgo Runtime Performance",
+    "compiler_node_runtime": "Node.js Runtime Performance",
     "python": "Python Performance",
     "ffmpeg_video_encode": "FFmpeg Video Encoding",
     "ffmpeg_video_decode": "FFmpeg Video Decoding",

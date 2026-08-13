@@ -1615,3 +1615,4 @@ def test_category_titles_include_new_go_compiler_outputs() -> None:
     assert CATEGORY_TITLES["compiler_go_runtime"] == "Go Runtime Performance"
     assert CATEGORY_TITLES["compiler_gccgo"] == "gccgo Compilation Speed"
     assert CATEGORY_TITLES["compiler_gccgo_runtime"] == "gccgo Runtime Performance"
+    assert CATEGORY_TITLES["compiler_node_runtime"] == "Node.js Runtime Performance"

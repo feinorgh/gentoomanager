@@ -233,6 +233,7 @@
         run_benchmarks_preflight_has_rustc: false
         run_benchmarks_preflight_has_go: false
         run_benchmarks_preflight_has_gccgo: false
+        run_benchmarks_preflight_has_node: false
       when: run_benchmarks_skip_complete | default(false) | bool
 
     - name: Detect rustc availability for completion gating
@@ -262,6 +263,15 @@
         - run_benchmarks_skip_complete | default(false) | bool
         - inventory_hostname not in (groups['mswindows'] | default([]))
 
+    - name: Detect Node.js availability for completion gating
+      ansible.builtin.raw: command -v node >/dev/null 2>&1 || command -v nodejs >/dev/null 2>&1
+      register: run_benchmarks_preflight_node_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - inventory_hostname not in (groups['mswindows'] | default([]))
+
     - name: Set preflight compiler toolchain availability
       ansible.builtin.set_fact:
         run_benchmarks_preflight_has_rustc: >-
@@ -270,6 +280,8 @@
           {{ run_benchmarks_preflight_go_raw.rc | default(1) == 0 }}
         run_benchmarks_preflight_has_gccgo: >-
           {{ run_benchmarks_preflight_gccgo_raw.rc | default(1) == 0 }}
+        run_benchmarks_preflight_has_node: >-
+          {{ run_benchmarks_preflight_node_raw.rc | default(1) == 0 }}
       when:
         - run_benchmarks_skip_complete | default(false) | bool
         - inventory_hostname not in (groups['mswindows'] | default([]))
@@ -354,6 +366,9 @@
                +
                (['compiler_gccgo.json', 'compiler_gccgo_runtime.json']
                 if run_benchmarks_preflight_has_gccgo | default(false) else [])
+               +
+               (['compiler_node_runtime.json']
+                if run_benchmarks_preflight_has_node | default(false) else [])
              ) -%}
           {%- set _ = primary.update({
                'compiler': (primary['compiler'] + compiler_optional)

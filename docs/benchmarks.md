@@ -660,9 +660,15 @@ Tests compilation speed and the performance of the compiled output.
 | rust-debug           | rustc | Compile in debug mode          |
 | rust-release         | rustc | Compile in release mode        |
 | go-build             | go    | Compile a Go program           |
+| go-runtime           | go    | Run the compiled Go binary     |
+| gccgo-build          | gccgo | Compile a Go program with gccgo |
+| gccgo-runtime        | gccgo | Run the compiled gccgo binary  |
+| node-runtime         | node  | Run a representative Node.js program |
 
 Results are written to `compiler_c_compile.json`, `compiler_c_runtime.json`,
-`compiler_rust.json`, and `compiler_go.json`.
+`compiler_rust.json`, `compiler_rust_runtime.json`, `compiler_rust_external.json`,
+`compiler_go.json`, `compiler_go_runtime.json`, `compiler_gccgo.json`,
+`compiler_gccgo_runtime.json`, and `compiler_node_runtime.json`.
 
 The `compiler_c_compile` and `compiler_c_runtime` report tables use a pivot
 layout: compiler version strings (extracted from `--version` output) appear as

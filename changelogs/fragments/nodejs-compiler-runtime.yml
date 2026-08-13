@@ -1,0 +1,2 @@
+minor_changes:
+  - "roles/run_benchmarks: add a Node.js runtime benchmark to the compiler category and export compiler_node_runtime.json when Node.js is available."

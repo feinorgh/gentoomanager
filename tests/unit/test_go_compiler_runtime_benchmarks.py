@@ -29,6 +29,7 @@ def test_compiler_task_exports_split_go_and_gccgo_results() -> None:
     assert "compiler_go_runtime.json" in text
     assert "compiler_gccgo.json" in text
     assert "compiler_gccgo_runtime.json" in text
+    assert "compiler_node_runtime.json" in text
 
 
 def test_compiler_task_labels_go_and_gccgo_runtime_workloads() -> None:
@@ -36,6 +37,7 @@ def test_compiler_task_labels_go_and_gccgo_runtime_workloads() -> None:
     assert "Run Go runtime benchmark" in text
     assert "Run gccgo compile benchmark" in text
     assert "Run gccgo runtime benchmark" in text
+    assert "Run Node.js runtime benchmark" in text
 
 
 def test_compiler_task_uses_go_and_gccgo_runtime_command_names() -> None:
@@ -43,6 +45,7 @@ def test_compiler_task_uses_go_and_gccgo_runtime_command_names() -> None:
     assert '--command-name "{{ go_label }}-runtime"' in text
     assert '--command-name "{{ gccgo_label }}-compile"' in text
     assert '--command-name "{{ gccgo_label }}-runtime"' in text
+    assert '--command-name "{{ node_label }}-runtime"' in text
 
 
 def test_skip_logic_tracks_go_and_gccgo_completion_files() -> None:
@@ -52,7 +55,9 @@ def test_skip_logic_tracks_go_and_gccgo_completion_files() -> None:
         "compiler_go_runtime.json",
         "compiler_gccgo.json",
         "compiler_gccgo_runtime.json",
+        "compiler_node_runtime.json",
     ):
         assert expected in playbook
         assert expected in main_tasks
     assert "run_benchmarks_skip_existing_has_gccgo" in main_tasks
+    assert "run_benchmarks_skip_existing_has_node" in main_tasks
