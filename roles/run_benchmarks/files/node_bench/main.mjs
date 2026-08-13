@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import crypto from "node:crypto";
 
 function benchPrimeCount(limit) {
