@@ -96,7 +96,7 @@ Supported OS families:
 | Debian (Ubuntu, Mint, elementary) | apt | — |
 | Arch Linux (Arch, Manjaro, CachyOS) | pacman | — |
 | SUSE (openSUSE) | zypper | — |
-| FreeBSD | ports (`make BATCH=yes`) | — |
+| FreeBSD | ports (`make BATCH=yes`) or poudriere with local pkg | — |
 | OpenBSD | pkg_add | — |
 | OpenIndiana | pkg (IPS) | — |
 | Void Linux | xbps-install | — |
