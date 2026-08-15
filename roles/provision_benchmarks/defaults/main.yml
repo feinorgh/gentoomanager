@@ -20,7 +20,7 @@ provision_benchmarks_packages:
     - app-arch/lz4
     - app-crypt/gnupg
     - sys-apps/diffutils
-    - app-arch/p7zip
+    - app-arch/7zip
     - dev-db/sqlite
   RedHat:
     - gcc
@@ -39,8 +39,7 @@ provision_benchmarks_packages:
     - lz4
     - gnupg2
     - diffutils
-    - p7zip
-    - p7zip-plugins
+    - 7zip
     - ImageMagick
     - sqlite
   Debian:
@@ -79,7 +78,7 @@ provision_benchmarks_packages:
     - lz4
     - gnupg
     - diffutils
-    - p7zip
+    - 7zip
     - imagemagick
     - sqlite
   Suse:
@@ -134,7 +133,7 @@ provision_benchmarks_packages:
     - lz4
     - gnupg
     - diffutils
-    - p7zip
+    - 7zip
     - ImageMagick
     - sqlite3
   OpenIndiana:
@@ -152,7 +151,7 @@ provision_benchmarks_packages:
     - lz4
     - gnupg
     - text/gnu-diffutils
-    - p7zip
+    - 7zip
     - imagemagick
     - sqlite
 

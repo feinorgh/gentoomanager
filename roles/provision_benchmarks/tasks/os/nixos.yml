@@ -21,7 +21,7 @@
     - lz4
     - gnupg
     - diffutils
-    - p7zip
+    - 7zip
     - imagemagick
     - ffmpeg
     - sqlite

@@ -893,11 +893,11 @@
       ansible.builtin.include_tasks:
         file: "{{ playbook_dir }}/../roles/run_benchmarks/tasks/sanity_check.yml"
 
-    - name: Install hyperfine and p7zip on hypervisor
+    - name: Install hyperfine and 7zip on hypervisor
       ansible.builtin.package:
         name:
           - app-benchmarks/hyperfine
-          - app-arch/p7zip
+          - app-arch/7zip
         state: present
 
   tasks:
