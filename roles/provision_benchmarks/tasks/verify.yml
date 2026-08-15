@@ -28,6 +28,7 @@
       # Output missing tools in machine-parseable format
       # Format: CATEGORY:tool1,tool2,tool3
       {% for cat_name in provision_benchmarks_verification_categories.keys() %}
+      # Reference array by constructed name (e.g., "${missing_compression[@]}")
       missing_list="{{ "${missing_" }}{{ cat_name }}[@]{{ "}" }}"
       echo "MISSING_{{ cat_name | upper }}:$(IFS=,; echo "${missing_list[*]}")"
       {% endfor %}
@@ -112,7 +113,7 @@
       - {{ cat_data.name }}: {{ _provision_benchmarks_verify_missing[cat_name] | join(', ') }}
       {% endif %}
       {% endfor %}
-  when: _provision_benchmarks_verify_missing | dict2items | map(attribute='value') | flatten | length > 0
+  when: provision_benchmarks_verification_categories | dict2items | selectattr('value.optional', 'equalto', false) | map(attribute='key') | map('extract', _provision_benchmarks_verify_missing) | flatten | length > 0
   changed_when: false
 
 - name: Include report generation
