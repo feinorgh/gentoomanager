@@ -318,3 +318,52 @@ provision_benchmarks_octave_packages:
     - octave
   OpenIndiana:
     - octave
+
+# Tool verification categories for comprehensive post-provisioning checks
+# These categories define what tools should be verified and how they're reported
+provision_benchmarks_verification_categories:
+  compression:
+    name: "Compression Tools"
+    description: "Essential compression utilities for benchmark suite"
+    tools:
+      - gzip
+      - bzip2
+      - xz
+      - zstd
+      - lz4
+      - 7zip
+    optional: false
+  build:
+    name: "Build Tools"
+    description: "Essential build and compilation tools"
+    tools:
+      - make
+      - cargo
+    optional: false
+  crypto:
+    name: "Cryptography Tools"
+    description: "Encryption and signing tools"
+    tools:
+      - gpg
+    optional: false
+  utilities:
+    name: "Utilities"
+    description: "Standard utility tools"
+    tools:
+      - diffutils
+      - sqlite3
+    optional: false
+  optional:
+    name: "Optional Tools"
+    description: "Optional tools, only checked if explicitly provisioned"
+    tools:
+      - botan
+      - mold
+      - numpy
+      - opencv
+      - gimp
+      - inkscape
+    optional: true
+
+# Flattened list of all tools to check (for simple loops)
+provision_benchmarks_all_verification_tools: "{{ provision_benchmarks_verification_categories | dict2items | map(attribute='value.tools') | flatten }}"
