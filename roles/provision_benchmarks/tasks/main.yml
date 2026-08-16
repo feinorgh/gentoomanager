@@ -3,6 +3,20 @@
 # with tasks_from: os/<family>.yml directly; this dispatcher handles the case
 # where the role is included without tasks_from (e.g. site.yml or ad-hoc use).
 
+- name: Load package mapping overrides
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/package_mappings.yml"
+  tags:
+    - provision_benchmarks
+    - verify
+
+- name: Load and merge package mappings
+  ansible.builtin.set_fact:
+    _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(package_mappings_overrides.get(ansible_os_family | lower, {})) }}"
+  tags:
+    - provision_benchmarks
+    - verify
+
 - name: Include OS-specific provisioning tasks
   ansible.builtin.include_tasks:
     file: "os/{{ _provision_os_key }}.yml"

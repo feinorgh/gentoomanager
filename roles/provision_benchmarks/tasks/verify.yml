@@ -1,4 +1,9 @@
 ---
+- name: Ensure package mappings are loaded
+  ansible.builtin.set_fact:
+    _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(package_mappings_overrides.get(ansible_os_family | lower, {})) }}"
+  run_once: true
+
 # Comprehensive verification that all benchmark tools are available.
 # Checks all categories: compression, build, crypto, utilities, and optional tools.
 # Includes both Linux and Windows support.
