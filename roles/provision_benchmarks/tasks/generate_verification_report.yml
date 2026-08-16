@@ -4,7 +4,7 @@
 
 - name: Create verification reports directory
   ansible.builtin.file:
-    path: "{{ playbook_dir }}/benchmarks/verification_reports"
+    path: "{{ playbook_dir }}/../benchmarks/verification_reports"
     state: directory
     mode: '0755'
   delegate_to: localhost
@@ -17,7 +17,7 @@
 
       # Prepare timestamp
       TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
-      REPORT_FILE="{{ playbook_dir }}/benchmarks/verification_reports/verification_${TIMESTAMP}.txt"
+      REPORT_FILE="{{ playbook_dir }}/../benchmarks/verification_reports/verification_${TIMESTAMP}.txt"
 
       # Start building the report
       {
@@ -80,7 +80,7 @@
 - name: Generate verification report on Windows
   ansible.windows.win_shell: |
     $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-    $basePath = "{{ playbook_dir }}"
+    $basePath = "{{ playbook_dir }}" -replace '/playbooks/?$', ''
     $basePath = $basePath.Replace("/", [char]92)
     $reportPath = Join-Path (Join-Path (Join-Path $basePath "benchmarks") "verification_reports") "verification_$timestamp.txt"
 
