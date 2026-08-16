@@ -176,9 +176,7 @@ def test_short_benchmark_wiring_is_present_in_task_files() -> None:
     if 'while [ "$i" -le "$target_git_repo_commits" ]; do' not in create_git_repo_cmd:
         raise AssertionError("git repo creation loop must compare against numeric variable")
     if 'while [ "$i" -le "$target_git_feature_commits" ]; do' not in create_git_repo_cmd:
-        raise AssertionError(
-            "git feature commit loop must compare against numeric variable"
-        )
+        raise AssertionError("git feature commit loop must compare against numeric variable")
     if "git rev-list --count" not in git_repo_size_check_cmd:
         raise AssertionError("git repo sizing task must count commit history")
     if "run_benchmarks_git_repo_commits" not in git_repo_size_check_cmd:

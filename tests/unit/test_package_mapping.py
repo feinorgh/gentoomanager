@@ -1,17 +1,15 @@
 """Unit tests for package mapping merge logic."""
 
-import pytest
-
 
 def merge_mappings(defaults, overrides, platform):
     """
     Merge canonical defaults with OS-specific overrides.
-    
+
     Args:
         defaults: package_mappings_defaults dict
-        overrides: package_mappings_overrides dict with per-platform mappings
+        overrides: provision_benchmarks_mappings_overrides dict with per-platform mappings
         platform: target OS platform (e.g., 'freebsd', 'debian')
-    
+
     Returns:
         dict: Merged mapping for the given platform
     """
@@ -68,14 +66,21 @@ def test_multiple_platforms_isolated():
     """Merging for one platform does not affect others."""
     freebsd_result = merge_mappings(DEFAULTS, OVERRIDES, "freebsd")
     debian_result = merge_mappings(DEFAULTS, OVERRIDES, "debian")
-    
+
     assert freebsd_result["botan"]["executable"] == "botan3"
     assert debian_result["botan"]["executable"] == "botan"
 
 
 def test_empty_overrides_for_platform():
     """Platform with no entries in overrides falls back to defaults completely."""
-    minimal_overrides = {"freebsd": {"botan": {"executable": "botan3", "package": "security/botan3"}}}
+    minimal_overrides = {
+        "freebsd": {
+            "botan": {
+                "executable": "botan3",
+                "package": "security/botan3",
+            }
+        }
+    }
     result = merge_mappings(DEFAULTS, minimal_overrides, "redhat")
     assert result == DEFAULTS
 

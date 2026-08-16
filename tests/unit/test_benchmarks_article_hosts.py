@@ -32,11 +32,13 @@ def test_host_link_markdown_trims_surrounding_whitespace() -> None:
 
 def test_parse_versions_ignores_entries_without_equals() -> None:
     bah = _require_hosts_module()
-    parsed = bah.parse_versions([
-        "gcc=gcc (Gentoo) 15.2.1",
-        "invalid-entry",
-        "python=Python 3.14.0",
-    ])
+    parsed = bah.parse_versions(
+        [
+            "gcc=gcc (Gentoo) 15.2.1",
+            "invalid-entry",
+            "python=Python 3.14.0",
+        ]
+    )
 
     assert parsed == {
         "gcc": "gcc (Gentoo) 15.2.1",

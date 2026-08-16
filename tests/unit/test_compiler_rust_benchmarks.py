@@ -90,8 +90,8 @@ def test_compiler_task_keeps_compile_benchmark_in_separate_compile_project() -> 
     assert "rust_bench/compile_bench/src" in text
     assert "compile_bench/Cargo.toml" in text
     assert "cd {{ run_benchmarks_work_dir }}/rust_bench/compile_bench" in text
-    assert '{{ tc_cargo }} build 2>&1' in text
-    assert '{{ tc_cargo }} build --release 2>&1' in text
+    assert "{{ tc_cargo }} build 2>&1" in text
+    assert "{{ tc_cargo }} build --release 2>&1" in text
 
 
 def test_compiler_task_pins_external_rust_dependencies_exactly() -> None:
@@ -103,9 +103,9 @@ def test_compiler_task_pins_external_rust_dependencies_exactly() -> None:
 
 def test_compiler_task_reports_failed_runtime_and_external_toolchain_builds() -> None:
     text = _content()
-    assert 'FAILED_TOOLCHAINS=()' in text
-    assert 'failed Rust runtime builds for:' in text
-    assert 'failed Rust external builds for:' in text
+    assert "FAILED_TOOLCHAINS=()" in text
+    assert "failed Rust runtime builds for:" in text
+    assert "failed Rust external builds for:" in text
     assert text.index(
         'if [ -n "${FAILED_TOOLCHAINS[*]}" ] && [ -z "${CMDS[*]}" ]; then'
     ) < text.index('[ -z "${CMDS[*]}" ] && exit 0')

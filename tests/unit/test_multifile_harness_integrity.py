@@ -79,8 +79,8 @@ def test_compiler_multifile_uses_make_parallel_flag_format_compatible_with_dmake
 
 def test_compiler_multifile_filters_compilers_that_cannot_link() -> None:
     content = _read("roles/run_benchmarks/tasks/compiler.yml")
-    assert "LINK_TEST_C=\"$PROJ/.link_check_" in content
-    assert "\"{{ cc_exe }}\" -O2 -o \"$LINK_TEST_BIN\" \"$LINK_TEST_C\"" in content
+    assert 'LINK_TEST_C="$PROJ/.link_check_' in content
+    assert '"{{ cc_exe }}" -O2 -o "$LINK_TEST_BIN" "$LINK_TEST_C"' in content
     assert "Skipping {{ cc_label }} for compiler_multifile" in content
 
 

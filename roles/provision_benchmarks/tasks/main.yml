@@ -12,7 +12,7 @@
 
 - name: Load and merge package mappings
   ansible.builtin.set_fact:
-    _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(package_mappings_overrides.get(ansible_os_family | lower, {})) }}"
+    _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(provision_benchmarks_mappings_overrides.get(ansible_os_family | lower, {})) }}"
   tags:
     - provision_benchmarks
     - verify

@@ -21,4 +21,4 @@ def test_disk_task_supports_freebsd_execution() -> None:
 
     assert "ansible_system | default('Linux') in ['Linux', 'FreeBSD']" in content
     assert "Detect work directory device (FreeBSD)" in content
-    assert "DROP_CMD=\"sync; purge 2>/dev/null || sync\"" in content
+    assert 'DROP_CMD="sync; purge 2>/dev/null || sync"' in content

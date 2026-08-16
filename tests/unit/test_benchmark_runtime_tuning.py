@@ -75,7 +75,6 @@ def test_compiler_task_uses_sqlite_opt_level_tuning_variable() -> None:
 
     assert "{% for opt in run_benchmarks_compiler_sqlite_opt_levels %}" in sqlite_section
     assert (
-        'CMDS+=(--command-name "{{ cc_label }}-{{ opt | replace(\' \', \'_\') }}"'
-        in sqlite_section
+        "CMDS+=(--command-name \"{{ cc_label }}-{{ opt | replace(' ', '_') }}\"" in sqlite_section
     )
     assert '"{{ cc_exe }} {{ opt }} -o /dev/null -c sqlite3.c")' in sqlite_section

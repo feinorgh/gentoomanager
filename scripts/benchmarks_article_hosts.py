@@ -294,7 +294,7 @@ def generate_host_pages(
             host_name = _stringify(metadata.get("hostname", "")) or host_dir.name
             anon_mapping[host_name] = _anonymize_hostname(host_name, idx)
 
-    for idx, host_dir in enumerate(host_dirs):
+    for _idx, host_dir in enumerate(host_dirs):
         metadata_path = host_dir / "metadata.json"
         if not metadata_path.exists():
             continue

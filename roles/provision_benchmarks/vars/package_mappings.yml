@@ -1,9 +1,9 @@
 ---
 # Package mapping overrides for specific operating systems.
 # These override the defaults from defaults/main.yml where package/executable names differ by platform.
-# Structure: package_mappings_overrides[platform][tool] = {executable, package}
+# Structure: provision_benchmarks_mappings_overrides[platform][tool] = {executable, package}
 
-package_mappings_overrides:
+provision_benchmarks_mappings_overrides:
   freebsd:
     botan:
       executable: "botan3"

@@ -37,9 +37,7 @@ def wrapper_repo_copy(tmp_path: Path) -> Path:
     script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
     inventory_path = repo_root / "inventory_generator.py"
-    inventory_path.chmod(
-        inventory_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
-    )
+    inventory_path.chmod(inventory_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
     hypervisors_file = repo_root / "hypervisors.txt"
     if hypervisors_file.exists():
@@ -97,9 +95,7 @@ def _write_mock_ansible_playbook(mock_bin_dir: Path, content: str) -> None:
 def _write_mock_ansible_inventory(mock_bin_dir: Path, content: str) -> None:
     mock_inventory = mock_bin_dir / "ansible-inventory"
     mock_inventory.write_text(content)
-    mock_inventory.chmod(
-        mock_inventory.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
-    )
+    mock_inventory.chmod(mock_inventory.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
 class TestMissingHypervisorsFile:
@@ -162,11 +158,7 @@ class TestSshFailureOutputHinting:
         mock_bin_dir, args_file = mock_bin
         _write_mock_ansible_playbook(
             mock_bin_dir,
-            (
-                "#!/usr/bin/env bash\n"
-                "echo 'fatal: generic failure' >&2\n"
-                "exit 7\n"
-            ),
+            ("#!/usr/bin/env bash\necho 'fatal: generic failure' >&2\nexit 7\n"),
         )
 
         result, _recorded = _run_wrapper(
@@ -189,7 +181,7 @@ class TestSshFailureOutputHinting:
             (
                 "#!/usr/bin/env bash\n"
                 "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => "
-                "{\"msg\": \"Failed to connect to the host via ssh: "
+                '{"msg": "Failed to connect to the host via ssh: '
                 "Permission denied (publickey).\"}' >&2\n"
                 "exit 4\n"
             ),
@@ -217,7 +209,7 @@ class TestSshFailureOutputHinting:
             (
                 "#!/usr/bin/env bash\n"
                 "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => "
-                "{\"msg\": \"Connection closed by remote host\"}' >&2\n"
+                '{"msg": "Connection closed by remote host"}\' >&2\n'
                 "exit 4\n"
             ),
         )
@@ -244,7 +236,7 @@ class TestSshFailureOutputHinting:
             (
                 "#!/usr/bin/env bash\n"
                 "cat <<'EOF'\n"
-                "{\"_meta\":{\"hostvars\":{\"openindiana-indiana\":{}}}}\n"
+                '{"_meta":{"hostvars":{"openindiana-indiana":{}}}}\n'
                 "EOF\n"
             ),
         )
@@ -253,7 +245,7 @@ class TestSshFailureOutputHinting:
             (
                 "#!/usr/bin/env bash\n"
                 "echo 'fatal: [openindiana-indiana]: UNREACHABLE! => "
-                "{\"msg\": \"Failed to connect to the host via ssh: "
+                '{"msg": "Failed to connect to the host via ssh: '
                 "Connection closed by remote host\"}' >&2\n"
                 "exit 4\n"
             ),
@@ -282,7 +274,7 @@ class TestSshFailureOutputHinting:
             (
                 "#!/usr/bin/env bash\n"
                 "echo 'fatal: [openindiana-indiana]: FAILED! => "
-                "{\"msg\": \"package install failed\"}'\n"
+                '{"msg": "package install failed"}\'\n'
                 "exit 2\n"
             ),
         )

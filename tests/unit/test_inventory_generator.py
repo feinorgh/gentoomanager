@@ -74,8 +74,7 @@ class TestLoadHostsFromFile:
     def test_strips_inline_comments(self, tmp_path: Path) -> None:
         hosts_file = tmp_path / "hypervisors.txt"
         hosts_file.write_text(
-            "hv-alpha.example.local # primary\n"
-            "hv-beta.example.local#secondary\n",
+            "hv-alpha.example.local # primary\nhv-beta.example.local#secondary\n",
             encoding="utf-8",
         )
 
@@ -193,10 +192,13 @@ class TestBuildSshFailureHints:
         assert "SSH public key" not in joined
 
     def test_unrelated_stderr_produces_no_hints(self) -> None:
-        assert inv.build_ssh_failure_hints(  # type: ignore[attr-defined]
-            "openindiana-indiana",
-            "some other error",
-        ) == []
+        assert (
+            inv.build_ssh_failure_hints(  # type: ignore[attr-defined]
+                "openindiana-indiana",
+                "some other error",
+            )
+            == []
+        )
 
 
 def test_get_vms_from_host_keeps_error_line_and_appends_hints(monkeypatch, capsys) -> None:
