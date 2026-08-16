@@ -367,3 +367,77 @@ provision_benchmarks_verification_categories:
 
 # Flattened list of all tools to check (for simple loops)
 provision_benchmarks_all_verification_tools: "{{ provision_benchmarks_verification_categories | dict2items | map(attribute='value.tools') | flatten }}"
+
+# Canonical tool mappings (fallback for all platforms)
+# These provide the standard executable and package names for each tool.
+# OS-specific overrides (defined per-platform below) take precedence over these defaults.
+package_mappings_defaults:  # noqa: var-naming[no-role-prefix]
+  xz:
+    executable: "xz"
+    package: "xz"
+  bzip2:
+    executable: "bzip2"
+    package: "bzip2"
+  gzip:
+    executable: "gzip"
+    package: "gzip"
+  zstd:
+    executable: "zstd"
+    package: "zstd"
+  lz4:
+    executable: "lz4"
+    package: "lz4"
+  7zip:
+    executable: "7z"
+    package: "p7zip"
+  gcc:
+    executable: "gcc"
+    package: "gcc"
+  make:
+    executable: "make"
+    package: "make"
+  cmake:
+    executable: "cmake"
+    package: "cmake"
+  cargo:
+    executable: "cargo"
+    package: "rust"
+  botan:
+    executable: "botan"
+    package: "botan"
+  openssl:
+    executable: "openssl"
+    package: "openssl"
+  curl:
+    executable: "curl"
+    package: "curl"
+  tar:
+    executable: "tar"
+    package: "tar"
+  find:
+    executable: "find"
+    package: "findutils"
+  diffutils:
+    executable: "diff"
+    package: "diffutils"
+  gpg:
+    executable: "gpg"
+    package: "gnupg"
+  sqlite3:
+    executable: "sqlite3"
+    package: "sqlite"
+  mold:
+    executable: "mold"
+    package: "mold"
+  numpy:
+    executable: "python3"
+    package: "python3-numpy"
+  opencv:
+    executable: "opencv_version"
+    package: "opencv"
+  gimp:
+    executable: "gimp"
+    package: "gimp"
+  inkscape:
+    executable: "inkscape"
+    package: "inkscape"
