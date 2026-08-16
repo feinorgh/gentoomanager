@@ -9,8 +9,6 @@ scripts/shellcheck_yaml_blocks.py shebang
 roles/run_benchmarks/files/gen_sortdata.py shebang
 roles/run_benchmarks/files/generate_multifile_bench.py shebang
 scripts/backfill_pgo_metadata.py shebang
-docs/benchmarks-article/_site/index.html no-smart-quotes
-docs/benchmarks-article/_site/search.json no-smart-quotes
 docs/superpowers/plans/2026-06-07-benchmark-category-deep-dive.md no-smart-quotes
 docs/superpowers/plans/2026-06-09-cflags-deep-dive.md no-smart-quotes
 docs/superpowers/plans/2026-06-09-multifile-harness-integrity.md no-smart-quotes
