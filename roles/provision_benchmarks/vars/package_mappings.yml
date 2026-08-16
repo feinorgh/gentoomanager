@@ -1,0 +1,40 @@
+---
+# Package mapping overrides for specific operating systems.
+# These override the defaults from defaults/main.yml where package/executable names differ by platform.
+# Structure: package_mappings_overrides[platform][tool] = {executable, package}
+
+package_mappings_overrides:
+  freebsd:
+    botan:
+      executable: "botan3"
+      package: "security/botan3"
+    openssl:
+      executable: "openssl"
+      package: "security/openssl"
+    curl:
+      executable: "curl"
+      package: "ftp/curl"
+    tar:
+      executable: "tar"
+      package: "archivers/tar"
+    find:
+      executable: "find"
+      package: "archivers/findutils"
+  debian:
+    botan:
+      executable: "botan"
+      package: "libbotan-3-dev"
+    gcc:
+      executable: "gcc"
+      package: "build-essential"
+  redhat:
+    botan:
+      executable: "botan"
+      package: "botan-devel"
+  alpine:
+    botan:
+      executable: "botan"
+      package: "botan-dev"
+    gcc:
+      executable: "gcc"
+      package: "build-base"
