@@ -68,6 +68,7 @@
       echo "Verification report written to: $REPORT_FILE" >&2
   args:
     executable: /bin/bash
+  delegate_to: localhost
   register: _provision_benchmarks_report_result
   changed_when: false
   when: ansible_system != "Windows"
@@ -132,6 +133,7 @@
     Write-Host "Verification report written to: $reportPath"
     Write-Host ""
     $report | ForEach-Object { Write-Host $_ }
+  delegate_to: localhost
   register: _provision_benchmarks_report_result
   changed_when: false
   when: ansible_system == "Windows"
