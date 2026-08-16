@@ -34,6 +34,7 @@ SERIAL=""
 DRY_RUN=0
 VERBOSITY=""
 BECOME_PASS=0
+FAIL_ON_TOOL_INSTALL_ERROR=0
 EXTRA_ARGS=()
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,6 +61,8 @@ Flags:
                               Default batch size is 1 when flag is given.
   --include-windows           Also provision Windows hosts (installs benchmark
                               dependencies via Chocolatey)
+  --fail-on-tool-install-error
+                              Exit with error if any tool installation fails
   --verbose, -v               Pass -v to ansible-playbook (repeat for -vvv)
   --dry-run, -C               Pass --check to ansible-playbook (no changes)
   --ask-become-pass, -K       Prompt for sudo/become password
@@ -198,6 +201,8 @@ while [[ $# -gt 0 ]]; do
             fi ;;
         --include-windows)
             INCLUDE_WINDOWS=1; shift ;;
+        --fail-on-tool-install-error)
+            FAIL_ON_TOOL_INSTALL_ERROR=1; shift ;;
         --verbose|-v)
             VERBOSITY="${VERBOSITY}v"; shift ;;
         --dry-run|-C)
@@ -239,6 +244,7 @@ declare -A EVARS=()
 [[ "${MANAGE_POWER}"    -eq 1 ]] && EVARS[provision_manage_power]="true"
 [[ -n "${BOOT_TIMEOUT}" ]]       && EVARS[provision_boot_timeout_sec]="${BOOT_TIMEOUT}"
 [[ "${INCLUDE_WINDOWS}" -eq 1 ]] && EVARS[provision_include_windows]="true"
+[[ "${FAIL_ON_TOOL_INSTALL_ERROR}" -eq 1 ]] && EVARS[provision_benchmarks_fail_on_install_error]="true"
 
 if [[ "${#EVARS[@]}" -gt 0 ]]; then
     _EVAR_JSON="{"
