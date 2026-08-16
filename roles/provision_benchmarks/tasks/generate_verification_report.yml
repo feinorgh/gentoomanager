@@ -1,6 +1,6 @@
 ---
-# Generate categorized verification report for missing benchmark tools.
-# This task creates a timestamped report file and displays warnings on stdout.
+# Generate categorized verification report for benchmark tools.
+# Reports on three categories: FOUND, MISSING, and UNRESOLVED tools.
 
 - name: Create verification reports directory
   ansible.builtin.file:
@@ -10,135 +10,24 @@
   delegate_to: localhost
   run_once: true
 
-- name: Generate verification report on Linux
-  ansible.builtin.shell:
-    cmd: |
-      set -e
-
-      # Prepare timestamp
-      TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
-      REPORT_FILE="{{ playbook_dir }}/../benchmarks/verification_reports/verification_${TIMESTAMP}.txt"
-
-      # Start building the report
-      {
-        echo "Benchmark Provisioning Verification Report"
-        echo "Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo "Hostname: {{ inventory_hostname }}"
-        echo "Ansible Run Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "=== MISSING TOOLS SUMMARY ==="
-      } > "$REPORT_FILE"
-
-      # Count missing tools per category (computed in Jinja2)
-      {% set total_missing = 0 %}
-      {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
-        {% set total_missing = total_missing + (_provision_benchmarks_verify_missing[cat_name] | length) %}
-      {% endfor %}
-
-      {
-        echo "Total Missing: {{ total_missing }} tools"
-        echo ""
-        echo "=== BY CATEGORY ==="
-        echo ""
-      } >> "$REPORT_FILE"
-
-      # Report each category
-      {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
-      {
-        echo "{{ cat_data.name }} ({{ _provision_benchmarks_verify_missing[cat_name] | length }}/{{ cat_data.tools | length }} missing):"
-        {% if _provision_benchmarks_verify_missing[cat_name] | length == 0 %}
-          echo "  ✓ All tools present: {{ cat_data.tools | join(', ') }}"
-        {% else %}
-          {% for tool in cat_data.tools %}
-            {% if tool in _provision_benchmarks_verify_missing[cat_name] %}
-          echo "  ✗ {{ tool }}"
-            {% else %}
-          echo "  ✓ {{ tool }}"
-            {% endif %}
-          {% endfor %}
-        {% endif %}
-        echo ""
-      } >> "$REPORT_FILE"
-      {% endfor %}
-
-      # Print the report
-      cat "$REPORT_FILE"
-
-      # Also write to debug log
-      echo "Verification report written to: $REPORT_FILE" >&2
-  args:
-    executable: /bin/bash
+- name: Generate verification report
+  ansible.builtin.template:
+    src: verification_report.j2
+    dest: "{{ playbook_dir }}/../benchmarks/verification_reports/verification_{{ ansible_date_time.iso8601_basic_short }}.txt"
+  vars:
+    _found_tools: "{{ _provision_benchmarks_verify_found | default([]) }}"
+    _missing_tools: "{{ _provision_benchmarks_verify_missing | default([]) }}"
+    _unresolved_tools: "{{ _provision_benchmarks_verify_unresolved | default([]) }}"
   delegate_to: localhost
   register: _provision_benchmarks_report_result
   changed_when: false
-  when: ansible_system != "Windows"
 
-- name: Display report summary (Linux)
+- name: Display report
   ansible.builtin.debug:
-    msg: "{{ _provision_benchmarks_report_result.stdout_lines }}"
-  when: ansible_system != "Windows"
-
-- name: Generate verification report on Windows
-  ansible.windows.win_shell: |
-    $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-    $basePath = "{{ playbook_dir }}" -replace '/playbooks/?$', ''
-    $basePath = $basePath.Replace("/", [char]92)
-    $reportPath = Join-Path (Join-Path (Join-Path $basePath "benchmarks") "verification_reports") "verification_$timestamp.txt"
-
-    # Ensure directory exists
-    $reportDir = Split-Path -Parent $reportPath
-    if (-not (Test-Path $reportDir)) {
-      New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
-    }
-
-    $report = @()
-    $report += "Benchmark Provisioning Verification Report"
-    $report += "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
-    $report += "Hostname: {{ inventory_hostname }}"
-    $report += "Ansible Run Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
-    $report += ""
-    $report += "=== MISSING TOOLS SUMMARY ==="
-
-    # Count total missing tools
-    $totalMissing = 0
-    {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
-    $totalMissing += {{ _provision_benchmarks_verify_missing[cat_name] | length }}
-    {% endfor %}
-
-    $report += "Total Missing: $totalMissing tools"
-    $report += ""
-    $report += "=== BY CATEGORY ==="
-    $report += ""
-
-    {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
-    $missingCount = {{ _provision_benchmarks_verify_missing[cat_name] | length }}
-    $totalCount = {{ cat_data.tools | length }}
-    $report += "{{ cat_data.name }} ($missingCount/$totalCount missing):"
-    {% if _provision_benchmarks_verify_missing[cat_name] | length == 0 %}
-    $report += "  ✓ All tools present: {{ cat_data.tools | join(', ') }}"
-    {% else %}
-    {% for tool in cat_data.tools %}
-    {% if tool in _provision_benchmarks_verify_missing[cat_name] %}
-    $report += "  ✗ {{ tool }}"
-    {% else %}
-    $report += "  ✓ {{ tool }}"
-    {% endif %}
-    {% endfor %}
-    {% endif %}
-    $report += ""
-    {% endfor %}
-
-    # Write report
-    $report | Out-File -FilePath $reportPath -Encoding utf8
-    Write-Host "Verification report written to: $reportPath"
-    Write-Host ""
-    $report | ForEach-Object { Write-Host $_ }
-  delegate_to: localhost
-  register: _provision_benchmarks_report_result
+    msg: |
+      Verification Report Generated: {{ _provision_benchmarks_report_result.dest }}
+      
+      FOUND: {{ _found_tools | length }}
+      MISSING: {{ _missing_tools | length }}
+      UNRESOLVED: {{ _unresolved_tools | length }}
   changed_when: false
-  when: ansible_system == "Windows"
-
-- name: Display report summary (Windows)
-  ansible.builtin.debug:
-    msg: "{{ _provision_benchmarks_report_result.stdout }}"
-  when: ansible_system == "Windows"

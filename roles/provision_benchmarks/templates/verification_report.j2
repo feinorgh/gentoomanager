@@ -1,0 +1,39 @@
+Verification Report for {{ inventory_hostname }}
+Generated: {{ ansible_date_time.iso8601 }}
+
+================================================================================
+VERIFICATION RESULTS
+================================================================================
+
+FOUND TOOLS ({{ _found_tools | length }}):
+{% if _found_tools | length > 0 %}
+{% for tool in _found_tools | sort %}
+  ✓ {{ tool }}
+{% endfor %}
+{% else %}
+  (none)
+{% endif %}
+
+MISSING TOOLS ({{ _missing_tools | length }}):
+{% if _missing_tools | length > 0 %}
+{% for tool in _missing_tools | sort %}
+  ✗ {{ tool }}
+{% endfor %}
+{% else %}
+  (none)
+{% endif %}
+
+UNRESOLVED TOOLS ({{ _unresolved_tools | length }}):
+{% if _unresolved_tools | length > 0 %}
+{% for tool in _unresolved_tools | sort %}
+  ⚠ {{ tool }}
+{% endfor %}
+{% else %}
+  (none)
+{% endif %}
+
+Summary:
+  - Found: {{ _found_tools | length }}
+  - Missing: {{ _missing_tools | length }}
+  - Unresolved: {{ _unresolved_tools | length }}
+  - Total: {{ (_found_tools | length) + (_missing_tools | length) + (_unresolved_tools | length) }}
