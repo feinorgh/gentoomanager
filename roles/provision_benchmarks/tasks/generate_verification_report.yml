@@ -35,10 +35,12 @@
         {% set total_missing = total_missing + (_provision_benchmarks_verify_missing[cat_name] | length) %}
       {% endfor %}
 
-      echo "Total Missing: {{ total_missing }} tools" >> "$REPORT_FILE"
-      echo "" >> "$REPORT_FILE"
-      echo "=== BY CATEGORY ===" >> "$REPORT_FILE"
-      echo "" >> "$REPORT_FILE"
+      {
+        echo "Total Missing: {{ total_missing }} tools"
+        echo ""
+        echo "=== BY CATEGORY ==="
+        echo ""
+      } >> "$REPORT_FILE"
 
       # Report each category
       {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
