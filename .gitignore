@@ -176,6 +176,9 @@ cython_debug/
 
 # Benchmarks (generated output)
 benchmarks/
+# But track the verification_reports directory structure
+!benchmarks/verification_reports/
+!benchmarks/verification_reports/.gitkeep
 docs/benchmarks-article/hosts/*.qmd
 inventory_generator_rs/target/
 hypervisors.txt

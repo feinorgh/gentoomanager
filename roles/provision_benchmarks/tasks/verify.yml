@@ -4,15 +4,16 @@
 # Includes both Linux and Windows support.
 # Generates categorized reports and displays warnings for missing tools.
 
-- name: Verify essential tools are available (Linux)
+- name: Verify essential tools are available
   ansible.builtin.shell:
     cmd: |
       set -e
       # Check all tools and build a dict of missing tools by category
+      # POSIX-compatible script for OpenBSD and Linux
 
-      # Initialize associative arrays for each category
+      # Initialize variables for each category (using POSIX-compatible approach)
       {% for cat_name in provision_benchmarks_verification_categories.keys() %}
-      declare -a missing_{{ cat_name }}
+      missing_{{ cat_name }}=""
       {% endfor %}
 
       # Check each category's tools
@@ -20,20 +21,40 @@
       # Check {{ cat_data.name }}
       {% for tool in cat_data.tools %}
       if ! command -v {{ tool }} >/dev/null 2>&1; then
-        missing_{{ cat_name }}+=({{ tool | quote }})
+        if [ -z "$missing_{{ cat_name }}" ]; then
+          missing_{{ cat_name }}="{{ tool }}"
+        else
+          missing_{{ cat_name }}="$missing_{{ cat_name }},{{ tool }}"
+        fi
       fi
       {% endfor %}
       {% endfor %}
 
+      # Special handling for Python/python3 (OpenBSD may have either)
+      if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+        if [ -z "$missing_utilities" ]; then
+          missing_utilities="python3,python"
+        else
+          missing_utilities="$missing_utilities,python3,python"
+        fi
+      fi
+
+      # Special handling for compiler (accept cc or gcc)
+      if ! command -v gcc >/dev/null 2>&1 && ! command -v cc >/dev/null 2>&1; then
+        if [ -z "$missing_build" ]; then
+          missing_build="cc"
+        else
+          missing_build="$missing_build,cc"
+        fi
+      fi
+
       # Output missing tools in machine-parseable format
       # Format: CATEGORY:tool1,tool2,tool3
       {% for cat_name in provision_benchmarks_verification_categories.keys() %}
-      # Reference array by constructed name (e.g., "${missing_compression[@]}")
-      missing_list="{{ "${missing_" }}{{ cat_name }}[@]{{ "}" }}"
-      echo "MISSING_{{ cat_name | upper }}:$(IFS=,; echo "${missing_list[*]}")"
+      eval missing_list="\$missing_{{ cat_name }}"
+      echo "MISSING_{{ cat_name | upper }}:$missing_list"
       {% endfor %}
-  args:
-    executable: /bin/bash
+    executable: /bin/sh
   register: _provision_benchmarks_verify_raw
   changed_when: false
   failed_when: false
