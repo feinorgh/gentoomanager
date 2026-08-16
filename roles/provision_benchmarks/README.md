@@ -81,6 +81,27 @@ None.
         provision_benchmarks_install_ffmpeg: true
 ```
 
+## Tool Verification
+
+After provisioning completes, the `verify.yml` task checks that all required and optional benchmark tools are installed:
+
+### Verification Categories
+
+- **Compression Tools:** gzip, bzip2, xz, zstd, lz4, 7zip
+- **Build Tools:** make, cargo
+- **Crypto Tools:** gpg
+- **Utilities:** diffutils, sqlite3
+- **Optional Tools:** botan, mold, numpy, opencv, gimp, inkscape
+
+### Output
+
+Verification results are displayed in two ways:
+
+1. **Console Output:** Summary of all tools showing which are present/missing, with warnings for missing non-optional tools
+2. **Timestamped Reports:** Detailed reports saved to `benchmarks/verification_reports/verification_YYYY-MM-DD_HHMMSS.txt`
+
+Each report includes a categorical breakdown of missing tools and can be reviewed later to identify provisioning gaps across multiple hosts.
+
 ## License
 
 GPL-3.0-or-later
