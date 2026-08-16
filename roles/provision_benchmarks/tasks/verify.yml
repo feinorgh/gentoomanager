@@ -51,8 +51,7 @@
       # Output missing tools in machine-parseable format
       # Format: CATEGORY:tool1,tool2,tool3
       {% for cat_name in provision_benchmarks_verification_categories.keys() %}
-      eval missing_list="\$missing_{{ cat_name }}"
-      echo "MISSING_{{ cat_name | upper }}:$missing_list"
+      eval echo "MISSING_{{ cat_name | upper }}:\$missing_{{ cat_name }}"
       {% endfor %}
     executable: /bin/sh
   register: _provision_benchmarks_verify_raw
