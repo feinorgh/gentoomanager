@@ -209,7 +209,7 @@ require_cmd python3
 cd "${REPO_ROOT}"
 
 # ── Build ansible-playbook command ───────────────────────────────────────────
-CMD=(ansible-playbook "${PLAYBOOK}" -i "${INVENTORY}")
+CMD=(env ANSIBLE_FORCE_COLOR=1 ansible-playbook "${PLAYBOOK}" -i "${INVENTORY}")
 
 # Verbosity
 [[ -n "${VERBOSITY}" ]] && CMD+=("-${VERBOSITY}")

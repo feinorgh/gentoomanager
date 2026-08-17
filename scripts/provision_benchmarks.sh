@@ -232,7 +232,7 @@ preflight_check_hypervisors_file
 cd "${REPO_ROOT}"
 
 # ── Build ansible-playbook command (no --limit yet) ──────────────────────────
-CMD=(ansible-playbook "${PLAYBOOK}" -i "${INVENTORY}")
+CMD=(env ANSIBLE_FORCE_COLOR=1 ansible-playbook "${PLAYBOOK}" -i "${INVENTORY}")
 
 [[ -n "${VERBOSITY}" ]] && CMD+=("-${VERBOSITY}")
 [[ "${DRY_RUN}"     -eq 1 ]] && CMD+=(--check)
