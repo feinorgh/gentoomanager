@@ -1,4 +1,8 @@
 ---
+- name: Load package mapping overrides
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/package_mappings.yml"
+
 - name: Ensure package mappings are loaded
   ansible.builtin.set_fact:
     _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(provision_benchmarks_mappings_overrides.get(ansible_os_family | lower, {})) }}"
