@@ -3,9 +3,17 @@
   ansible.builtin.include_vars:
     file: "{{ role_path }}/vars/package_mappings.yml"
 
-- name: Ensure package mappings are loaded
+- name: Load package mapping variants
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/package_mappings_variants.yml"
+
+- name: Ensure package mappings are loaded with variant overrides
   ansible.builtin.set_fact:
-    _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(provision_benchmarks_mappings_overrides.get(ansible_os_family | lower, {})) }}"
+    _provision_benchmarks_package_mappings: >-
+      {{ package_mappings_defaults
+         | combine(provision_benchmarks_mappings_overrides.get(ansible_os_family | lower, {}))
+         | combine(package_mappings_variants.get(
+             ansible_os_family | lower ~ '_' ~ ansible_distribution_major_version, {})) }}
 
 # Comprehensive verification that all benchmark tools are available.
 # Checks all categories: compression, build, crypto, utilities, and optional tools.
