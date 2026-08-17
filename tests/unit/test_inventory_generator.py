@@ -515,16 +515,24 @@ class TestBuildInventoryEdgeCases:
 def test_warns_when_hypervisors_file_missing(monkeypatch, capsys) -> None:
     """Emit a warning when hypervisors.txt is missing and no env override is set."""
     import builtins
+    import pathlib
 
     real_open = builtins.open
+    real_path_open = pathlib.Path.open
 
     def fake_open(file, *args, **kwargs):
         if str(file).endswith("hypervisors.txt"):
             raise FileNotFoundError
         return real_open(file, *args, **kwargs)
 
+    def fake_path_open(self, *args, **kwargs):
+        if str(self).endswith("hypervisors.txt"):
+            raise FileNotFoundError
+        return real_path_open(self, *args, **kwargs)
+
     monkeypatch.delenv("HYPERVISOR_HOSTS", raising=False)
     monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(pathlib.Path, "open", fake_path_open)
     monkeypatch.setattr(sys, "argv", ["inventory_generator.py", "--list"])
 
     try:
