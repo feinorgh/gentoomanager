@@ -28,7 +28,8 @@
       {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
       # Check {{ cat_data.name }}
       {% for tool in cat_data.tools %}
-      if ! command -v {{ tool }} >/dev/null 2>&1; then
+      {% set exe = _provision_benchmarks_package_mappings.get(tool, {}).get('executable', tool) %}
+      if ! command -v {{ exe }} >/dev/null 2>&1; then
         if [ -z "$missing_{{ cat_name }}" ]; then
           missing_{{ cat_name }}="{{ tool }}"
         else
