@@ -165,6 +165,19 @@ preflight_check_hypervisors_file() {
     fi
 }
 
+run_binary_resolver() {
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "  WARNING: uv not found — skipping binary resolution post-processor" >&2
+    return 0
+  fi
+  echo "" >&2
+  echo "▶ Running binary resolution post-processor..." >&2
+  uv run python "${REPO_ROOT}/scripts/resolve_package_binaries.py" \
+    "${REPO_ROOT}/benchmarks/package_discoveries/" \
+    "${REPO_ROOT}/roles/provision_benchmarks/vars/package_mappings.yml" \
+    "${REPO_ROOT}/roles/provision_benchmarks/vars/package_mappings_variants.yml"
+}
+
 # ── Argument parsing ─────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -302,6 +315,7 @@ for h in sorted(d.get('_meta', {}).get('hostvars', {}).keys()):
         run_ansible_with_output_filter "${CMD[@]}" --limit "${batch_limit}"
         batch_start=$(( batch_start + SERIAL_N ))
     done
+    run_binary_resolver
     exit 0
 fi
 
@@ -312,3 +326,4 @@ echo "▶ Running: ${CMD[*]}" >&2
 echo "" >&2
 
 run_ansible_with_output_filter "${CMD[@]}"
+run_binary_resolver
