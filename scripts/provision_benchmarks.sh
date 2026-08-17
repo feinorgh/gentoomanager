@@ -170,6 +170,10 @@ run_binary_resolver() {
     echo "  WARNING: uv not found — skipping binary resolution post-processor" >&2
     return 0
   fi
+  if [[ ! -f "${REPO_ROOT}/scripts/resolve_package_binaries.py" ]]; then
+    echo "  WARNING: resolve_package_binaries.py not found — skipping binary resolution post-processor" >&2
+    return 0
+  fi
   echo "" >&2
   echo "▶ Running binary resolution post-processor..." >&2
   uv run python "${REPO_ROOT}/scripts/resolve_package_binaries.py" \
