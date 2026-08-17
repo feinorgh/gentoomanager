@@ -62,5 +62,75 @@
   failed_when: false
   when: provision_benchmarks_nixos_shm_check.rc != 0
 
+- name: Load package mapping overrides for NixOS check
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/package_mappings.yml"
+  when: ansible_os_family == "NixOS"
+
+- name: Set up package mappings for NixOS
+  ansible.builtin.set_fact:
+    _provision_benchmarks_package_mappings: "{{ package_mappings_defaults | combine(provision_benchmarks_mappings_overrides.get(ansible_os_family | lower, {})) }}"
+  when: ansible_os_family == "NixOS"
+
+- name: Check NixOS configuration.nix for missing packages
+  ansible.builtin.shell:
+    cmd: |
+      CONFIG="/etc/nixos/configuration.nix"
+      if [ ! -f "$CONFIG" ]; then
+        echo "NIXOS_CONFIG_MISSING:true"
+        exit 0
+      fi
+      # Extract package names after pkgs. (handles most common patterns)
+      CONFIGURED=$(grep -oE 'pkgs\.[a-zA-Z0-9_-]+' "$CONFIG" | sed 's/pkgs\.//' | sort -u)
+      {% for cat_name, cat_data in provision_benchmarks_verification_categories.items() %}
+      {% for tool in cat_data.tools %}
+      {% set pkg = _provision_benchmarks_package_mappings.get(tool, {}).get('package', tool) %}
+      if printf '%s\n' "$CONFIGURED" | grep -qxF "{{ pkg }}"; then
+        echo "NIXOS_CONFIGURED:{{ tool }}:{{ pkg }}"
+      else
+        echo "NIXOS_MISSING:{{ tool }}:{{ pkg }}"
+      fi
+      {% endfor %}
+      {% endfor %}
+    executable: /bin/sh
+  register: _provision_benchmarks_nixos_check
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family == "NixOS"
+
+- name: Warn about packages missing from NixOS configuration.nix
+  ansible.builtin.debug:
+    msg: >-
+      NixOS: The following packages are not in environment.systemPackages in
+      /etc/nixos/configuration.nix. Add them and run 'nixos-rebuild switch':
+      {{ _provision_benchmarks_nixos_check.stdout_lines
+         | select('match', '^NIXOS_MISSING:')
+         | map('replace', 'NIXOS_MISSING:', '')
+         | list | join(', ') }}
+  when:
+    - ansible_os_family == "NixOS"
+    - _provision_benchmarks_nixos_check is defined
+    - _provision_benchmarks_nixos_check.stdout_lines | select('match', '^NIXOS_MISSING:') | list | length > 0
+  changed_when: false
+
+- name: Write NixOS discovery file to localhost
+  ansible.builtin.copy:
+    content: "{{ nixos_discovery_content }}"
+    dest: "{{ playbook_dir }}/../benchmarks/package_discoveries/{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic_short }}.yml"
+    mode: '0644'
+  vars:
+    nixos_discovery_content: |
+      ---
+      hostname: {{ inventory_hostname }}
+      os_family: nixos
+      os_major_version: "{{ ansible_distribution_major_version }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      discoveries: {}
+  delegate_to: localhost
+  when:
+    - ansible_os_family == "NixOS"
+    - _provision_benchmarks_nixos_check is defined
+  changed_when: false
+
 - name: Verify installed tools
   ansible.builtin.include_tasks: verify.yml
