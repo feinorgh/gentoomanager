@@ -2,13 +2,11 @@
 
 import sys
 from pathlib import Path
-import pytest
 
 # Allow importing from scripts/
 sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
 
 from resolve_package_binaries import compute_consensus, merge_into_mappings
-
 
 DISCOVERIES_CONSENSUS = [
     {
@@ -16,7 +14,11 @@ DISCOVERIES_CONSENSUS = [
         "os_family": "debian",
         "os_major_version": "12",
         "discoveries": {
-            "diffutils": {"package": "diffutils", "executable": "diff", "all_candidates": ["diff", "diff3"]},
+            "diffutils": {
+                "package": "diffutils",
+                "executable": "diff",
+                "all_candidates": ["diff", "diff3"],
+            },
         },
     },
     {
@@ -24,7 +26,11 @@ DISCOVERIES_CONSENSUS = [
         "os_family": "debian",
         "os_major_version": "22",
         "discoveries": {
-            "diffutils": {"package": "diffutils", "executable": "diff", "all_candidates": ["diff", "diff3"]},
+            "diffutils": {
+                "package": "diffutils",
+                "executable": "diff",
+                "all_candidates": ["diff", "diff3"],
+            },
         },
     },
 ]
@@ -35,7 +41,11 @@ DISCOVERIES_FLAPPING = [
         "os_family": "redhat",
         "os_major_version": "8",
         "discoveries": {
-            "somepackage": {"package": "somepackage", "executable": "tool-8", "all_candidates": ["tool-8"]},
+            "somepackage": {
+                "package": "somepackage",
+                "executable": "tool-8",
+                "all_candidates": ["tool-8"],
+            },
         },
     },
     {
@@ -43,7 +53,11 @@ DISCOVERIES_FLAPPING = [
         "os_family": "redhat",
         "os_major_version": "9",
         "discoveries": {
-            "somepackage": {"package": "somepackage", "executable": "tool-9", "all_candidates": ["tool-9"]},
+            "somepackage": {
+                "package": "somepackage",
+                "executable": "tool-9",
+                "all_candidates": ["tool-9"],
+            },
         },
     },
 ]
@@ -128,7 +142,11 @@ def test_single_host_counts_as_consensus():
             "os_family": "gentoo",
             "os_major_version": "2",
             "discoveries": {
-                "diffutils": {"package": "sys-apps/diffutils", "executable": "diff", "all_candidates": ["diff"]},
+                "diffutils": {
+                    "package": "sys-apps/diffutils",
+                    "executable": "diff",
+                    "all_candidates": ["diff"],
+                },
             },
         }
     ]
