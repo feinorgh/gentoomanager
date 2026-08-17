@@ -5,4 +5,4 @@
 # Key format: {ansible_os_family | lower}_{ansible_distribution_major_version}
 # This file is managed automatically — manual edits may be overwritten.
 
-package_mappings_variants: {}
+package_mappings_variants: {}  # noqa: var-naming
