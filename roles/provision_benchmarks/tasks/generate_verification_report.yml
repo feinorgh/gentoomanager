@@ -12,9 +12,17 @@
 
 - name: Set report tool lists
   ansible.builtin.set_fact:
-    _provision_benchmarks_found_tools: "{{ _provision_benchmarks_verify_found | default([]) }}"
-    _provision_benchmarks_missing_tools: "{{ _provision_benchmarks_verify_missing | default([]) }}"
+    _provision_benchmarks_missing_tools: >-
+      {{ _provision_benchmarks_verify_missing | default({}) | dict2items
+         | map(attribute='value') | flatten | sort }}
     _provision_benchmarks_unresolved_tools: "{{ _provision_benchmarks_verify_unresolved | default([]) }}"
+
+- name: Set found tool list
+  ansible.builtin.set_fact:
+    _provision_benchmarks_found_tools: >-
+      {{ provision_benchmarks_verification_categories | dict2items
+         | map(attribute='value.tools') | flatten
+         | difference(_provision_benchmarks_missing_tools) | sort }}
 
 - name: Generate verification report
   ansible.builtin.template:
