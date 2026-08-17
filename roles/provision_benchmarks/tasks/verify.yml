@@ -13,7 +13,7 @@
       {{ package_mappings_defaults
          | combine(provision_benchmarks_mappings_overrides.get(ansible_os_family | lower, {}))
          | combine(package_mappings_variants.get(
-             ansible_os_family | lower ~ '_' ~ ansible_distribution_major_version, {})) }}
+             ansible_os_family | lower ~ '_' ~ (ansible_distribution_major_version | default(ansible_distribution_version | default('0') | regex_replace('\..*', ''))), {})) }}
 
 # Comprehensive verification that all benchmark tools are available.
 # Checks all categories: compression, build, crypto, utilities, and optional tools.

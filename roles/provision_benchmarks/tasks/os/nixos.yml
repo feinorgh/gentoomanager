@@ -123,7 +123,7 @@
       ---
       hostname: {{ inventory_hostname }}
       os_family: nixos
-      os_major_version: "{{ ansible_distribution_major_version }}"
+      os_major_version: "{{ ansible_distribution_major_version | default(ansible_distribution_version | default("0") | regex_replace("\\..*", "")) }}"
       timestamp: "{{ ansible_date_time.iso8601 }}"
       discoveries: {}
   delegate_to: localhost
