@@ -4,33 +4,17 @@
 # Writes per-host discovery YAML to benchmarks/package_discoveries/ on localhost.
 # Not run on Windows or NixOS (NixOS uses a separate task in nixos.yml).
 
-- name: Build flat list of missing tools with their package names
+- name: Build flat list of missing tools with resolved package names
   ansible.builtin.set_fact:
     _provision_benchmarks_missing_with_packages: >-
-      {{
-        _provision_benchmarks_verify_missing
-        | dict2items
-        | map(attribute='value')
-        | flatten
-        | map('regex_replace', '^(.*)$', '{"tool": "\\1", "package": ""}')
-        | map('from_yaml')
-        | list
-      }}
-  changed_when: false
-
-- name: Resolve package names for missing tools
-  ansible.builtin.set_fact:
-    _provision_benchmarks_missing_with_packages: >-
-      {{
-        _provision_benchmarks_missing_with_packages
-        | map('combine', {
-            'package': _provision_benchmarks_package_mappings.get(item.tool, {}).get('package', item.tool)
-          })
-        | list
-      }}
-  loop: "{{ _provision_benchmarks_missing_with_packages }}"
-  loop_control:
-    loop_var: item
+      {%- set result = [] -%}
+      {%- for cat_tools in _provision_benchmarks_verify_missing.values() -%}
+        {%- for tool in cat_tools -%}
+          {%- set pkg = _provision_benchmarks_package_mappings.get(tool, {}).get('package', tool) -%}
+          {%- if result.append({'tool': tool, 'package': pkg}) -%}{%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ result }}
   changed_when: false
 
 - name: Query package manager for binary candidates
