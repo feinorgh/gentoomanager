@@ -1,0 +1,123 @@
+---
+# query_package_binaries.yml — Query OS package manager to discover actual
+# binary names for tools that were not found during verification.
+# Writes per-host discovery YAML to benchmarks/package_discoveries/ on localhost.
+# Not run on Windows or NixOS (NixOS uses a separate task in nixos.yml).
+
+- name: Build flat list of missing tools with their package names
+  ansible.builtin.set_fact:
+    _provision_benchmarks_missing_with_packages: >-
+      {{
+        _provision_benchmarks_verify_missing
+        | dict2items
+        | map(attribute='value')
+        | flatten
+        | map('regex_replace', '^(.*)$', '{"tool": "\\1", "package": ""}')
+        | map('from_yaml')
+        | list
+      }}
+  changed_when: false
+
+- name: Resolve package names for missing tools
+  ansible.builtin.set_fact:
+    _provision_benchmarks_missing_with_packages: >-
+      {{
+        _provision_benchmarks_missing_with_packages
+        | map('combine', {
+            'package': _provision_benchmarks_package_mappings.get(item.tool, {}).get('package', item.tool)
+          })
+        | list
+      }}
+  loop: "{{ _provision_benchmarks_missing_with_packages }}"
+  loop_control:
+    loop_var: item
+  changed_when: false
+
+- name: Query package manager for binary candidates
+  ansible.builtin.shell:
+    cmd: |
+      {% set pm_cmds = {
+        'Gentoo':    'qlist',
+        'Debian':    'dpkg -L',
+        'RedHat':    'rpm -ql',
+        'Archlinux': 'pacman -Ql',
+        'Suse':      'rpm -ql',
+        'FreeBSD':   'pkg info -l',
+        'OpenBSD':   'pkg_info -L',
+        'Void':      'xbps-query -f',
+        'Solus':     'eopkg list-files',
+        'Alpine':    'apk info -L',
+      } %}
+      {% set pm_base = pm_cmds.get(ansible_os_family, '') %}
+      {% if pm_base %}
+      FILES=$({{ pm_base }} {{ item.package }} 2>/dev/null) || true
+      {% else %}
+      FILES=""
+      {% endif %}
+      CANDIDATES=$(printf '%s\n' "$FILES" | grep -E '/(s?bin|libexec)/' | sed 's|.*/||' | sort -u)
+      WINNER=""
+      for cand in $CANDIDATES; do
+          if command -v "$cand" >/dev/null 2>&1; then
+              WINNER="$cand"
+              break
+          fi
+      done
+      printf 'TOOL:%s\nPACKAGE:%s\nCANDIDATES:%s\nEXECUTABLE:%s\n' \
+        "{{ item.tool }}" \
+        "{{ item.package }}" \
+        "$(printf '%s\n' "$CANDIDATES" | tr '\n' ',' | sed 's/,$//')" \
+        "$WINNER"
+    executable: /bin/sh
+  loop: "{{ _provision_benchmarks_missing_with_packages }}"
+  loop_control:
+    label: "{{ item.tool }}"
+  register: _provision_benchmarks_binary_queries
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_system != "Windows"
+    - ansible_os_family != "NixOS"
+    - item.package | length > 0
+
+- name: Parse binary query results into discoveries dict
+  ansible.builtin.set_fact:
+    _provision_benchmarks_discoveries: >-
+      {{
+        _provision_benchmarks_discoveries | default({}) | combine({
+          (result.stdout_lines | select('match', '^TOOL:') | first | replace('TOOL:', '')): {
+            'package': (result.stdout_lines | select('match', '^PACKAGE:') | first | replace('PACKAGE:', '')),
+            'executable': (result.stdout_lines | select('match', '^EXECUTABLE:') | first | replace('EXECUTABLE:', '')) or None,
+            'all_candidates': ((result.stdout_lines | select('match', '^CANDIDATES:') | first | replace('CANDIDATES:', '')).split(',') | reject('equalto', '') | list),
+          }
+        })
+      }}
+  loop: "{{ _provision_benchmarks_binary_queries.results | default([]) }}"
+  loop_control:
+    loop_var: result
+  when:
+    - result.stdout_lines is defined
+    - result.stdout_lines | length > 0
+    - result.stdout_lines | select('match', '^TOOL:') | list | length > 0
+  changed_when: false
+
+- name: Write per-host discovery file to localhost
+  ansible.builtin.copy:
+    content: "{{ discovery_content }}"
+    dest: "{{ playbook_dir }}/../benchmarks/package_discoveries/{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic_short }}.yml"
+    mode: '0644'
+  vars:
+    discovery_content: |
+      ---
+      hostname: {{ inventory_hostname }}
+      os_family: {{ ansible_os_family | lower }}
+      os_major_version: "{{ ansible_distribution_major_version }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      discoveries:
+      {{ _provision_benchmarks_discoveries | default({}) | to_nice_yaml(indent=2) | indent(2) }}
+  delegate_to: localhost
+  when:
+    - _provision_benchmarks_discoveries is defined
+    - _provision_benchmarks_discoveries | length > 0
+    - ansible_system != "Windows"
+    - ansible_os_family != "NixOS"
+  changed_when: false

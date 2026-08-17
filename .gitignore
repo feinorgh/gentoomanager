@@ -190,3 +190,4 @@ group_vars/
 #   ansible-galaxy collection install -r requirements.yml
 collections/
 changelogs/.plugin-cache.yaml
+benchmarks/package_discoveries/
