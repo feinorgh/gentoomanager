@@ -38,3 +38,7 @@ provision_benchmarks_mappings_overrides:
     gcc:
       executable: "gcc"
       package: "build-base"
+  gentoo:
+    botan:
+      executable: botan3
+      package: "dev-libs/botan:3"
