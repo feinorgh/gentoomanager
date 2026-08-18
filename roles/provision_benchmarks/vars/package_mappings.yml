@@ -33,7 +33,7 @@ provision_benchmarks_mappings_overrides:
   redhat:
     botan:
       executable: "botan"
-      package: "botan-devel"
+      package: "botan3"
   alpine:
     botan:
       executable: "botan"

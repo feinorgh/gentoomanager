@@ -263,7 +263,7 @@ provision_benchmarks_botan_packages:
   Gentoo:
     - dev-libs/botan:3
   RedHat:
-    - botan
+    - botan3
   Debian:
     - botan
   Archlinux:
