@@ -90,6 +90,24 @@
     - ansible_system | default('Linux') in ['Linux', 'FreeBSD']
     - not (run_benchmarks_disk_skip | default(false) | bool)
 
+- name: Write disk skip artifact when benchmark is skipped (tmpfs or unsupported)
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/disk_skip.json"
+    content: >-
+      {{
+        {
+          'category': 'disk',
+          'status': 'skipped',
+          'reason': 'Work directory is on a tmpfs/RAM-backed filesystem; disk I/O benchmark skipped.'
+        } | to_nice_json
+      }}
+    mode: "0644"
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_system | default('Linux') in ['Linux', 'FreeBSD']
+    - run_benchmarks_disk_skip | default(false) | bool
+
 - name: Warn if disk benchmarks failed
   ansible.builtin.debug:
     msg: "[WARN] disk benchmark failed or timed out"

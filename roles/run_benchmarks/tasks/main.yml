@@ -156,7 +156,8 @@
                                    else 'memory_bandwidth.json'),
             'process':            'process.json',
             'disk':               ('disk_skip.json'
-                                   if ansible_system == 'OpenBSD'
+                                   if (ansible_system in ['OpenBSD', 'SunOS']
+                                       or 'disk_skip.json' in existing)
                                    else 'disk.json'),
             'linker':             'linker.json',
             'opencv':             'opencv.json',

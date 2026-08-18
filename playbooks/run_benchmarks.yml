@@ -345,7 +345,8 @@
                                     else 'memory_bandwidth.json'),
              'process':            'process.json',
              'disk':               ('disk_skip.json'
-                                    if run_benchmarks_preflight_system == 'OpenBSD'
+                                    if (run_benchmarks_preflight_system in ['OpenBSD', 'SunOS']
+                                        or 'disk_skip.json' in existing)
                                     else 'disk.json'),
             'linker':             'linker.json',
             'opencv':             'opencv.json',
