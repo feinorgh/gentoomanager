@@ -76,6 +76,72 @@
     run_benchmarks_boot_retries: 2
 
   pre_tasks:
+    # ── Pre-boot completeness check (controller-side, no SSH needed) ───────
+    # When --skip-complete is set, check result files on the controller before
+    # booting the VM. Avoids waking a VM only to immediately skip it.
+    # Uses only fixed-path file checks; OS-specific variants (memory_bandwidth
+    # vs memory_latency, disk vs disk_skip) are handled with "either" logic.
+    - name: Check existing results before booting (controller-side)
+      ansible.builtin.find:
+        paths: "{{ run_benchmarks_results_dir }}/results/{{ inventory_hostname }}"
+        patterns: "*.json"
+        size: 1
+      delegate_to: localhost
+      become: false
+      register: _preboot_existing_results
+      when: run_benchmarks_skip_complete | default(false) | bool
+
+    - name: Evaluate pre-boot completeness
+      ansible.builtin.set_fact:
+        _preboot_results_complete: >-
+          {%- set existing = _preboot_existing_results.files
+                             | default([])
+                             | map(attribute='path')
+                             | map('basename')
+                             | list -%}
+          {%- set required = [
+            'compression.json', 'crypto_symmetric.json',
+            'python.json', 'numeric_compiled.json', 'sqlite_write.json',
+            'ffmpeg_video_encode.json', 'imagemagick_resize.json',
+            'coreutils.json', 'process.json', 'startup.json',
+            'boot_times.json', 'bash.json', 'octave.json', 'linker.json',
+            'compiler_c_compile.json', 'compiler_c_runtime.json',
+            'compiler_sqlite.json', 'compiler_multifile.json'
+          ] -%}
+          {%- set optional_either = [
+            ['memory_bandwidth.json', 'memory_latency.json'],
+            ['disk.json',    'disk_skip.json'],
+            ['opencv.json',  'opencv_skip.json'],
+            ['gimp.json',    'gimp_skip.json'],
+            ['inkscape.json','inkscape_skip.json']
+          ] -%}
+          {%- set missing = [] -%}
+          {%- for f in required -%}
+            {%- if f not in existing -%}{%- set _ = missing.append(f) -%}{%- endif -%}
+          {%- endfor -%}
+          {%- for pair in optional_either -%}
+            {%- if pair | select('in', existing) | list | length == 0 -%}
+              {%- set _ = missing.append(pair[0]) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ missing | length == 0 }}
+      when: run_benchmarks_skip_complete | default(false) | bool
+
+    - name: Log pre-boot skip decision
+      ansible.builtin.debug:
+        msg: >-
+          Pre-boot skip: {{ inventory_hostname }} already has a complete result
+          set — skipping boot and benchmarks entirely.
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - _preboot_results_complete | default(false) | bool
+
+    - name: End play for this host before boot — results already complete
+      ansible.builtin.meta: end_host
+      when:
+        - run_benchmarks_skip_complete | default(false) | bool
+        - _preboot_results_complete | default(false) | bool
+
     # ── Power management: boot VM if it is off ────────────────────────────
     # When run_benchmarks_manage_power is true, check the VM's current state
     # via virsh before attempting SSH.  If the domain is not running, start it
