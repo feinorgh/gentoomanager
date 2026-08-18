@@ -349,9 +349,9 @@
                                         or 'disk_skip.json' in existing)
                                     else 'disk.json'),
             'linker':             'linker.json',
-            'opencv':             'opencv.json',
-            'gimp':               'gimp.json',
-             'inkscape':           'inkscape.json',
+            'opencv':             ('opencv_skip.json' if 'opencv_skip.json' in existing else 'opencv.json'),
+            'gimp':               ('gimp_skip.json' if 'gimp_skip.json' in existing else 'gimp.json'),
+             'inkscape':           ('inkscape_skip.json' if 'inkscape_skip.json' in existing else 'inkscape.json'),
              'startup':            'startup.json',
              'boot_time':          'boot_times.json',
              'bash':               'bash.json',

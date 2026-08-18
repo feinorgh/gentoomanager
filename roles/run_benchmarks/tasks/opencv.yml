@@ -18,6 +18,17 @@
       -i inventory_generator.py --limit {{ inventory_hostname }}
   when: run_benchmarks_opencv_check.rc != 0
 
+- name: Write opencv skip artifact
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/opencv_skip.json"
+    content: >-
+      {{ {'category': 'opencv', 'status': 'skipped',
+          'reason': 'opencv (cv2) not importable on this host'} | to_nice_json }}
+    mode: "0644"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_opencv_check.rc != 0
+
 - name: Create OpenCV benchmark script
   ansible.builtin.copy:
     dest: "{{ run_benchmarks_work_dir }}/opencv_bench.py"

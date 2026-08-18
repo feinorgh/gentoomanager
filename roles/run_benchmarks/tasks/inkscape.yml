@@ -23,6 +23,17 @@
       -i inventory_generator.py --limit {{ inventory_hostname }}
   when: run_benchmarks_inkscape_check.rc != 0
 
+- name: Write inkscape skip artifact
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/inkscape_skip.json"
+    content: >-
+      {{ {'category': 'inkscape', 'status': 'skipped',
+          'reason': 'inkscape not found on this host'} | to_nice_json }}
+    mode: "0644"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_inkscape_check.rc != 0
+
 # Generate a complex SVG: 300 star/polygon paths (gradients + filter effects),
 # 80 transformed groups of 4 rectangles, 60 text labels — ~500 KB total.
 # The fixture is stable (random.seed(42)) so results are reproducible.

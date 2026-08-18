@@ -36,6 +36,17 @@
       -i inventory_generator.py --limit {{ inventory_hostname }}
   when: run_benchmarks_gimp_check.rc != 0
 
+- name: Write gimp skip artifact
+  ansible.builtin.copy:
+    dest: "{{ run_benchmarks_work_dir }}/gimp_skip.json"
+    content: >-
+      {{ {'category': 'gimp', 'status': 'skipped',
+          'reason': 'gimp not found on this host'} | to_nice_json }}
+    mode: "0644"
+  changed_when: false
+  failed_when: false
+  when: run_benchmarks_gimp_check.rc != 0
+
 - name: Select GIMP startup command for detected major version
   ansible.builtin.set_fact:
     run_benchmarks_gimp_start_command: >-
