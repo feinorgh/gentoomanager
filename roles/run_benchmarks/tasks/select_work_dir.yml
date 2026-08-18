@@ -157,9 +157,10 @@
     - run_benchmarks_auto_select_work_dir | default(true) | bool
     - run_benchmarks_workdir_needs_fallback | default(false) | bool
 
-- name: Fail when no suitable non-tmpfs work directory is available
-  ansible.builtin.fail:
+- name: Warn — no suitable benchmark work directory found (skipping host)
+  ansible.builtin.debug:
     msg: >-
+      WARNING: Skipping benchmarks on {{ inventory_hostname }}.
       No suitable benchmark work directory found. Required free space:
       {{
         run_benchmarks_work_dir_required_mb
@@ -174,6 +175,14 @@
       filesystem={{ run_benchmarks_workdir_current_fstype | default('unknown') }},
       available={{ ((run_benchmarks_workdir_current_avail_kb | default(0) | int) / 1024) | round(0) | int }} MB.
       Override run_benchmarks_work_dir or provide a larger candidate list.
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+    - run_benchmarks_workdir_needs_fallback | default(false) | bool
+    - run_benchmarks_workdir_select_raw.rc | default(1) != 0
+
+- name: Skip host — no suitable benchmark work directory available
+  ansible.builtin.meta: end_host
   when:
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
