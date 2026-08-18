@@ -27,6 +27,9 @@ provision_benchmarks_mappings_overrides:
     gcc:
       executable: "gcc"
       package: "build-essential"
+    opencv:
+      executable: "opencv_version"
+      package: "python3-opencv"
   redhat:
     botan:
       executable: "botan"
