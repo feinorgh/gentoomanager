@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Host details: Zeus – Gentoo Benchmark Analysis</title>
+<title>Host details: Atalanta – Gentoo Benchmark Analysis</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -107,7 +107,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">Host details: Zeus</li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">Host details: Atalanta</li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -170,7 +170,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Host details: Zeus</h1>
+<h1 class="title">Host details: Atalanta</h1>
 </div>
 
 
@@ -199,19 +199,19 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td>Hostname</td>
-<td>Zeus</td>
+<td>Atalanta</td>
 </tr>
 <tr class="even">
 <td>Operating system</td>
-<td>Archlinux</td>
+<td>RedHat</td>
 </tr>
 <tr class="odd">
 <td>OS version</td>
-<td>NA</td>
+<td>9.8</td>
 </tr>
 <tr class="even">
 <td>OS family</td>
-<td>Archlinux</td>
+<td>RedHat</td>
 </tr>
 </tbody>
 </table>
@@ -240,10 +240,6 @@ ul.task-list li input[type="checkbox"] {
 <section id="build-and-tuning" class="level2">
 <h2 class="anchored" data-anchor-id="build-and-tuning">Build and tuning</h2>
 <table class="caption-top table">
-<colgroup>
-<col style="width: 50%">
-<col style="width: 50%">
-</colgroup>
 <thead>
 <tr class="header">
 <th>Field</th>
@@ -257,15 +253,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>Common flags</td>
-<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
+<td>-O2 -g</td>
 </tr>
 <tr class="odd">
 <td>CFLAGS</td>
-<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
+<td>-O2 -g</td>
 </tr>
 <tr class="even">
 <td>LDFLAGS</td>
-<td>-Wl,-O1 -Wl,–sort-common -Wl,–as-needed -Wl,-z,relro -Wl,-z,now \</td>
+<td>%{build_ldflags}</td>
 </tr>
 </tbody>
 </table>
@@ -286,43 +282,43 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td>7z</td>
-<td>n/a</td>
+<td>not installed</td>
 </tr>
 <tr class="even">
 <td>bash</td>
-<td>GNU bash, version 5.3.15(1)-release (x86_64-pc-linux-gnu)</td>
+<td>GNU bash, version 5.1.8(1)-release (x86_64-redhat-linux-gnu)</td>
 </tr>
 <tr class="odd">
 <td>clang</td>
-<td>clang version 22.1.8</td>
+<td>clang version 21.1.8 (Red Hat, Inc.&nbsp;21.1.8-2.el9)</td>
 </tr>
 <tr class="even">
 <td>ffmpeg</td>
-<td>ffmpeg version n9.0.1 Copyright (c) 2000-2026 the FFmpeg developers</td>
+<td>not installed</td>
 </tr>
 <tr class="odd">
 <td>gcc</td>
-<td>gcc (GCC) 16.2.1 20260810</td>
+<td>gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-14)</td>
 </tr>
 <tr class="even">
 <td>gimp</td>
-<td>GNU Image Manipulation Program version 3.2.4</td>
+<td>not installed</td>
 </tr>
 <tr class="odd">
 <td>go</td>
-<td>go version go1.26.6-X:nodwarf5 linux/amd64</td>
+<td>go version go1.26.5 (Red Hat 1.26.5-1.el9_8) linux/amd64</td>
 </tr>
 <tr class="even">
 <td>imagemagick</td>
-<td>Version: ImageMagick 7.1.2-29 Q16-HDRI x86_64 b919b37fd:20260727 https://imagemagick.org</td>
+<td>not installed</td>
 </tr>
 <tr class="odd">
 <td>inkscape</td>
-<td>Inkscape 1.4.4 (dcaf3e7d9e, 2026-05-05)</td>
+<td>not installed</td>
 </tr>
 <tr class="even">
 <td>kernel</td>
-<td>7.1.8-arch1-3</td>
+<td>5.14.0-687.39.1.el9_8.x86_64</td>
 </tr>
 <tr class="odd">
 <td>lld</td>
@@ -334,19 +330,19 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>numpy</td>
-<td>2.5.2</td>
+<td>1.23.5</td>
 </tr>
 <tr class="even">
 <td>openssl</td>
-<td>OpenSSL 3.6.3 9 Jun 2026 (Library: OpenSSL 3.6.3 9 Jun 2026)</td>
+<td>OpenSSL 3.5.5 27 Jan 2026 (Library: OpenSSL 3.5.5 27 Jan 2026)</td>
 </tr>
 <tr class="odd">
 <td>perl</td>
-<td>This is perl 5, version 42, subversion 2 (v5.42.2*) built for x86_64-linux-thread-multi</td>
+<td>This is perl 5, version 32, subversion 1 (v5.32.1) built for x86_64-linux-thread-multi</td>
 </tr>
 <tr class="even">
 <td>python</td>
-<td>Python 3.14.7</td>
+<td>Python 3.9.25</td>
 </tr>
 <tr class="odd">
 <td>ruby</td>
@@ -354,11 +350,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>rustc</td>
-<td>rustc 1.97.1 (8bab26f4f 2026-07-14) (Arch Linux rust 1:1.97.1-1)</td>
+<td>rustc 1.92.0 (ded5c06cf 2025-12-08) (Red Hat 1.92.0-1.el9)</td>
 </tr>
 <tr class="odd">
 <td>sqlite3</td>
-<td>3.53.4 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e0945alt1 (64-bit)</td>
+<td>not installed</td>
 </tr>
 </tbody>
 </table>
@@ -379,15 +375,15 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td>calibration_mips</td>
-<td>6572</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>cflags</td>
-<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
+<td>-O2 -g</td>
 </tr>
 <tr class="odd">
 <td>common_flags</td>
-<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
+<td>-O2 -g</td>
 </tr>
 <tr class="even">
 <td>cpu_cache_l3</td>
@@ -415,11 +411,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>cxxflags</td>
-<td>$CFLAGS -Wp,-D_GLIBCXX_ASSERTIONS</td>
+<td>-O2 -g</td>
 </tr>
 <tr class="odd">
 <td>distro_label</td>
-<td>Archlinux</td>
+<td>RedHat</td>
 </tr>
 <tr class="even">
 <td>features</td>
@@ -427,11 +423,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>filesystem</td>
-<td>btrfs</td>
+<td>xfs</td>
 </tr>
 <tr class="even">
 <td>gcc_config</td>
-<td>default-pie=yes, default-ssp=yes, lto-support=yes, bootstrap-lto=yes</td>
+<td>default-pie=no, default-ssp=no, lto-support=no, bootstrap-lto=yes</td>
 </tr>
 <tr class="odd">
 <td>gentoo_profile</td>
@@ -439,11 +435,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>hostname</td>
-<td>Zeus</td>
+<td>Atalanta</td>
 </tr>
 <tr class="odd">
 <td>io_scheduler</td>
-<td>none</td>
+<td>unknown</td>
 </tr>
 <tr class="even">
 <td>is_hypervisor</td>
@@ -451,7 +447,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>ldflags</td>
-<td>-Wl,-O1 -Wl,–sort-common -Wl,–as-needed -Wl,-z,relro -Wl,-z,now \</td>
+<td>%{build_ldflags}</td>
 </tr>
 <tr class="even">
 <td>libc_variant</td>
@@ -459,15 +455,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>libc_version</td>
-<td>2.44</td>
+<td>2.34</td>
 </tr>
 <tr class="even">
 <td>linux_perf_context</td>
-<td>{“cpu_boost_enabled”: “unknown”, “cpu_idle_governor”: “menu”, “kernel_numa_balancing”: “0”, “kernel_sched_autogroup_enabled”: “1”, “thp_defrag”: “madvise”, “vm_dirty_background_ratio”: “10”, “vm_dirty_expire_centisecs”: “3000”, “vm_dirty_ratio”: “20”, “vm_dirty_writeback_centisecs”: “500”, “vm_overcommit_memory”: “0”, “vm_overcommit_ratio”: “50”, “vm_swappiness”: “60”, “vm_watermark_scale_factor”: “10”, “vm_zone_reclaim_mode”: “0”, “zram_enabled”: “0”, “zswap_enabled”: “enabled”}</td>
+<td>{“cpu_boost_enabled”: “unknown”, “cpu_idle_governor”: “menu”, “kernel_numa_balancing”: “0”, “kernel_sched_autogroup_enabled”: “1”, “thp_defrag”: “madvise”, “vm_dirty_background_ratio”: “10”, “vm_dirty_expire_centisecs”: “3000”, “vm_dirty_ratio”: “20”, “vm_dirty_writeback_centisecs”: “500”, “vm_overcommit_memory”: “0”, “vm_overcommit_ratio”: “50”, “vm_swappiness”: “60”, “vm_watermark_scale_factor”: “10”, “vm_zone_reclaim_mode”: “0”, “zram_enabled”: “0”, “zswap_enabled”: “disabled”}</td>
 </tr>
 <tr class="odd">
 <td>makeflags</td>
-<td>n/a</td>
+<td>-j8</td>
 </tr>
 <tr class="even">
 <td>makeopts</td>
@@ -499,15 +495,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>os</td>
-<td>Archlinux</td>
+<td>RedHat</td>
 </tr>
 <tr class="even">
 <td>os_family</td>
-<td>Archlinux</td>
+<td>RedHat</td>
 </tr>
 <tr class="odd">
 <td>os_version</td>
-<td>NA</td>
+<td>9.8</td>
 </tr>
 <tr class="even">
 <td>preempt_model</td>
@@ -519,7 +515,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>scheduler</td>
-<td>sched_ext</td>
+<td>CFS</td>
 </tr>
 <tr class="odd">
 <td>smt_active</td>
@@ -535,7 +531,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>versions</td>
-<td>gcc=gcc (GCC) 16.2.1 20260810, clang=clang version 22.1.8, rustc=rustc 1.97.1 (8bab26f4f 2026-07-14) (Arch Linux rust 1:1.97.1-1), go=go version go1.26.6-X:nodwarf5 linux/amd64, python=Python 3.14.7, ffmpeg=ffmpeg version n9.0.1 Copyright (c) 2000-2026 the FFmpeg developers, openssl=OpenSSL 3.6.3 9 Jun 2026 (Library: OpenSSL 3.6.3 9 Jun 2026), kernel=7.1.8-arch1-3, bash=GNU bash, version 5.3.15(1)-release (x86_64-pc-linux-gnu), 7z=, imagemagick=Version: ImageMagick 7.1.2-29 Q16-HDRI x86_64 b919b37fd:20260727 https://imagemagick.org, lld=not installed, sqlite3=3.53.4 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e0945alt1 (64-bit), numpy=2.5.2, gimp=GNU Image Manipulation Program version 3.2.4, inkscape=Inkscape 1.4.4 (dcaf3e7d9e, 2026-05-05), perl=This is perl 5, version 42, subversion 2 (v5.42.2*) built for x86_64-linux-thread-multi, ruby=not installed, node=not installed</td>
+<td>gcc=gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-14), clang=clang version 21.1.8 (Red Hat, Inc.&nbsp;21.1.8-2.el9), rustc=rustc 1.92.0 (ded5c06cf 2025-12-08) (Red Hat 1.92.0-1.el9), go=go version go1.26.5 (Red Hat 1.26.5-1.el9_8) linux/amd64, python=Python 3.9.25, ffmpeg=not installed, openssl=OpenSSL 3.5.5 27 Jan 2026 (Library: OpenSSL 3.5.5 27 Jan 2026), kernel=5.14.0-687.39.1.el9_8.x86_64, bash=GNU bash, version 5.1.8(1)-release (x86_64-redhat-linux-gnu), 7z=not installed, imagemagick=not installed, lld=not installed, sqlite3=not installed, numpy=1.23.5, gimp=not installed, inkscape=not installed, perl=This is perl 5, version 32, subversion 1 (v5.32.1) built for x86_64-linux-thread-multi, ruby=not installed, node=not installed</td>
 </tr>
 <tr class="odd">
 <td>virt_type</td>
