@@ -156,6 +156,21 @@
     - run_benchmarks_auto_select_work_dir | default(true) | bool
     - run_benchmarks_workdir_needs_fallback | default(false) | bool
 
+- name: Record whether a fallback work directory was found
+  ansible.builtin.set_fact:
+    _run_benchmarks_workdir_fallback_found: >-
+      {{
+        (run_benchmarks_workdir_select_raw.stdout_lines
+         | default([])
+         | select('match', '^selected=')
+         | list
+         | length) > 0
+      }}
+  when:
+    - ansible_os_family | default('') != 'Windows'
+    - run_benchmarks_auto_select_work_dir | default(true) | bool
+    - run_benchmarks_workdir_needs_fallback | default(false) | bool
+
 - name: Warn — no suitable benchmark work directory found (skipping host)
   ansible.builtin.debug:
     msg: >-
@@ -178,7 +193,7 @@
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
     - run_benchmarks_workdir_needs_fallback | default(false) | bool
-    - (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length) == 0
+    - not (_run_benchmarks_workdir_fallback_found | default(false) | bool)
 
 - name: Skip host — no suitable benchmark work directory available
   ansible.builtin.meta: end_host
@@ -186,7 +201,7 @@
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
     - run_benchmarks_workdir_needs_fallback | default(false) | bool
-    - (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length) == 0
+    - not (_run_benchmarks_workdir_fallback_found | default(false) | bool)
 
 - name: Set selected benchmark work directory facts
   ansible.builtin.set_fact:
@@ -209,7 +224,7 @@
         run_benchmarks_selected_work_dir | default(run_benchmarks_work_dir)
         if (
           run_benchmarks_workdir_needs_fallback | default(false) | bool and
-          (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length > 0)
+          (_run_benchmarks_workdir_fallback_found | default(false) | bool)
         )
         else run_benchmarks_work_dir
       }}
@@ -218,7 +233,7 @@
         run_benchmarks_selected_work_dir | default(run_benchmarks_work_dir)
         if (
           run_benchmarks_workdir_needs_fallback | default(false) | bool and
-          (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length > 0)
+          (_run_benchmarks_workdir_fallback_found | default(false) | bool)
         )
         else run_benchmarks_work_dir
       }}
