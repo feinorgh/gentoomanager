@@ -137,7 +137,7 @@
           target="${base%/}/$suffix"
           mkdir -p "$target" 2>/dev/null || continue
           probe="${target}/.ansible_write_probe.$$"
-          : >"$probe" 2>/dev/null || continue
+          : >"$probe" 2>/dev/null || { rmdir "$target" 2>/dev/null; continue; }
           rm -f "$probe"
 
           echo "selected=${base%/}/$suffix"
