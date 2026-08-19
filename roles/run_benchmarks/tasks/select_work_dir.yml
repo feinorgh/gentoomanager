@@ -178,7 +178,7 @@
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
     - run_benchmarks_workdir_needs_fallback | default(false) | bool
-    - run_benchmarks_workdir_select_raw.rc | default(1) != 0
+    - (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length) == 0
 
 - name: Skip host — no suitable benchmark work directory available
   ansible.builtin.meta: end_host
@@ -186,7 +186,7 @@
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
     - run_benchmarks_workdir_needs_fallback | default(false) | bool
-    - run_benchmarks_workdir_select_raw.rc | default(1) != 0
+    - (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length) == 0
 
 - name: Set selected benchmark work directory facts
   ansible.builtin.set_fact:
@@ -209,7 +209,7 @@
         run_benchmarks_selected_work_dir | default(run_benchmarks_work_dir)
         if (
           run_benchmarks_workdir_needs_fallback | default(false) | bool and
-          (run_benchmarks_workdir_select_raw.rc | default(1) == 0)
+          (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length > 0)
         )
         else run_benchmarks_work_dir
       }}
@@ -218,7 +218,7 @@
         run_benchmarks_selected_work_dir | default(run_benchmarks_work_dir)
         if (
           run_benchmarks_workdir_needs_fallback | default(false) | bool and
-          (run_benchmarks_workdir_select_raw.rc | default(1) == 0)
+          (run_benchmarks_workdir_select_raw.stdout_lines | default([]) | select('match', '^selected=') | list | length > 0)
         )
         else run_benchmarks_work_dir
       }}
