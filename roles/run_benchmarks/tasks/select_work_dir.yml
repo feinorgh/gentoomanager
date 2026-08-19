@@ -148,8 +148,7 @@
         fi
       done
       exit 1
-    executable: /bin/sh
-  register: run_benchmarks_workdir_select_raw
+    executable: /bin/bash
   changed_when: false
   failed_when: false
   when:
