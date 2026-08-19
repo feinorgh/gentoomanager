@@ -149,6 +149,7 @@
       done
       exit 1
     executable: /bin/bash
+  register: run_benchmarks_workdir_select_raw
   changed_when: false
   failed_when: false
   when:
@@ -159,13 +160,7 @@
 - name: Record whether a fallback work directory was found
   ansible.builtin.set_fact:
     _run_benchmarks_workdir_fallback_found: >-
-      {{
-        (run_benchmarks_workdir_select_raw.stdout_lines
-         | default([])
-         | select('match', '^selected=')
-         | list
-         | length) > 0
-      }}
+      {{ 'selected=' in (run_benchmarks_workdir_select_raw.stdout | default('')) }}
   when:
     - ansible_os_family | default('') != 'Windows'
     - run_benchmarks_auto_select_work_dir | default(true) | bool
