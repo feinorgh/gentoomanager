@@ -113,7 +113,7 @@ fi
 echo ""
 echo "🔄 Syncing rendered site into worktree..."
 mkdir -p "$WORKTREE_DIR/docs/benchmarks-article"
-rsync -a --delete "$SITE_DIR/" "$WORKTREE_DIR/docs/benchmarks-article/_site/"
+rsync -a --delete "$SITE_DIR/" "$WORKTREE_DIR/"
 
 # ── 7. Commit and push ────────────────────────────────────────────────────────
 echo ""
