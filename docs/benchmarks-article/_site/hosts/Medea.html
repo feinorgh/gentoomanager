@@ -203,15 +203,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>Operating system</td>
-<td>OpenBSD</td>
+<td>Archlinux</td>
 </tr>
 <tr class="odd">
 <td>OS version</td>
-<td>7.9</td>
+<td>26.1.0</td>
 </tr>
 <tr class="even">
 <td>OS family</td>
-<td>OpenBSD</td>
+<td>Archlinux</td>
 </tr>
 </tbody>
 </table>
@@ -232,7 +232,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>-march=native</td>
-<td>n/a</td>
+<td>skylake</td>
 </tr>
 </tbody>
 </table>
@@ -240,6 +240,10 @@ ul.task-list li input[type="checkbox"] {
 <section id="build-and-tuning" class="level2">
 <h2 class="anchored" data-anchor-id="build-and-tuning">Build and tuning</h2>
 <table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
 <thead>
 <tr class="header">
 <th>Field</th>
@@ -253,15 +257,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>Common flags</td>
-<td>n/a</td>
+<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
 </tr>
 <tr class="odd">
 <td>CFLAGS</td>
-<td>n/a</td>
+<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
 </tr>
 <tr class="even">
 <td>LDFLAGS</td>
-<td>n/a</td>
+<td>-Wl,-O1 -Wl,–sort-common -Wl,–as-needed -Wl,-z,relro -Wl,-z,now \</td>
 </tr>
 </tbody>
 </table>
@@ -286,39 +290,39 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>bash</td>
-<td>GNU bash, version 5.3.9(1)-release (x86_64-unknown-openbsd7.9)</td>
+<td>GNU bash, version 5.3.15(1)-release (x86_64-pc-linux-gnu)</td>
 </tr>
 <tr class="odd">
 <td>clang</td>
-<td>OpenBSD clang version 19.1.7</td>
+<td>clang version 22.1.8</td>
 </tr>
 <tr class="even">
 <td>ffmpeg</td>
-<td>ffmpeg version 8.0.3 Copyright (c) 2000-2026 the FFmpeg developers</td>
+<td>ffmpeg version n9.0 Copyright (c) 2000-2026 the FFmpeg developers</td>
 </tr>
 <tr class="odd">
 <td>gcc</td>
-<td>OpenBSD clang version 19.1.7</td>
+<td>gcc (GCC) 16.1.1 20260728</td>
 </tr>
 <tr class="even">
 <td>gimp</td>
-<td>not installed</td>
+<td>GNU Image Manipulation Program version 3.2.4</td>
 </tr>
 <tr class="odd">
 <td>go</td>
-<td>go version go1.26.2 openbsd/amd64</td>
+<td>go version go1.26.5-X:nodwarf5 linux/amd64</td>
 </tr>
 <tr class="even">
 <td>imagemagick</td>
-<td>Version: ImageMagick 6.9.13-43 Q16 x86_64 19215 https://legacy.imagemagick.org</td>
+<td>Version: ImageMagick 7.1.2-29 Q16-HDRI x86_64 b919b37fd:20260727 https://imagemagick.org</td>
 </tr>
 <tr class="odd">
 <td>inkscape</td>
-<td>Inkscape 1.4.3 (0d15f75042, 2025-12-25)</td>
+<td>Inkscape 1.4.4 (dcaf3e7d9e, 2026-05-05)</td>
 </tr>
 <tr class="even">
 <td>kernel</td>
-<td>7.9</td>
+<td>6.12.103-1-MANJARO</td>
 </tr>
 <tr class="odd">
 <td>lld</td>
@@ -330,19 +334,19 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>numpy</td>
-<td>2.4.4</td>
+<td>2.5.2</td>
 </tr>
 <tr class="even">
 <td>openssl</td>
-<td>LibreSSL 4.3.0</td>
+<td>OpenSSL 3.6.3 9 Jun 2026 (Library: OpenSSL 3.6.3 9 Jun 2026)</td>
 </tr>
 <tr class="odd">
 <td>perl</td>
-<td>This is perl 5, version 42, subversion 2 (v5.42.2) built for amd64-openbsd</td>
+<td>This is perl 5, version 42, subversion 2 (v5.42.2) built for x86_64-linux-thread-multi</td>
 </tr>
 <tr class="even">
 <td>python</td>
-<td>Python 3.13.14</td>
+<td>Python 3.14.6</td>
 </tr>
 <tr class="odd">
 <td>ruby</td>
@@ -350,11 +354,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>rustc</td>
-<td>rustc 1.94.1 (e408947bf 2026-03-25) (built from a source tarball)</td>
+<td>rustc 1.97.1 (8bab26f4f 2026-07-14) (Arch Linux rust 1:1.97.1-1)</td>
 </tr>
 <tr class="odd">
 <td>sqlite3</td>
-<td>3.51.3 2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6alt1 (64-bit)</td>
+<td>3.53.4 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e0945alt1 (64-bit)</td>
 </tr>
 </tbody>
 </table>
@@ -375,23 +379,23 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td>calibration_mips</td>
-<td>4125</td>
+<td>6792</td>
 </tr>
 <tr class="even">
 <td>cflags</td>
-<td>n/a</td>
+<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
 </tr>
 <tr class="odd">
 <td>common_flags</td>
-<td>n/a</td>
+<td>-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \</td>
 </tr>
 <tr class="even">
 <td>cpu_cache_l3</td>
-<td>n/a</td>
+<td>128 MiB (8 instances)</td>
 </tr>
 <tr class="odd">
 <td>cpu_cores</td>
-<td>1</td>
+<td>8</td>
 </tr>
 <tr class="even">
 <td>cpu_flags_x86</td>
@@ -403,7 +407,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>cpu_mhz</td>
-<td>149</td>
+<td>3000</td>
 </tr>
 <tr class="odd">
 <td>cpu_model</td>
@@ -411,11 +415,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>cxxflags</td>
-<td>n/a</td>
+<td>$CFLAGS -Wp,-D_GLIBCXX_ASSERTIONS</td>
 </tr>
 <tr class="odd">
 <td>distro_label</td>
-<td>OpenBSD</td>
+<td>Archlinux</td>
 </tr>
 <tr class="even">
 <td>features</td>
@@ -423,11 +427,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>filesystem</td>
-<td>unknown</td>
+<td>btrfs</td>
 </tr>
 <tr class="even">
 <td>gcc_config</td>
-<td>default-pie=no, default-ssp=no, lto-support=no</td>
+<td>default-pie=yes, default-ssp=yes, lto-support=yes, bootstrap-lto=yes</td>
 </tr>
 <tr class="odd">
 <td>gentoo_profile</td>
@@ -439,7 +443,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>io_scheduler</td>
-<td>unknown</td>
+<td>none</td>
 </tr>
 <tr class="even">
 <td>is_hypervisor</td>
@@ -447,23 +451,23 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>ldflags</td>
-<td>n/a</td>
+<td>-Wl,-O1 -Wl,–sort-common -Wl,–as-needed -Wl,-z,relro -Wl,-z,now \</td>
 </tr>
 <tr class="even">
 <td>libc_variant</td>
-<td>unknown</td>
+<td>glibc</td>
 </tr>
 <tr class="odd">
 <td>libc_version</td>
-<td>n/a</td>
+<td>2.44</td>
 </tr>
 <tr class="even">
 <td>linux_perf_context</td>
-<td>{}</td>
+<td>{“cpu_boost_enabled”: “unknown”, “cpu_idle_governor”: “menu”, “kernel_numa_balancing”: “0”, “kernel_sched_autogroup_enabled”: “1”, “thp_defrag”: “madvise”, “vm_dirty_background_ratio”: “10”, “vm_dirty_expire_centisecs”: “3000”, “vm_dirty_ratio”: “20”, “vm_dirty_writeback_centisecs”: “500”, “vm_overcommit_memory”: “0”, “vm_overcommit_ratio”: “50”, “vm_swappiness”: “60”, “vm_watermark_scale_factor”: “10”, “vm_zone_reclaim_mode”: “0”, “zram_enabled”: “0”, “zswap_enabled”: “disabled”}</td>
 </tr>
 <tr class="odd">
 <td>makeflags</td>
-<td>n/a</td>
+<td>-j2</td>
 </tr>
 <tr class="even">
 <td>makeopts</td>
@@ -471,7 +475,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>march_native</td>
-<td>n/a</td>
+<td>skylake</td>
 </tr>
 <tr class="even">
 <td>mem_speed</td>
@@ -479,15 +483,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>mitigations</td>
-<td>unknown</td>
+<td>default</td>
 </tr>
 <tr class="even">
 <td>normalization_mode</td>
-<td>sync-only-safe-subset</td>
+<td>platform-default</td>
 </tr>
 <tr class="odd">
 <td>normalization_reduced</td>
-<td>True</td>
+<td>False</td>
 </tr>
 <tr class="even">
 <td>numa_nodes</td>
@@ -495,19 +499,19 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>os</td>
-<td>OpenBSD</td>
+<td>Archlinux</td>
 </tr>
 <tr class="even">
 <td>os_family</td>
-<td>OpenBSD</td>
+<td>Archlinux</td>
 </tr>
 <tr class="odd">
 <td>os_version</td>
-<td>7.9</td>
+<td>26.1.0</td>
 </tr>
 <tr class="even">
 <td>preempt_model</td>
-<td>unknown</td>
+<td>DYNAMIC</td>
 </tr>
 <tr class="odd">
 <td>rustflags</td>
@@ -515,11 +519,11 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="even">
 <td>scheduler</td>
-<td>unknown</td>
+<td>sched_ext</td>
 </tr>
 <tr class="odd">
 <td>smt_active</td>
-<td>unknown</td>
+<td>False</td>
 </tr>
 <tr class="even">
 <td>swap_enabled</td>
@@ -527,15 +531,15 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>thp</td>
-<td>unknown</td>
+<td>always</td>
 </tr>
 <tr class="even">
 <td>versions</td>
-<td>gcc=OpenBSD clang version 19.1.7, clang=OpenBSD clang version 19.1.7, rustc=rustc 1.94.1 (e408947bf 2026-03-25) (built from a source tarball), go=go version go1.26.2 openbsd/amd64, python=Python 3.13.14, ffmpeg=ffmpeg version 8.0.3 Copyright (c) 2000-2026 the FFmpeg developers, openssl=LibreSSL 4.3.0, kernel=7.9, bash=GNU bash, version 5.3.9(1)-release (x86_64-unknown-openbsd7.9), 7z=, imagemagick=Version: ImageMagick 6.9.13-43 Q16 x86_64 19215 https://legacy.imagemagick.org, lld=not installed, sqlite3=3.51.3 2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6alt1 (64-bit), numpy=2.4.4, gimp=not installed, inkscape=Inkscape 1.4.3 (0d15f75042, 2025-12-25), perl=This is perl 5, version 42, subversion 2 (v5.42.2) built for amd64-openbsd, ruby=not installed, node=not installed</td>
+<td>gcc=gcc (GCC) 16.1.1 20260728, clang=clang version 22.1.8, rustc=rustc 1.97.1 (8bab26f4f 2026-07-14) (Arch Linux rust 1:1.97.1-1), go=go version go1.26.5-X:nodwarf5 linux/amd64, python=Python 3.14.6, ffmpeg=ffmpeg version n9.0 Copyright (c) 2000-2026 the FFmpeg developers, openssl=OpenSSL 3.6.3 9 Jun 2026 (Library: OpenSSL 3.6.3 9 Jun 2026), kernel=6.12.103-1-MANJARO, bash=GNU bash, version 5.3.15(1)-release (x86_64-pc-linux-gnu), 7z=, imagemagick=Version: ImageMagick 7.1.2-29 Q16-HDRI x86_64 b919b37fd:20260727 https://imagemagick.org, lld=not installed, sqlite3=3.53.4 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e0945alt1 (64-bit), numpy=2.5.2, gimp=GNU Image Manipulation Program version 3.2.4, inkscape=Inkscape 1.4.4 (dcaf3e7d9e, 2026-05-05), perl=This is perl 5, version 42, subversion 2 (v5.42.2) built for x86_64-linux-thread-multi, ruby=not installed, node=not installed</td>
 </tr>
 <tr class="odd">
 <td>virt_type</td>
-<td>unknown</td>
+<td>kvm</td>
 </tr>
 </tbody>
 </table>
