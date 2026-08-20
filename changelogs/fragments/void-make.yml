@@ -1,0 +1,2 @@
+minor_changes:
+  - "roles/provision_benchmarks: install make on Void Linux so compiler_multifile can run."

@@ -16,6 +16,7 @@
     - hyperfine
     - gcc
     - clang
+    - make
     - openssl
     - python3
     - rust
