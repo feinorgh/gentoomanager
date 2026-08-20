@@ -30,4 +30,4 @@ QUARTO_BENCHMARKS_ANONYMIZE=0 quarto preview docs/benchmarks-article
 ## GitHub Pages
 
 The workflow `.github/workflows/quarto-pages.yml` renders this project and deploys the
-`docs/benchmarks-article` site root through GitHub Pages from the `gh-pages-build` branch.
+`docs/benchmarks-article/_site` output through GitHub Pages from the `gh-pages-build` branch.

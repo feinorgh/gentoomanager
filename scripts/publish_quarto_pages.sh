@@ -20,7 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SITE_DIR="$REPO_ROOT/docs/benchmarks-article/_site"
-WORKTREE_DIR="/tmp/gm-pages"
+WORKTREE_DIR="$REPO_ROOT/.worktrees/gh-pages-build"
 PAGES_BRANCH="gh-pages-build"
 
 usage() {
@@ -90,18 +90,27 @@ echo "🌿 Preparing worktree at $WORKTREE_DIR (branch: $PAGES_BRANCH)..."
 git worktree prune
 
 if [[ -d "$WORKTREE_DIR" ]]; then
-    actual_branch=$(git -C "$WORKTREE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-    if [[ "$actual_branch" != "$PAGES_BRANCH" ]]; then
-        die "Worktree at $WORKTREE_DIR is on branch '$actual_branch', not '$PAGES_BRANCH'." \
-            $'\nRemove it with: git worktree remove --force '"$WORKTREE_DIR"
+    if git -C "$WORKTREE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        actual_branch=$(git -C "$WORKTREE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        if [[ "$actual_branch" != "$PAGES_BRANCH" ]]; then
+            die "Worktree at $WORKTREE_DIR is on branch '$actual_branch', not '$PAGES_BRANCH'." \
+                $'\nRemove it with: git worktree remove --force '"$WORKTREE_DIR"
+        fi
+        echo "   ✔  Reusing existing worktree"
+    else
+        echo "   ⚠️  Removing stale worktree directory at $WORKTREE_DIR"
+        rm -rf "$WORKTREE_DIR"
     fi
-    echo "   ✔  Reusing existing worktree"
-elif git rev-parse --verify "$PAGES_BRANCH" >/dev/null 2>&1; then
-    git worktree add "$WORKTREE_DIR" "$PAGES_BRANCH"
-    echo "   ✔  Worktree created from existing branch"
-else
-    git worktree add -b "$PAGES_BRANCH" "$WORKTREE_DIR"
-    echo "   ✔  Worktree created with new branch"
+fi
+
+if [[ ! -d "$WORKTREE_DIR" ]]; then
+    if git rev-parse --verify "$PAGES_BRANCH" >/dev/null 2>&1; then
+        git worktree add "$WORKTREE_DIR" "$PAGES_BRANCH"
+        echo "   ✔  Worktree created from existing branch"
+    else
+        git worktree add -b "$PAGES_BRANCH" "$WORKTREE_DIR"
+        echo "   ✔  Worktree created with new branch"
+    fi
 fi
 
 # Sync remote tracking branch so we push cleanly
@@ -112,12 +121,11 @@ fi
 # ── 6. Sync rendered site into worktree ──────────────────────────────────────
 echo ""
 echo "🔄 Syncing rendered site into worktree..."
-mkdir -p "$WORKTREE_DIR/docs/benchmarks-article"
-rsync -a --delete "$SITE_DIR/" "$WORKTREE_DIR/"
+cd "$WORKTREE_DIR"
+rsync -a --delete "$SITE_DIR/" .
 
 # ── 7. Commit and push ────────────────────────────────────────────────────────
 echo ""
-cd "$WORKTREE_DIR"
 git add -A
 
 if git diff --cached --quiet; then
