@@ -93,8 +93,8 @@ if [[ -d "$WORKTREE_DIR" ]]; then
     if git -C "$WORKTREE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         actual_branch=$(git -C "$WORKTREE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
         if [[ "$actual_branch" != "$PAGES_BRANCH" ]]; then
-            die "Worktree at $WORKTREE_DIR is on branch '$actual_branch', not '$PAGES_BRANCH'." \
-                $'\nRemove it with: git worktree remove --force '"$WORKTREE_DIR"
+            echo "   ⚠️  Removing worktree at $WORKTREE_DIR on branch '$actual_branch'"
+            git worktree remove --force "$WORKTREE_DIR" >/dev/null 2>&1 || rm -rf "$WORKTREE_DIR"
         fi
         echo "   ✔  Reusing existing worktree"
     else
@@ -122,7 +122,8 @@ fi
 echo ""
 echo "🔄 Syncing rendered site into worktree..."
 cd "$WORKTREE_DIR"
-rsync -a --delete "$SITE_DIR/" .
+find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+rsync -a "$SITE_DIR/" .
 
 # ── 7. Commit and push ────────────────────────────────────────────────────────
 echo ""

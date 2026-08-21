@@ -20,6 +20,5 @@ def test_setup_task_recreates_work_dir_with_privilege() -> None:
         content = file_handle.read()
 
     assert "- name: Create benchmark working directory" in content
-    assert "owner: \"{{ ansible_user | default(lookup('env', 'USER')) }}\"" in content
-    assert 'group: "{{ ansible_user_gid | default(omit) }}"' in content
-    assert "become: true" in content
+    assert "state: directory" in content
+    assert 'mode: "0700"' in content
