@@ -1,0 +1,2 @@
+bugfixes:
+  - "scripts/benchmarks_article_data.py: when hostname anonymization is enabled, host-detail link slugs now use anonymized aliases instead of original hostnames, preventing hostname leakage in published Quarto hyperlinks."

@@ -21,6 +21,8 @@ through:
 `scripts/benchmarks_article_data.py`
 
 Hostnames are anonymized by default using deterministic Greek mythology aliases.
+Host-detail hyperlinks also use anonymized slugs, so published Quarto artifacts do not
+retain original hostnames when anonymization is enabled.
 To disable anonymization for local drafting:
 
 ```bash

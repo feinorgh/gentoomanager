@@ -185,8 +185,9 @@ def load_benchmark_rows(results_dir: Path, anonymize_hosts: bool = True) -> list
         versions = _parse_versions(list(metadata.get("versions", [])))
         tuning = extract_gentoo_tuning(metadata)
         host_name = _resolve_host_name(metadata, host_dir)
-        host_slug = canonical_host_slug(host_name, fallback=host_dir.name)
         host_alias = host_alias_map.get(host_name, host_name)
+        host_slug_source = host_alias if anonymize_hosts else host_name
+        host_slug = canonical_host_slug(host_slug_source, fallback=host_dir.name)
         os_name = str(metadata.get("os", "unknown"))
         os_version = str(metadata.get("os_version", ""))
         distro_label = metadata.get("distro_label", _build_os_label(os_name, os_version))

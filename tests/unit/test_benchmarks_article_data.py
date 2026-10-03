@@ -180,9 +180,11 @@ def test_load_benchmark_rows_anonymizes_hosts_by_default(tmp_path: Path) -> None
     host_slugs = sorted({row["host_slug"] for row in rows})
 
     assert hosts == ["Hera", "Zeus"]
-    assert host_slugs == ["host-alpha", "host-zeta"]
+    assert host_slugs == ["Hera", "Zeus"]
     assert "host-alpha" not in hosts
     assert "host-zeta" not in hosts
+    assert "host-alpha" not in host_slugs
+    assert "host-zeta" not in host_slugs
 
 
 def test_load_benchmark_rows_preserves_hosts_when_anonymization_disabled(tmp_path: Path) -> None:
