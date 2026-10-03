@@ -1,0 +1,1 @@
+inventory_generator.py shebang
