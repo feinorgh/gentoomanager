@@ -61,7 +61,7 @@ Use a template-driven multi-page Quarto site:
 
 - Missing dataset: fail early with explicit message already used in article.
 - Missing category data:
-  - Render explicit “no data for this category” block instead of hard failure.
+  - Render explicit "no data for this category" block instead of hard failure.
 - Missing metadata fields:
   - Use safe defaults (`False` for optimization booleans, empty string for optional strings) and annotate limitations in page caveats.
 - Host anonymization:

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Interactive benchmark dashboard (Plotly Dash).
 
 Serves a local web dashboard for exploring and comparing benchmark results

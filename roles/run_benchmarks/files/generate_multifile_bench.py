@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """Generate a multi-file C benchmark project for compilation speed tests.
 
 Creates a directory containing a Makefile and N independent C source modules

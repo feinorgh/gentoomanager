@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 collapse_use_flags.py
 ~~~~~~~~~~~~~~~~~~~~~

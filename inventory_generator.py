@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """Dynamic Ansible inventory generator.
 
 Connects to one or more KVM/QEMU hypervisors via SSH, enumerates all libvirt

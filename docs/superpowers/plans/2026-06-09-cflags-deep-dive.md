@@ -175,7 +175,7 @@ Run:
 uv run quarto render docs/benchmarks-article/index.qmd
 ```
 
-Expected: render succeeds and includes “Gentoo CFLAGS Deep-Dive”.
+Expected: render succeeds and includes "Gentoo CFLAGS Deep-Dive".
 
 - [ ] **Step 6: Commit article integration**
 

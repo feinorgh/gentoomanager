@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate deterministic benchmark test images for ImageMagick benchmarks.
 
 Creates a 4096×4096 RGB PNG from a fixed random seed, plus JPEG Q90 and

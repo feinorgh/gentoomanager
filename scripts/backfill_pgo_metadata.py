@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Backfill pgo_enabled field in existing metadata.json files using host_vars."""
 
 from __future__ import annotations

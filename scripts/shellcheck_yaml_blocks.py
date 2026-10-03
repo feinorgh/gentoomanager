@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run shellcheck on inline shell blocks embedded in Ansible YAML task files.
 
 Jinja2 expressions are replaced with shell-safe placeholders so that

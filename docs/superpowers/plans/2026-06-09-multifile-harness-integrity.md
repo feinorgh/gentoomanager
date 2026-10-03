@@ -121,7 +121,7 @@ In `roles/provision_benchmarks/defaults/main.yml` add `make` for `Suse`:
 
 - [ ] **Step 2: Add multifile preflight checks**
 
-Insert before “Run multi-file C project compile benchmarks”:
+Insert before "Run multi-file C project compile benchmarks":
 
 ```yaml
 - name: Check make availability for compiler_multifile
@@ -290,6 +290,6 @@ git commit -m "docs: record multifile harness integrity fixes"
 
 ## Placeholder / Consistency Check
 
-- No placeholders (`TODO`, `TBD`, “later”) remain.
+- No placeholders (`TODO`, `TBD`, "later") remain.
 - Functionality names and file paths are consistent with the approved spec.
 - Scope stays focused on multifile harness integrity and provisioning prerequisites only.

@@ -13,7 +13,7 @@
 ## File Structure
 
 - Modify: `docs/benchmarks-article/index.qmd`  
-  Add the long-form “how benchmarks are run / how data is collected” narrative and links into category deep-dive pages.
+  Add the long-form "how benchmarks are run / how data is collected" narrative and links into category deep-dive pages.
 
 - Modify: `docs/benchmarks-article/_quarto.yml`  
   Add navbar/sidebar entries for category pages.

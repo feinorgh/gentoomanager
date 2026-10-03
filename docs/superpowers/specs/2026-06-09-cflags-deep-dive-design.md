@@ -37,7 +37,7 @@ Primary responsibilities:
 
 Update `docs/benchmarks-article/index.qmd` to:
 - Enrich Gentoo rows with parsed CFLAGS dimensions via the new helper.
-- Add a dedicated “CFLAGS Deep-Dive” section after current Gentoo tuning focus.
+- Add a dedicated "CFLAGS Deep-Dive" section after current Gentoo tuning focus.
 - Render new tables/charts plus interpretation callouts.
 
 ## Data Model (Normalized Dimensions)
@@ -100,7 +100,7 @@ For each dimension, include:
 
 ## Error Handling and Robustness
 
-- If a dimension has insufficient diversity (single group), show a “not enough variation” note instead of a misleading chart.
+- If a dimension has insufficient diversity (single group), show a "not enough variation" note instead of a misleading chart.
 - If Gentoo rows are missing for a category, keep current graceful no-data handling.
 - Do not fail article render on sparse CFLAGS coverage; degrade presentation gracefully.
 

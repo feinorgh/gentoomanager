@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Download standardised benchmark fixture files.
 
 Downloads and prepares:

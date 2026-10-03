@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """Generate a deterministic random text file used by coreutils benchmarks.
 
 Creates sortdata.txt in the current working directory containing 500 000

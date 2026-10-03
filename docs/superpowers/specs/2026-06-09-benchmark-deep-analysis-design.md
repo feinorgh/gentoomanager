@@ -11,7 +11,7 @@ Explain what each benchmark category measures, show how to read it, and provide 
 
 Keep the current single Quarto article and extend it with a methodology/taxonomy section followed by repeated category deep-dive blocks. A small category metadata registry will drive the narrative text, metric direction (`time` vs `rate`), chart labels, and sorting so the article can render each category consistently without hardcoding per-category prose in the template.
 
-The article will continue to load benchmark rows through `scripts/benchmarks_article_data.py`, but the category deep-dive rendering will be driven by a reusable metadata structure rather than ad hoc text. That keeps the analysis readable, makes the “lower is better / higher is better” distinction explicit, and lets the article generate the same visual pattern for each benchmark category.
+The article will continue to load benchmark rows through `scripts/benchmarks_article_data.py`, but the category deep-dive rendering will be driven by a reusable metadata structure rather than ad hoc text. That keeps the analysis readable, makes the "lower is better / higher is better" distinction explicit, and lets the article generate the same visual pattern for each benchmark category.
 
 ## Data Model
 
@@ -41,7 +41,7 @@ The category registry is presentation metadata. It does not alter benchmark calc
 
 1. The article must clearly say when a category is measured as time, where **lower is better**, and when it is measured as rate/throughput, where **higher is better**.
 2. Every category section must include:
-   - a short “what this measures” paragraph,
+   - a short "what this measures" paragraph,
    - a cross-OS comparison graph,
    - a per-host distribution graph,
    - a short qualitative interpretation,
@@ -53,7 +53,7 @@ The category registry is presentation metadata. It does not alter benchmark calc
 ## Error Handling
 
 - If a category has no registry entry, render a generic description and a safe default interpretation instead of failing.
-- If a category has no rows in the dataset, skip the section or render a short “no data” note.
+- If a category has no rows in the dataset, skip the section or render a short "no data" note.
 - If a metric kind is missing, default to `time` and explicitly note that the category was treated as a runtime benchmark.
 
 ## Testing

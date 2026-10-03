@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate Markdown and HTML benchmark reports from hyperfine JSON results.
 
 Usage::
